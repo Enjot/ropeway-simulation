@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ctime>
-#include "common/enums.hpp"
+#include "common/gate_type.hpp"
 
 /**
  * Structure for logging gate passages

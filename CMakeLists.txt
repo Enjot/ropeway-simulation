@@ -9,7 +9,6 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 add_executable(ropeway_simulation main.cpp
         include/ipc/ropeway_system_state.hpp
         include/common/config.hpp
-        include/common/enums.hpp
         include/common/pass_type.hpp
         include/common/ropeway_state.hpp
         include/common/station_type.hpp

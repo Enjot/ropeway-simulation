@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ctime>
-#include "common/enums.hpp"
+#include "common/pass_type.hpp"
 
 /**
  * Structure representing a pass/ticket
