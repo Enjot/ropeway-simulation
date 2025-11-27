@@ -5,87 +5,64 @@
 /**
  * System configuration constants
  */
+namespace Config {
 
-namespace RopewayConfig {
-    // ========================================================================
-    // CHAIR SYSTEM
-    // ========================================================================
+    namespace Chair {
+        constexpr uint32_t QUANTITY{72};
+        constexpr uint32_t MAX_CONCURRENT_IN_USE{36};
+        constexpr uint32_t SLOTS_PER_CHAIR{4};
+        constexpr uint32_t CYCLIST_SLOT_COST{2};
+        constexpr uint32_t PEDESTRIAN_SLOT_COST{1};
+        constexpr uint32_t MAX_CYCLISTS_PER_CHAIR{2};
+        constexpr uint32_t MAX_PEDESTRIANS_PER_CHAIR{4};
+        constexpr uint32_t RIDE_TIME_S{300};
+        constexpr uint32_t LOADING_TIME_S{30};
+    }
 
-    constexpr int TOTAL_CHAIRS = 72;              // Total number of 4-person chairs
-    constexpr int MAX_CONCURRENT_CHAIRS = 36;     // Max chairs in operation simultaneously
-    constexpr int CHAIR_CAPACITY_SLOTS = 4;       // Each chair has 4 slots
+    namespace Gate {
+        constexpr uint32_t NUM_ENTRY_GATES{4};
+        constexpr uint32_t NUM_RIDE_GATES{3};
+        constexpr uint32_t NUM_EXIT_ROUTES{2};
+        constexpr uint32_t MAX_TOURISTS_ON_STATION{50};
+    }
 
-    // Chair occupancy rules (in slots)
-    constexpr int CYCLIST_SLOTS = 2;              // Cyclist occupies 2 slots
-    constexpr int PEDESTRIAN_SLOTS = 1;           // Pedestrian occupies 1 slot
-    constexpr int MAX_CYCLISTS_PER_CHAIR = 2;     // Max 2 cyclists (2*2=4 slots)
-    constexpr int MAX_PEDESTRIANS_PER_CHAIR = 4;  // Max 4 pedestrians (4*1=4 slots)
+    namespace Worker {
+        constexpr uint32_t NUM_WORKERS{2};
+    }
 
-    // ========================================================================
-    // GATES AND CAPACITY
-    // ========================================================================
+    namespace Age {
+        constexpr uint32_t SUPERVISION_AGE_LIMIT{8};
+        constexpr uint32_t CHILD_DISCOUNT_AGE{10};
+        constexpr uint32_t ADULT_AGE{18};
+        constexpr uint32_t SENIOR_AGE{65};
+        constexpr uint32_t MAX_CHILDREN_PER_ADULT{2};
+    }
 
-    constexpr int NUM_ENTRY_GATES = 4;            // Entry gates
-    constexpr int NUM_RIDE_GATES = 3;             // Ride gates
-    constexpr int NUM_EXIT_ROUTES = 2;            // Exit routes at the upper station
-    constexpr int MAX_TOURISTS_ON_STATION = 50;   // N - max tourists in the lower station area
+    namespace Discount {
+        constexpr float CHILD_DISCOUNT{0.25};
+        constexpr float SENIOR_DISCOUNT{0.25};
+    }
 
-    // ========================================================================
-    // WORKERS
-    // ========================================================================
+    namespace Vip {
+        constexpr float VIP_CHANCE_PERCENTAGE{0.01};
+    }
 
-    constexpr int NUM_WORKERS = 2;                // Worker 1 (lower), Worker 2 (upper)
+    namespace Ropeway {
+        constexpr uint32_t DEFAULT_OPENING_TIME{8 * 3600}; // Tp - 8:00 AM
+        constexpr uint32_t DEFAULT_CLOSING_TIME{18 * 3600}; // Tk - 6:00 PM
+        constexpr uint32_t SHUTDOWN_DELAY_S{3};
+    }
 
-    // ========================================================================
-    // DISCOUNTS AND AGE CATEGORIES
-    // ========================================================================
+    namespace Trail {
+        constexpr uint32_t TRAIL_TIME_EASY_S{180}; // T1 - 3 minutes
+        constexpr uint32_t TRAIL_TIME_MEDIUM_S{300}; // T2 - 5 minutes
+        constexpr uint32_t TRAIL_TIME_HARD_S{420}; // T3 - 7 minutes
+    }
 
-    // Discounts
-    constexpr double CHILD_DISCOUNT = 0.25;       // 25% for children under 10
-    constexpr double SENIOR_DISCOUNT = 0.25;      // 25% for seniors over 65
+    namespace Ipc {
+        constexpr key_t SHM_KEY_BASE{0x1000};
+        constexpr key_t SEM_KEY_BASE{0x2000};
+        constexpr key_t MSG_KEY_BASE{0x3000};
+    }
 
-    // Age categories
-    constexpr int SUPERVISION_AGE_LIMIT = 8;      // Children under 8 need supervision
-    constexpr int CHILD_DISCOUNT_AGE = 10;        // Children under 10 get discount
-    constexpr int ADULT_AGE = 18;                 // Adult age threshold
-    constexpr int SENIOR_AGE = 65;                // Seniors over 65 get discount
-    constexpr int MAX_CHILDREN_PER_ADULT = 2;     // Max children under 8 per adult
-
-    // ========================================================================
-    // VIP
-    // ========================================================================
-
-    constexpr double VIP_PERCENTAGE = 0.01;       // Approximately 1% of tourists are VIP
-
-    // ========================================================================
-    // OPERATING HOURS
-    // ========================================================================
-
-    // Operating hours (in seconds from midnight, configurable)
-    constexpr int DEFAULT_OPENING_TIME = 8 * 3600;   // Tp - 8:00 AM
-    constexpr int DEFAULT_CLOSING_TIME = 18 * 3600;  // Tk - 6:00 PM
-    constexpr int SHUTDOWN_DELAY_MS = 3000;          // 3 seconds after the last tourist
-
-    // ========================================================================
-    // TRAIL DESCENT TIMES (T1 < T2 < T3)
-    // ========================================================================
-
-    constexpr int TRAIL_TIME_EASY = 180;      // T1 - 3 minutes
-    constexpr int TRAIL_TIME_MEDIUM = 300;    // T2 - 5 minutes
-    constexpr int TRAIL_TIME_HARD = 420;      // T3 - 7 minutes
-
-    // ========================================================================
-    // RIDE DURATION
-    // ========================================================================
-
-    constexpr int CHAIR_RIDE_TIME = 300;      // 5 minutes to reach the upper station
-    constexpr int CHAIR_LOADING_TIME = 30;    // 30 seconds to load passengers
-
-    // ========================================================================
-    // IPC KEYS (for shared memory, semaphores, message queues)
-    // ========================================================================
-
-    constexpr key_t SHM_KEY_BASE = 0x1000;
-    constexpr key_t SEM_KEY_BASE = 0x2000;
-    constexpr key_t MSG_KEY_BASE = 0x3000;
 }
