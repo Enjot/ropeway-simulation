@@ -49,3 +49,17 @@ add_executable(tourist_process src/processes/tourist_process.cpp
         ${IPC_HEADERS}
         ${STRUCTURE_HEADERS}
 )
+
+# Worker1 process - Lower Station Controller (spawned via fork/exec)
+add_executable(worker1_process src/processes/worker1_process.cpp
+        ${COMMON_HEADERS}
+        ${IPC_HEADERS}
+        ${STRUCTURE_HEADERS}
+)
+
+# Worker2 process - Upper Station Controller (spawned via fork/exec)
+add_executable(worker2_process src/processes/worker2_process.cpp
+        ${COMMON_HEADERS}
+        ${IPC_HEADERS}
+        ${STRUCTURE_HEADERS}
+)
