@@ -24,6 +24,8 @@ namespace {
     constexpr key_t MSG_KEY = Config::Ipc::MSG_KEY_BASE;
 
     volatile sig_atomic_t g_shouldExit = 0;
+    pid_t g_worker1Pid = 0;
+    pid_t g_worker2Pid = 0;
 
     void signalHandler(int signum) {
         if (signum == SIGINT || signum == SIGTERM) {
@@ -39,6 +41,10 @@ namespace {
 
         sigaction(SIGINT, &sa, nullptr);
         sigaction(SIGTERM, &sa, nullptr);
+
+        // Ignore SIGCHLD to prevent zombies during main loop
+        // We'll handle child cleanup explicitly
+        signal(SIGCHLD, SIG_IGN);
     }
 
     void cleanupIpc() {
@@ -47,30 +53,52 @@ namespace {
         MessageQueue<WorkerMessage>::removeByKey(MSG_KEY);
     }
 
-    std::string getTouristProcessPath() {
-        // Get the directory of the current executable
+    std::string getProcessPath(const char* processName) {
         char path[1024];
         uint32_t size = sizeof(path);
 
         #ifdef __APPLE__
         if (_NSGetExecutablePath(path, &size) != 0) {
-            return "./tourist_process";
+            return std::string("./") + processName;
         }
         #else
         ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
         if (len == -1) {
-            return "./tourist_process";
+            return std::string("./") + processName;
         }
         path[len] = '\0';
         #endif
 
-        // Find last slash and replace executable name
         char* lastSlash = strrchr(path, '/');
         if (lastSlash != nullptr) {
-            strcpy(lastSlash + 1, "tourist_process");
+            strcpy(lastSlash + 1, processName);
             return path;
         }
-        return "./tourist_process";
+        return std::string("./") + processName;
+    }
+
+    pid_t spawnWorker(const char* processName, int workerId) {
+        pid_t pid = fork();
+        if (pid == -1) {
+            perror("fork");
+            return -1;
+        }
+
+        if (pid == 0) {
+            std::string processPath = getProcessPath(processName);
+
+            char shmStr[16], semStr[16], msgStr[16];
+            snprintf(shmStr, sizeof(shmStr), "%d", SHM_KEY);
+            snprintf(semStr, sizeof(semStr), "%d", SEM_KEY);
+            snprintf(msgStr, sizeof(msgStr), "%d", MSG_KEY);
+
+            execl(processPath.c_str(), processName, shmStr, semStr, msgStr, nullptr);
+
+            perror("execl");
+            _exit(1);
+        }
+
+        return pid;
     }
 
     pid_t spawnTourist(uint32_t id, uint32_t age, TouristType type, bool isVip,
@@ -82,8 +110,7 @@ namespace {
         }
 
         if (pid == 0) {
-            // Child process - exec tourist_process
-            std::string processPath = getTouristProcessPath();
+            std::string processPath = getProcessPath("tourist_process");
 
             char idStr[16], ageStr[16], typeStr[16], vipStr[16], rideStr[16];
             char guardianStr[16], trailStr[16], shmStr[16], semStr[16], msgStr[16];
@@ -104,24 +131,35 @@ namespace {
                   guardianStr, trailStr, shmStr, semStr, msgStr,
                   nullptr);
 
-            // If exec fails
             perror("execl");
             _exit(1);
         }
 
         return pid;
     }
+
+    void terminateProcess(pid_t pid, const char* name) {
+        if (pid > 0) {
+            std::cout << "Terminating " << name << " (PID: " << pid << ")" << std::endl;
+            kill(pid, SIGTERM);
+            // Give it time to clean up
+            usleep(100000);
+            // Force kill if still running
+            kill(pid, SIGKILL);
+        }
+    }
 }
 
 int main() {
-    std::cout << "Ropeway Simulation - Tourist Process Test\n" << std::endl;
+    std::cout << "=== Ropeway Simulation - Full System Test ===" << std::endl;
+    std::cout << "Testing: Workers + Tourists + Emergency Stop\n" << std::endl;
 
     setupSignalHandlers();
     cleanupIpc();
 
     try {
         // Create IPC structures
-        std::cout << "Creating IPC structures..." << std::endl;
+        std::cout << "[Main] Creating IPC structures..." << std::endl;
 
         SharedMemory<RopewaySystemState> shm(SHM_KEY, true);
         Semaphore sem(SEM_KEY, SemaphoreIndex::TOTAL_SEMAPHORES, true);
@@ -139,17 +177,30 @@ int main() {
         shm->state = RopewayState::RUNNING;
         shm->acceptingNewTourists = true;
         shm->openingTime = time(nullptr);
-        shm->closingTime = time(nullptr) + 30; // 30 seconds simulation
+        shm->closingTime = time(nullptr) + 25; // 25 seconds simulation
 
-        std::cout << "IPC structures created and initialized" << std::endl;
-        std::cout << "Station capacity: " << Config::Gate::MAX_TOURISTS_ON_STATION << std::endl;
+        std::cout << "[Main] IPC structures initialized" << std::endl;
+
+        // Spawn workers
+        std::cout << "\n[Main] Spawning workers..." << std::endl;
+
+        g_worker1Pid = spawnWorker("worker1_process", 1);
+        if (g_worker1Pid > 0) {
+            std::cout << "[Main] Worker1 spawned with PID " << g_worker1Pid << std::endl;
+        }
+
+        g_worker2Pid = spawnWorker("worker2_process", 2);
+        if (g_worker2Pid > 0) {
+            std::cout << "[Main] Worker2 spawned with PID " << g_worker2Pid << std::endl;
+        }
+
+        // Wait for workers to register
+        usleep(200000);
 
         // Spawn tourists
         std::vector<pid_t> touristPids;
+        std::cout << "\n[Main] Spawning tourists..." << std::endl;
 
-        std::cout << "\nSpawning tourists..." << std::endl;
-
-        // Spawn a few test tourists
         struct TouristConfig {
             uint32_t id;
             uint32_t age;
@@ -163,74 +214,112 @@ int main() {
         std::vector<TouristConfig> tourists = {
             {1, 25, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY},
             {2, 30, TouristType::CYCLIST, false, true, -1, TrailDifficulty::MEDIUM},
-            {3, 7, TouristType::PEDESTRIAN, false, true, 4, TrailDifficulty::EASY},  // Child with guardian
-            {4, 35, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY}, // Guardian
-            {5, 70, TouristType::PEDESTRIAN, true, true, -1, TrailDifficulty::EASY},  // VIP senior
+            {3, 35, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY},
         };
 
         for (const auto& t : tourists) {
             pid_t pid = spawnTourist(t.id, t.age, t.type, t.isVip, t.wantsToRide, t.guardianId, t.trail);
             if (pid > 0) {
                 touristPids.push_back(pid);
-                std::cout << "Spawned tourist " << t.id << " with PID " << pid << std::endl;
+                std::cout << "[Main] Spawned tourist " << t.id << " with PID " << pid << std::endl;
             }
-            usleep(100000); // 100ms between spawns
+            usleep(100000);
         }
 
-        std::cout << "\nWaiting for tourists to complete..." << std::endl;
+        // Main simulation loop
+        std::cout << "\n[Main] Simulation running..." << std::endl;
+        std::cout << "[Main] Sending emergency stop in 8 seconds..." << std::endl;
 
-        // Wait for tourists (with timeout)
-        int activeCount = static_cast<int>(touristPids.size());
         time_t startTime = time(nullptr);
-        constexpr int TIMEOUT_S = 20;
+        bool emergencySent = false;
+        bool resumeSent = false;
 
-        while (activeCount > 0 && !g_shouldExit) {
-            int status;
-            pid_t finishedPid = waitpid(-1, &status, WNOHANG);
+        while (!g_shouldExit) {
+            time_t elapsed = time(nullptr) - startTime;
 
-            if (finishedPid > 0) {
-                activeCount--;
-                if (WIFEXITED(status)) {
-                    std::cout << "Tourist (PID " << finishedPid << ") exited with status "
-                              << WEXITSTATUS(status) << std::endl;
-                } else if (WIFSIGNALED(status)) {
-                    std::cout << "Tourist (PID " << finishedPid << ") killed by signal "
-                              << WTERMSIG(status) << std::endl;
+            // Trigger emergency stop after 8 seconds
+            if (!emergencySent && elapsed >= 8) {
+                std::cout << "\n[Main] >>> TRIGGERING EMERGENCY STOP <<<" << std::endl;
+                if (g_worker1Pid > 0) {
+                    kill(g_worker1Pid, SIGUSR1);
                 }
+                emergencySent = true;
             }
 
-            if (time(nullptr) - startTime > TIMEOUT_S) {
-                std::cout << "Timeout reached, stopping simulation..." << std::endl;
-                shm->acceptingNewTourists = false;
-
-                // Send SIGTERM to remaining tourists
-                for (pid_t pid : touristPids) {
-                    kill(pid, SIGTERM);
+            // Send resume signal after 12 seconds
+            if (emergencySent && !resumeSent && elapsed >= 12) {
+                std::cout << "\n[Main] >>> SENDING RESUME SIGNAL <<<" << std::endl;
+                if (g_worker1Pid > 0) {
+                    kill(g_worker1Pid, SIGUSR2);
                 }
+                resumeSent = true;
+            }
+
+            // Check system state
+            RopewayState currentState;
+            {
+                SemaphoreLock lock(sem, SemaphoreIndex::SHARED_MEMORY);
+                currentState = shm->state;
+            }
+
+            if (currentState == RopewayState::STOPPED) {
+                std::cout << "\n[Main] Ropeway stopped. Ending simulation." << std::endl;
                 break;
             }
 
-            usleep(100000); // 100ms
+            // Timeout after 30 seconds
+            if (elapsed >= 30) {
+                std::cout << "\n[Main] Timeout reached." << std::endl;
+                break;
+            }
+
+            usleep(500000); // 500ms
         }
 
-        // Final wait for any remaining processes
+        // Print final statistics
+        std::cout << "\n=== Final Simulation Statistics ===" << std::endl;
+        {
+            SemaphoreLock lock(sem, SemaphoreIndex::SHARED_MEMORY);
+            std::cout << "State: ";
+            switch (shm->state) {
+                case RopewayState::STOPPED: std::cout << "STOPPED"; break;
+                case RopewayState::RUNNING: std::cout << "RUNNING"; break;
+                case RopewayState::EMERGENCY_STOP: std::cout << "EMERGENCY_STOP"; break;
+                case RopewayState::CLOSING: std::cout << "CLOSING"; break;
+            }
+            std::cout << std::endl;
+            std::cout << "Total rides today: " << shm->totalRidesToday << std::endl;
+            std::cout << "Tourists in station: " << shm->touristsInLowerStation << std::endl;
+            std::cout << "Tourists on platform: " << shm->touristsOnPlatform << std::endl;
+        }
+
+        // Cleanup
+        std::cout << "\n[Main] Cleaning up processes..." << std::endl;
+
+        // Terminate workers
+        terminateProcess(g_worker1Pid, "Worker1");
+        terminateProcess(g_worker2Pid, "Worker2");
+
+        // Terminate any remaining tourists
+        for (pid_t pid : touristPids) {
+            kill(pid, SIGTERM);
+        }
+
+        // Wait for all children
+        usleep(200000);
         while (waitpid(-1, nullptr, WNOHANG) > 0) {}
 
-        // Print final statistics
-        std::cout << "\n=== Simulation Statistics ===" << std::endl;
-        std::cout << "Total rides today: " << shm->totalRidesToday << std::endl;
-        std::cout << "Tourists still on station: " << shm->touristsInLowerStation << std::endl;
-        std::cout << "Tourists on platform: " << shm->touristsOnPlatform << std::endl;
-
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "[Main] Error: " << e.what() << std::endl;
+        terminateProcess(g_worker1Pid, "Worker1");
+        terminateProcess(g_worker2Pid, "Worker2");
         cleanupIpc();
         return 1;
     }
 
-    std::cout << "\nCleaning up IPC structures..." << std::endl;
+    std::cout << "\n[Main] Cleaning up IPC structures..." << std::endl;
     cleanupIpc();
-    std::cout << "Done." << std::endl;
+    std::cout << "[Main] Done." << std::endl;
 
     return 0;
 }
