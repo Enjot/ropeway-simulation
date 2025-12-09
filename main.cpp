@@ -14,6 +14,7 @@
 #include "ipc/MessageQueue.hpp"
 #include "ipc/ropeway_system_state.hpp"
 #include "ipc/worker_message.hpp"
+#include "ipc/cashier_message.hpp"
 #include "ipc/semaphore_index.hpp"
 #include "structures/tourist.hpp"
 #include "common/config.hpp"
@@ -22,10 +23,12 @@ namespace {
     constexpr key_t SHM_KEY = Config::Ipc::SHM_KEY_BASE;
     constexpr key_t SEM_KEY = Config::Ipc::SEM_KEY_BASE;
     constexpr key_t MSG_KEY = Config::Ipc::MSG_KEY_BASE;
+    constexpr key_t CASHIER_MSG_KEY = Config::Ipc::MSG_KEY_BASE + 1;
 
     volatile sig_atomic_t g_shouldExit = 0;
     pid_t g_worker1Pid = 0;
     pid_t g_worker2Pid = 0;
+    pid_t g_cashierPid = 0;
 
     void signalHandler(int signum) {
         if (signum == SIGINT || signum == SIGTERM) {
@@ -42,8 +45,6 @@ namespace {
         sigaction(SIGINT, &sa, nullptr);
         sigaction(SIGTERM, &sa, nullptr);
 
-        // Ignore SIGCHLD to prevent zombies during main loop
-        // We'll handle child cleanup explicitly
         signal(SIGCHLD, SIG_IGN);
     }
 
@@ -51,6 +52,7 @@ namespace {
         SharedMemory<RopewaySystemState>::removeByKey(SHM_KEY);
         Semaphore::removeByKey(SEM_KEY);
         MessageQueue<WorkerMessage>::removeByKey(MSG_KEY);
+        MessageQueue<TicketRequest>::removeByKey(CASHIER_MSG_KEY);
     }
 
     std::string getProcessPath(const char* processName) {
@@ -77,7 +79,7 @@ namespace {
         return std::string("./") + processName;
     }
 
-    pid_t spawnWorker(const char* processName, int workerId) {
+    pid_t spawnWorker(const char* processName) {
         pid_t pid = fork();
         if (pid == -1) {
             perror("fork");
@@ -101,6 +103,30 @@ namespace {
         return pid;
     }
 
+    pid_t spawnCashier() {
+        pid_t pid = fork();
+        if (pid == -1) {
+            perror("fork");
+            return -1;
+        }
+
+        if (pid == 0) {
+            std::string processPath = getProcessPath("cashier_process");
+
+            char shmStr[16], semStr[16], cashierMsgStr[16];
+            snprintf(shmStr, sizeof(shmStr), "%d", SHM_KEY);
+            snprintf(semStr, sizeof(semStr), "%d", SEM_KEY);
+            snprintf(cashierMsgStr, sizeof(cashierMsgStr), "%d", CASHIER_MSG_KEY);
+
+            execl(processPath.c_str(), "cashier_process", shmStr, semStr, cashierMsgStr, nullptr);
+
+            perror("execl");
+            _exit(1);
+        }
+
+        return pid;
+    }
+
     pid_t spawnTourist(uint32_t id, uint32_t age, TouristType type, bool isVip,
                        bool wantsToRide, int32_t guardianId, TrailDifficulty trail) {
         pid_t pid = fork();
@@ -113,7 +139,7 @@ namespace {
             std::string processPath = getProcessPath("tourist_process");
 
             char idStr[16], ageStr[16], typeStr[16], vipStr[16], rideStr[16];
-            char guardianStr[16], trailStr[16], shmStr[16], semStr[16], msgStr[16];
+            char guardianStr[16], trailStr[16], shmStr[16], semStr[16], msgStr[16], cashierMsgStr[16];
 
             snprintf(idStr, sizeof(idStr), "%u", id);
             snprintf(ageStr, sizeof(ageStr), "%u", age);
@@ -125,10 +151,11 @@ namespace {
             snprintf(shmStr, sizeof(shmStr), "%d", SHM_KEY);
             snprintf(semStr, sizeof(semStr), "%d", SEM_KEY);
             snprintf(msgStr, sizeof(msgStr), "%d", MSG_KEY);
+            snprintf(cashierMsgStr, sizeof(cashierMsgStr), "%d", CASHIER_MSG_KEY);
 
             execl(processPath.c_str(), "tourist_process",
                   idStr, ageStr, typeStr, vipStr, rideStr,
-                  guardianStr, trailStr, shmStr, semStr, msgStr,
+                  guardianStr, trailStr, shmStr, semStr, msgStr, cashierMsgStr,
                   nullptr);
 
             perror("execl");
@@ -142,9 +169,7 @@ namespace {
         if (pid > 0) {
             std::cout << "Terminating " << name << " (PID: " << pid << ")" << std::endl;
             kill(pid, SIGTERM);
-            // Give it time to clean up
             usleep(100000);
-            // Force kill if still running
             kill(pid, SIGKILL);
         }
     }
@@ -152,7 +177,7 @@ namespace {
 
 int main() {
     std::cout << "=== Ropeway Simulation - Full System Test ===" << std::endl;
-    std::cout << "Testing: Workers + Tourists + Emergency Stop\n" << std::endl;
+    std::cout << "Testing: Workers + Cashier + Tourists + Discounts\n" << std::endl;
 
     setupSignalHandlers();
     cleanupIpc();
@@ -163,7 +188,8 @@ int main() {
 
         SharedMemory<RopewaySystemState> shm(SHM_KEY, true);
         Semaphore sem(SEM_KEY, SemaphoreIndex::TOTAL_SEMAPHORES, true);
-        MessageQueue<WorkerMessage> msgQueue(MSG_KEY, true);
+        MessageQueue<WorkerMessage> workerMsgQueue(MSG_KEY, true);
+        MessageQueue<TicketRequest> cashierMsgQueue(CASHIER_MSG_KEY, true);
 
         // Initialize semaphores
         sem.setValue(SemaphoreIndex::STATION_CAPACITY, Config::Gate::MAX_TOURISTS_ON_STATION);
@@ -177,29 +203,36 @@ int main() {
         shm->state = RopewayState::RUNNING;
         shm->acceptingNewTourists = true;
         shm->openingTime = time(nullptr);
-        shm->closingTime = time(nullptr) + 25; // 25 seconds simulation
+        shm->closingTime = time(nullptr) + 20; // 20 seconds simulation
 
         std::cout << "[Main] IPC structures initialized" << std::endl;
+
+        // Spawn Cashier first
+        std::cout << "\n[Main] Spawning cashier..." << std::endl;
+        g_cashierPid = spawnCashier();
+        if (g_cashierPid > 0) {
+            std::cout << "[Main] Cashier spawned with PID " << g_cashierPid << std::endl;
+        }
+        usleep(100000); // Let cashier initialize
 
         // Spawn workers
         std::cout << "\n[Main] Spawning workers..." << std::endl;
 
-        g_worker1Pid = spawnWorker("worker1_process", 1);
+        g_worker1Pid = spawnWorker("worker1_process");
         if (g_worker1Pid > 0) {
             std::cout << "[Main] Worker1 spawned with PID " << g_worker1Pid << std::endl;
         }
 
-        g_worker2Pid = spawnWorker("worker2_process", 2);
+        g_worker2Pid = spawnWorker("worker2_process");
         if (g_worker2Pid > 0) {
             std::cout << "[Main] Worker2 spawned with PID " << g_worker2Pid << std::endl;
         }
 
-        // Wait for workers to register
         usleep(200000);
 
-        // Spawn tourists
+        // Spawn tourists with various ages to test discounts
         std::vector<pid_t> touristPids;
-        std::cout << "\n[Main] Spawning tourists..." << std::endl;
+        std::cout << "\n[Main] Spawning tourists (testing discounts)..." << std::endl;
 
         struct TouristConfig {
             uint32_t id;
@@ -209,51 +242,33 @@ int main() {
             bool wantsToRide;
             int32_t guardianId;
             TrailDifficulty trail;
+            const char* description;
         };
 
         std::vector<TouristConfig> tourists = {
-            {1, 25, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY},
-            {2, 30, TouristType::CYCLIST, false, true, -1, TrailDifficulty::MEDIUM},
-            {3, 35, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY},
+            {1, 8, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child (8yo, 25% discount)"},
+            {2, 70, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Senior (70yo, 25% discount)"},
+            {3, 30, TouristType::CYCLIST, false, true, -1, TrailDifficulty::MEDIUM, "Adult cyclist (no discount)"},
+            {4, 25, TouristType::PEDESTRIAN, true, true, -1, TrailDifficulty::EASY, "Adult VIP request"},
+            {5, 5, TouristType::PEDESTRIAN, false, true, 3, TrailDifficulty::EASY, "Young child (5yo, needs guardian)"},
         };
 
         for (const auto& t : tourists) {
+            std::cout << "[Main] Spawning Tourist " << t.id << ": " << t.description << std::endl;
             pid_t pid = spawnTourist(t.id, t.age, t.type, t.isVip, t.wantsToRide, t.guardianId, t.trail);
             if (pid > 0) {
                 touristPids.push_back(pid);
-                std::cout << "[Main] Spawned tourist " << t.id << " with PID " << pid << std::endl;
             }
-            usleep(100000);
+            usleep(150000); // Stagger spawns
         }
 
         // Main simulation loop
         std::cout << "\n[Main] Simulation running..." << std::endl;
-        std::cout << "[Main] Sending emergency stop in 8 seconds..." << std::endl;
 
         time_t startTime = time(nullptr);
-        bool emergencySent = false;
-        bool resumeSent = false;
 
         while (!g_shouldExit) {
             time_t elapsed = time(nullptr) - startTime;
-
-            // Trigger emergency stop after 8 seconds
-            if (!emergencySent && elapsed >= 8) {
-                std::cout << "\n[Main] >>> TRIGGERING EMERGENCY STOP <<<" << std::endl;
-                if (g_worker1Pid > 0) {
-                    kill(g_worker1Pid, SIGUSR1);
-                }
-                emergencySent = true;
-            }
-
-            // Send resume signal after 12 seconds
-            if (emergencySent && !resumeSent && elapsed >= 12) {
-                std::cout << "\n[Main] >>> SENDING RESUME SIGNAL <<<" << std::endl;
-                if (g_worker1Pid > 0) {
-                    kill(g_worker1Pid, SIGUSR2);
-                }
-                resumeSent = true;
-            }
 
             // Check system state
             RopewayState currentState;
@@ -267,8 +282,8 @@ int main() {
                 break;
             }
 
-            // Timeout after 30 seconds
-            if (elapsed >= 30) {
+            // Timeout after 25 seconds
+            if (elapsed >= 25) {
                 std::cout << "\n[Main] Timeout reached." << std::endl;
                 break;
             }
@@ -296,21 +311,20 @@ int main() {
         // Cleanup
         std::cout << "\n[Main] Cleaning up processes..." << std::endl;
 
-        // Terminate workers
+        terminateProcess(g_cashierPid, "Cashier");
         terminateProcess(g_worker1Pid, "Worker1");
         terminateProcess(g_worker2Pid, "Worker2");
 
-        // Terminate any remaining tourists
         for (pid_t pid : touristPids) {
             kill(pid, SIGTERM);
         }
 
-        // Wait for all children
-        usleep(200000);
+        usleep(300000);
         while (waitpid(-1, nullptr, WNOHANG) > 0) {}
 
     } catch (const std::exception& e) {
         std::cerr << "[Main] Error: " << e.what() << std::endl;
+        terminateProcess(g_cashierPid, "Cashier");
         terminateProcess(g_worker1Pid, "Worker1");
         terminateProcess(g_worker2Pid, "Worker2");
         cleanupIpc();
