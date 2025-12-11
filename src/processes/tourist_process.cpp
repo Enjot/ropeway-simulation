@@ -11,6 +11,7 @@
 #include "ipc/semaphore_index.hpp"
 #include "ipc/cashier_message.hpp"
 #include "structures/tourist.hpp"
+#include "gates/EntryGate.hpp"
 #include "common/config.hpp"
 
 namespace {
@@ -191,6 +192,7 @@ public:
           sem_{args.semKey, SemaphoreIndex::TOTAL_SEMAPHORES, false},
           cashierRequestQueue_{args.cashierMsgKey, false},
           cashierResponseQueue_{args.cashierMsgKey, false},
+          entryGate_{sem_, shm_.get()},
           requestVip_{args.isVip} {
 
         tourist_.id = args.id;
@@ -349,11 +351,27 @@ private:
     }
 
     void handleWaitingEntry() {
-        // Wait for station capacity (counting semaphore)
-        std::cout << "[Tourist " << tourist_.id << "] Waiting for entry gate..." << std::endl;
+        // Validate ticket first
+        auto validation = entryGate_.validateTicket(
+            tourist_.ticketId,
+            TicketType::DAILY, // Simplified - real impl would track ticket type
+            time(nullptr) + 3600, // Valid for 1 hour
+            tourist_.isVip
+        );
 
-        if (!sem_.wait(SemaphoreIndex::STATION_CAPACITY)) {
-            std::cerr << "[Tourist " << tourist_.id << "] Failed to wait for station capacity" << std::endl;
+        if (!validation.allowed) {
+            std::cout << "[Tourist " << tourist_.id << "] Entry denied: " << validation.reason << std::endl;
+            changeState(TouristState::LEAVING);
+            return;
+        }
+
+        // Try to enter through gate (VIP gets priority)
+        uint32_t gateNumber = 0;
+        std::cout << "[Tourist " << tourist_.id << "] Waiting for entry gate"
+                  << (tourist_.isVip ? " [VIP PRIORITY]" : "") << "..." << std::endl;
+
+        if (!entryGate_.tryEnter(tourist_.id, tourist_.isVip, gateNumber)) {
+            std::cerr << "[Tourist " << tourist_.id << "] Failed to enter station" << std::endl;
             changeState(TouristState::LEAVING);
             return;
         }
@@ -364,7 +382,8 @@ private:
             shm_->touristsInLowerStation++;
         }
 
-        std::cout << "[Tourist " << tourist_.id << "] Entered through entry gate" << std::endl;
+        std::cout << "[Tourist " << tourist_.id << "] Entered through entry gate " << gateNumber
+                  << (tourist_.isVip ? " [VIP]" : "") << std::endl;
         changeState(TouristState::ON_STATION);
     }
 
@@ -488,6 +507,7 @@ private:
     Semaphore sem_;
     MessageQueue<TicketRequest> cashierRequestQueue_;
     MessageQueue<TicketResponse> cashierResponseQueue_;
+    EntryGate entryGate_;
     bool requestVip_;
 };
 
