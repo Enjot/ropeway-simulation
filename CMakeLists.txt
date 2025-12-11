@@ -37,37 +37,35 @@ set(STRUCTURE_HEADERS
         include/structures/tourist.hpp
 )
 
-# Main simulation controller
-add_executable(ropeway_simulation main.cpp
+set(GATE_HEADERS
+        include/gates/EntryGate.hpp
+        include/gates/RideGate.hpp
+)
+
+set(UTILS_HEADERS
+        include/utils/GatePassageLogger.hpp
+)
+
+# All headers combined
+set(ALL_HEADERS
         ${COMMON_HEADERS}
         ${IPC_HEADERS}
         ${STRUCTURE_HEADERS}
+        ${GATE_HEADERS}
+        ${UTILS_HEADERS}
 )
+
+# Main simulation controller
+add_executable(ropeway_simulation main.cpp ${ALL_HEADERS})
 
 # Tourist process (spawned via fork/exec)
-add_executable(tourist_process src/processes/tourist_process.cpp
-        ${COMMON_HEADERS}
-        ${IPC_HEADERS}
-        ${STRUCTURE_HEADERS}
-)
+add_executable(tourist_process src/processes/tourist_process.cpp ${ALL_HEADERS})
 
 # Worker1 process - Lower Station Controller (spawned via fork/exec)
-add_executable(worker1_process src/processes/worker1_process.cpp
-        ${COMMON_HEADERS}
-        ${IPC_HEADERS}
-        ${STRUCTURE_HEADERS}
-)
+add_executable(worker1_process src/processes/worker1_process.cpp ${ALL_HEADERS})
 
 # Worker2 process - Upper Station Controller (spawned via fork/exec)
-add_executable(worker2_process src/processes/worker2_process.cpp
-        ${COMMON_HEADERS}
-        ${IPC_HEADERS}
-        ${STRUCTURE_HEADERS}
-)
+add_executable(worker2_process src/processes/worker2_process.cpp ${ALL_HEADERS})
 
 # Cashier process - Ticket sales (spawned via fork/exec)
-add_executable(cashier_process src/processes/cashier_process.cpp
-        ${COMMON_HEADERS}
-        ${IPC_HEADERS}
-        ${STRUCTURE_HEADERS}
-)
+add_executable(cashier_process src/processes/cashier_process.cpp ${ALL_HEADERS})
