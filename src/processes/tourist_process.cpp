@@ -12,6 +12,7 @@
 #include "ipc/cashier_message.hpp"
 #include "structures/tourist.hpp"
 #include "gates/EntryGate.hpp"
+#include "gates/RideGate.hpp"
 #include "common/config.hpp"
 
 namespace {
@@ -193,7 +194,9 @@ public:
           cashierRequestQueue_{args.cashierMsgKey, false},
           cashierResponseQueue_{args.cashierMsgKey, false},
           entryGate_{sem_, shm_.get()},
-          requestVip_{args.isVip} {
+          rideGate_{sem_, shm_.get()},
+          requestVip_{args.isVip},
+          assignedChairId_{-1} {
 
         tourist_.id = args.id;
         tourist_.pid = getpid();
@@ -391,11 +394,66 @@ private:
         // Simulate being on station, then proceed to platform
         usleep(100000 + (rand() % 200000)); // 100-300ms
 
-        // Check if child needs to wait for guardian
+        // Add to boarding queue
+        BoardingQueueEntry entry;
+        entry.touristId = tourist_.id;
+        entry.touristPid = tourist_.pid;
+        entry.age = tourist_.age;
+        entry.type = tourist_.type;
+        entry.guardianId = tourist_.guardianId;
+        entry.needsSupervision = tourist_.needsSupervision();
+        entry.isAdult = tourist_.isAdult();
+        entry.dependentCount = 0;
+        entry.assignedChairId = -1;
+        entry.readyToBoard = false;
+
+        {
+            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            if (!shm_->boardingQueue.addTourist(entry)) {
+                std::cerr << "[Tourist " << tourist_.id << "] Boarding queue full!" << std::endl;
+                changeState(TouristState::LEAVING);
+                return;
+            }
+        }
+
+        // Child without pre-assigned guardian waits for pairing
         if (tourist_.needsSupervision() && tourist_.guardianId == -1) {
-            std::cout << "[Tourist " << tourist_.id << "] Child waiting for guardian assignment" << std::endl;
-            // In real implementation, wait for guardian assignment
-            usleep(500000);
+            std::cout << "[Tourist " << tourist_.id << "] Child (age " << tourist_.age
+                      << ") waiting for adult guardian..." << std::endl;
+
+            // Wait for Worker1 to assign a guardian
+            bool guardianAssigned = false;
+            time_t waitStart = time(nullptr);
+            constexpr int GUARDIAN_TIMEOUT_S = 10;
+
+            while (!guardianAssigned && !g_shouldExit) {
+                usleep(100000); // 100ms
+
+                {
+                    SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                    int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
+                    if (idx >= 0 && shm_->boardingQueue.entries[idx].guardianId != -1) {
+                        tourist_.guardianId = shm_->boardingQueue.entries[idx].guardianId;
+                        guardianAssigned = true;
+                        std::cout << "[Tourist " << tourist_.id << "] Assigned guardian: Tourist "
+                                  << tourist_.guardianId << std::endl;
+                    }
+                }
+
+                if (time(nullptr) - waitStart > GUARDIAN_TIMEOUT_S) {
+                    std::cout << "[Tourist " << tourist_.id << "] No guardian available, leaving" << std::endl;
+                    // Remove from queue
+                    {
+                        SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                        int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
+                        if (idx >= 0) {
+                            shm_->boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+                        }
+                    }
+                    changeState(TouristState::LEAVING);
+                    return;
+                }
+            }
         }
 
         changeState(TouristState::WAITING_PLATFORM);
@@ -404,55 +462,125 @@ private:
     void handleWaitingPlatform() {
         std::cout << "[Tourist " << tourist_.id << "] Waiting for chair..." << std::endl;
 
-        // In real implementation, Worker1 would control this
-        // For now, simulate waiting for ride gate
-        usleep(300000 + (rand() % 500000)); // 300-800ms
+        // Wait for Worker1 to assign us to a chair
+        time_t waitStart = time(nullptr);
+        constexpr int BOARDING_TIMEOUT_S = 30;
 
-        // Check ropeway state
-        {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            if (shm_->state == RopewayState::EMERGENCY_STOP) {
-                std::cout << "[Tourist " << tourist_.id << "] Ropeway stopped, waiting..." << std::endl;
-                return; // Stay in this state
+        while (!g_shouldExit) {
+            usleep(100000); // 100ms
+
+            // Check ropeway state and boarding status
+            {
+                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+
+                // Check for emergency stop
+                if (shm_->state == RopewayState::EMERGENCY_STOP) {
+                    std::cout << "[Tourist " << tourist_.id << "] Ropeway emergency stop, waiting..." << std::endl;
+                    continue;
+                }
+
+                // Check for closing
+                if (shm_->state == RopewayState::CLOSING || shm_->state == RopewayState::STOPPED) {
+                    std::cout << "[Tourist " << tourist_.id << "] Ropeway closing, leaving" << std::endl;
+                    // Remove from boarding queue
+                    int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
+                    if (idx >= 0) {
+                        shm_->boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+                    }
+                    if (shm_->touristsInLowerStation > 0) {
+                        shm_->touristsInLowerStation--;
+                    }
+                    changeState(TouristState::LEAVING);
+                    return;
+                }
+
+                // Check if Worker1 has assigned us to a chair
+                int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
+                if (idx >= 0) {
+                    BoardingQueueEntry& entry = shm_->boardingQueue.entries[idx];
+                    if (entry.readyToBoard && entry.assignedChairId >= 0) {
+                        assignedChairId_ = entry.assignedChairId;
+                        std::cout << "[Tourist " << tourist_.id << "] Assigned to chair "
+                                  << assignedChairId_ << std::endl;
+
+                        // Remove from queue
+                        shm_->boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+
+                        // Update counts
+                        if (shm_->touristsInLowerStation > 0) {
+                            shm_->touristsInLowerStation--;
+                        }
+                        shm_->touristsOnPlatform++;
+
+                        changeState(TouristState::ON_CHAIR);
+                        return;
+                    }
+                } else {
+                    // Not in queue anymore - something went wrong
+                    std::cerr << "[Tourist " << tourist_.id << "] Lost from boarding queue!" << std::endl;
+                    changeState(TouristState::LEAVING);
+                    return;
+                }
             }
-            if (shm_->state == RopewayState::CLOSING || shm_->state == RopewayState::STOPPED) {
-                std::cout << "[Tourist " << tourist_.id << "] Ropeway closing, leaving station" << std::endl;
-                // Release station capacity
-                shm_->touristsInLowerStation--;
+
+            // Timeout check
+            if (time(nullptr) - waitStart > BOARDING_TIMEOUT_S) {
+                std::cout << "[Tourist " << tourist_.id << "] Boarding timeout, leaving" << std::endl;
+                {
+                    SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                    int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
+                    if (idx >= 0) {
+                        shm_->boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+                    }
+                    if (shm_->touristsInLowerStation > 0) {
+                        shm_->touristsInLowerStation--;
+                    }
+                }
+                changeState(TouristState::LEAVING);
+                return;
             }
         }
-
-        // Update counts
-        {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            if (shm_->touristsInLowerStation > 0) {
-                shm_->touristsInLowerStation--;
-            }
-            shm_->touristsOnPlatform++;
-        }
-
-        changeState(TouristState::ON_CHAIR);
     }
 
     void handleOnChair() {
-        std::cout << "[Tourist " << tourist_.id << "] On chair, riding up..." << std::endl;
+        std::cout << "[Tourist " << tourist_.id << "] On chair " << assignedChairId_
+                  << ", riding up..." << std::endl;
 
         // Simulate ride time (scaled down for testing)
         uint32_t rideTime = Config::Chair::RIDE_TIME_S;
         // Scale down: 300s -> 3s for testing
         usleep((rideTime / 100) * 1000000);
 
-        // Update counts
+        // Update counts and release chair
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
             if (shm_->touristsOnPlatform > 0) {
                 shm_->touristsOnPlatform--;
             }
             shm_->totalRidesToday++;
+
+            // Release chair (only first passenger does this to avoid double-release)
+            if (assignedChairId_ >= 0 && static_cast<uint32_t>(assignedChairId_) < Config::Chair::QUANTITY) {
+                Chair& chair = shm_->chairs[assignedChairId_];
+                // Check if we're the first passenger (responsible for releasing)
+                if (chair.passengerIds[0] == static_cast<int32_t>(tourist_.id)) {
+                    chair.isOccupied = false;
+                    chair.numPassengers = 0;
+                    chair.slotsUsed = 0;
+                    for (int i = 0; i < 4; ++i) {
+                        chair.passengerIds[i] = -1;
+                    }
+                    if (shm_->chairsInUse > 0) {
+                        shm_->chairsInUse--;
+                    }
+                    std::cout << "[Tourist " << tourist_.id << "] Released chair " << assignedChairId_ << std::endl;
+                }
+            }
         }
 
         tourist_.ridesCompleted++;
         tourist_.lastRideTime = time(nullptr);
+        assignedChairId_ = -1; // Clear assigned chair
 
         // Signal station capacity is freed
         sem_.signal(SemaphoreIndex::STATION_CAPACITY);
@@ -508,7 +636,9 @@ private:
     MessageQueue<TicketRequest> cashierRequestQueue_;
     MessageQueue<TicketResponse> cashierResponseQueue_;
     EntryGate entryGate_;
+    RideGate rideGate_;
     bool requestVip_;
+    int32_t assignedChairId_;
 };
 
 int main(int argc, char* argv[]) {
