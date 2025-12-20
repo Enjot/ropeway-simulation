@@ -109,7 +109,8 @@ public:
         : shm_{args.shmKey, false},
           sem_{args.semKey, SemaphoreIndex::TOTAL_SEMAPHORES, false},
           msgQueue_{args.msgKey, false},
-          isEmergencyStopped_{false} {
+          isEmergencyStopped_{false},
+          currentEmergencyRecordIndex_{-1} {
 
         // Register this worker's PID
         {
@@ -171,10 +172,11 @@ private:
     void handleEmergencyStopTrigger() {
         std::cout << "[Worker1] !!! EMERGENCY STOP TRIGGERED !!!" << std::endl;
 
-        // Set system state to emergency stop
+        // Set system state to emergency stop and record in statistics
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
             shm_->state = RopewayState::EMERGENCY_STOP;
+            currentEmergencyRecordIndex_ = shm_->dailyStats.recordEmergencyStart(WORKER_ID);
         }
 
         isEmergencyStopped_ = true;
@@ -210,13 +212,17 @@ private:
             if (msg && msg->signal == WorkerSignal::READY_TO_START) {
                 std::cout << "[Worker1] Worker2 confirmed ready. Resuming operations." << std::endl;
 
-                // Resume operations
+                // Resume operations and record end of emergency
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
                     shm_->state = RopewayState::RUNNING;
+                    if (currentEmergencyRecordIndex_ >= 0) {
+                        shm_->dailyStats.recordEmergencyEnd(currentEmergencyRecordIndex_);
+                    }
                 }
 
                 isEmergencyStopped_ = false;
+                currentEmergencyRecordIndex_ = -1;
                 return;
             }
             usleep(100000); // 100ms
@@ -241,6 +247,7 @@ private:
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
                     shm_->state = RopewayState::EMERGENCY_STOP;
+                    // Worker2 already recorded the emergency start, just acknowledge
                 }
                 isEmergencyStopped_ = true;
                 break;
@@ -557,6 +564,7 @@ private:
     Semaphore sem_;
     MessageQueue<WorkerMessage> msgQueue_;
     bool isEmergencyStopped_;
+    int32_t currentEmergencyRecordIndex_;
 };
 
 int main(int argc, char* argv[]) {
