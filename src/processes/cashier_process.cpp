@@ -170,10 +170,16 @@ private:
 
         double finalPrice = basePrice * (1.0 - discount);
 
-        // Determine VIP status (if requested and eligible - random 1% chance)
+        // Determine VIP status
+        // In production: 1% random chance OR explicit VIP membership
+        // For testing: if requested, grant VIP status
         bool isVip = false;
         if (request.requestVip) {
-            // Simulate VIP eligibility (in real system would check membership)
+            // Grant VIP if explicitly requested (simulates VIP membership)
+            isVip = true;
+            vipTickets_++;
+        } else {
+            // Random 1% chance for non-requesting tourists (lucky VIP)
             isVip = (rand() % 100) < static_cast<int>(Config::Vip::VIP_CHANCE_PERCENTAGE * 100);
             if (isVip) {
                 vipTickets_++;
@@ -257,6 +263,12 @@ private:
         std::cout << "[Cashier] VIP tickets: " << vipTickets_ << std::endl;
         std::cout << "[Cashier] Discounts given: " << discountsGiven_ << std::endl;
         std::cout << "[Cashier] Total revenue: " << totalRevenue_ << std::endl;
+
+        // Save revenue to shared stats
+        {
+            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            shm_->dailyStats.totalRevenueWithDiscounts = totalRevenue_;
+        }
     }
 
     SharedMemory<RopewaySystemState> shm_;
