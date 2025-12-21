@@ -1,5 +1,7 @@
 #include <iostream>
 #include <iomanip>
+#include <fstream>
+#include <sstream>
 #include <vector>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -177,8 +179,8 @@ namespace {
 }
 
 int main() {
-    std::cout << "=== Ropeway Simulation - Phase 7: Daily Reports Test ===" << std::endl;
-    std::cout << "Testing: Gate logging and daily report generation\n" << std::endl;
+    std::cout << "=== Ropeway Simulation - Phase 9: Emergency Stop/Resume Test ===" << std::endl;
+    std::cout << "Testing: Emergency stop trigger, worker communication, and resume protocol\n" << std::endl;
 
     setupSignalHandlers();
     cleanupIpc();
@@ -203,10 +205,12 @@ int main() {
         sem.setValue(SemaphoreIndex::WORKER_SYNC, 0);
 
         // Initialize shared state
+        time_t simulationStartTime = time(nullptr);
         shm->state = RopewayState::RUNNING;
         shm->acceptingNewTourists = true;
-        shm->openingTime = time(nullptr);
-        shm->closingTime = time(nullptr) + 20; // 20 seconds simulation
+        shm->openingTime = simulationStartTime;
+        shm->closingTime = simulationStartTime + 25; // 25 seconds simulation (emergency test)
+        shm->dailyStats.simulationStartTime = simulationStartTime;
 
         std::cout << "[Main] IPC structures initialized" << std::endl;
 
@@ -248,17 +252,16 @@ int main() {
             const char* description;
         };
 
-        // Test child supervision: children under 8 need adult guardian
-        // Adults can supervise max 2 children
+        // Test various tourists including VIPs, children, seniors
         std::vector<TouristConfig> tourists = {
-            {1, 35, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Adult 1 (potential guardian)"},
+            {1, 35, TouristType::PEDESTRIAN, true, true, -1, TrailDifficulty::EASY, "Adult VIP 1"},
             {2, 6, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child 6yo (needs guardian)"},
-            {3, 5, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child 5yo (needs guardian)"},
+            {3, 70, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Senior 70yo (25% discount)"},
             {4, 40, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Adult 2 (potential guardian)"},
             {5, 7, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child 7yo (needs guardian)"},
             {6, 30, TouristType::CYCLIST, false, true, -1, TrailDifficulty::MEDIUM, "Adult cyclist"},
-            {7, 10, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child 10yo (no guardian needed)"},
-            {8, 25, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Adult 3"},
+            {7, 9, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child 9yo (discount, no guardian)"},
+            {8, 25, TouristType::PEDESTRIAN, true, true, -1, TrailDifficulty::EASY, "Adult VIP 2"},
         };
 
         for (const auto& t : tourists) {
@@ -272,8 +275,12 @@ int main() {
 
         // Main simulation loop
         std::cout << "\n[Main] Simulation running..." << std::endl;
+        std::cout << "[Main] Emergency stop scheduled at 8 seconds" << std::endl;
+        std::cout << "[Main] Resume scheduled at 13 seconds" << std::endl;
 
         time_t startTime = time(nullptr);
+        bool emergencyTriggered = false;
+        bool resumeTriggered = false;
 
         while (!g_shouldExit) {
             time_t elapsed = time(nullptr) - startTime;
@@ -290,8 +297,28 @@ int main() {
                 break;
             }
 
-            // Timeout after 25 seconds
-            if (elapsed >= 25) {
+            // Trigger emergency stop at 8 seconds
+            if (elapsed >= 8 && !emergencyTriggered) {
+                std::cout << "\n[Main] >>> TRIGGERING EMERGENCY STOP <<<" << std::endl;
+                std::cout << "[Main] Sending SIGUSR1 to Worker1 (PID: " << g_worker1Pid << ")" << std::endl;
+                if (g_worker1Pid > 0) {
+                    kill(g_worker1Pid, SIGUSR1);
+                }
+                emergencyTriggered = true;
+            }
+
+            // Trigger resume at 13 seconds
+            if (elapsed >= 13 && emergencyTriggered && !resumeTriggered) {
+                std::cout << "\n[Main] >>> TRIGGERING RESUME <<<" << std::endl;
+                std::cout << "[Main] Sending SIGUSR2 to Worker1 (PID: " << g_worker1Pid << ")" << std::endl;
+                if (g_worker1Pid > 0) {
+                    kill(g_worker1Pid, SIGUSR2);
+                }
+                resumeTriggered = true;
+            }
+
+            // Timeout after 30 seconds
+            if (elapsed >= 30) {
                 std::cout << "\n[Main] Timeout reached." << std::endl;
                 break;
             }
@@ -299,61 +326,108 @@ int main() {
             usleep(500000); // 500ms
         }
 
-        // Generate comprehensive daily report
-        std::cout << "\n" << std::string(60, '=') << std::endl;
-        std::cout << "           DAILY REPORT - ROPEWAY SIMULATION" << std::endl;
-        std::cout << std::string(60, '=') << std::endl;
+        // Record simulation end time
+        time_t simulationEndTime = time(nullptr);
+
+        // Generate comprehensive daily report to both console and file
+        std::stringstream report;
         {
             SemaphoreLock lock(sem, SemaphoreIndex::SHARED_MEMORY);
+            shm->dailyStats.simulationEndTime = simulationEndTime;
+
+            // Format timestamps
+            char startTimeStr[64], endTimeStr[64];
+            struct tm* tm_start = localtime(&shm->dailyStats.simulationStartTime);
+            strftime(startTimeStr, sizeof(startTimeStr), "%Y-%m-%d %H:%M:%S", tm_start);
+            struct tm* tm_end = localtime(&shm->dailyStats.simulationEndTime);
+            strftime(endTimeStr, sizeof(endTimeStr), "%Y-%m-%d %H:%M:%S", tm_end);
+
+            report << std::string(60, '=') << "\n";
+            report << "           DAILY REPORT - ROPEWAY SIMULATION\n";
+            report << std::string(60, '=') << "\n\n";
+
+            // Timing information
+            report << "--- SIMULATION TIMING ---\n";
+            report << "Start Time: " << startTimeStr << "\n";
+            report << "End Time:   " << endTimeStr << "\n";
+            report << "Duration:   " << (simulationEndTime - shm->dailyStats.simulationStartTime) << " seconds\n";
 
             // Overall statistics
-            std::cout << "\n--- OVERALL STATISTICS ---" << std::endl;
-            std::cout << "Final State: ";
+            report << "\n--- OVERALL STATISTICS ---\n";
+            report << "Final State: ";
             switch (shm->state) {
-                case RopewayState::STOPPED: std::cout << "STOPPED"; break;
-                case RopewayState::RUNNING: std::cout << "RUNNING"; break;
-                case RopewayState::EMERGENCY_STOP: std::cout << "EMERGENCY_STOP"; break;
-                case RopewayState::CLOSING: std::cout << "CLOSING"; break;
+                case RopewayState::STOPPED: report << "STOPPED"; break;
+                case RopewayState::RUNNING: report << "RUNNING"; break;
+                case RopewayState::EMERGENCY_STOP: report << "EMERGENCY_STOP"; break;
+                case RopewayState::CLOSING: report << "CLOSING"; break;
             }
-            std::cout << std::endl;
+            report << "\n";
 
             const DailyStatistics& stats = shm->dailyStats;
-            std::cout << "Total Tourists Served: " << stats.totalTourists << std::endl;
-            std::cout << "  - VIP Tourists: " << stats.vipTourists << std::endl;
-            std::cout << "  - Children (under 10): " << stats.childrenServed << std::endl;
-            std::cout << "  - Seniors (65+): " << stats.seniorsServed << std::endl;
-            std::cout << "Total Rides Completed: " << stats.totalRides << std::endl;
-            std::cout << "  - Cyclist Rides: " << stats.cyclistRides << std::endl;
-            std::cout << "  - Pedestrian Rides: " << stats.pedestrianRides << std::endl;
-            std::cout << "Emergency Stops: " << stats.emergencyStops << std::endl;
+            report << "Total Tourists Served: " << stats.totalTourists << "\n";
+            report << "  - VIP Tourists: " << stats.vipTourists << "\n";
+            report << "  - Children (under 10): " << stats.childrenServed << "\n";
+            report << "  - Seniors (65+): " << stats.seniorsServed << "\n";
+            report << "Total Rides Completed: " << stats.totalRides << "\n";
+            report << "  - Cyclist Rides: " << stats.cyclistRides << "\n";
+            report << "  - Pedestrian Rides: " << stats.pedestrianRides << "\n";
+            report << "Total Revenue: " << std::fixed << std::setprecision(2) << stats.totalRevenueWithDiscounts << "\n";
+            report << "Emergency Stops: " << stats.emergencyStops << "\n";
+            if (stats.totalEmergencyDuration > 0) {
+                report << "Total Emergency Duration: " << stats.totalEmergencyDuration << " seconds\n";
+            }
 
             // Per-tourist ride report
-            std::cout << "\n--- RIDES PER TOURIST/TICKET ---" << std::endl;
-            std::cout << std::left << std::setw(10) << "Tourist"
-                      << std::setw(10) << "Ticket"
-                      << std::setw(8) << "Age"
-                      << std::setw(12) << "Type"
-                      << std::setw(6) << "VIP"
-                      << std::setw(8) << "Rides"
-                      << std::setw(12) << "EntryGates"
-                      << "RideGates" << std::endl;
-            std::cout << std::string(76, '-') << std::endl;
+            report << "\n--- RIDES PER TOURIST/TICKET ---\n";
+            report << std::left << std::setw(10) << "Tourist"
+                   << std::setw(10) << "Ticket"
+                   << std::setw(8) << "Age"
+                   << std::setw(12) << "Type"
+                   << std::setw(6) << "VIP"
+                   << std::setw(8) << "Rides"
+                   << std::setw(12) << "EntryGates"
+                   << "RideGates\n";
+            report << std::string(76, '-') << "\n";
 
             for (uint32_t i = 0; i < shm->touristRecordCount; ++i) {
                 const TouristRideRecord& rec = shm->touristRecords[i];
-                std::cout << std::left << std::setw(10) << rec.touristId
-                          << std::setw(10) << rec.ticketId
-                          << std::setw(8) << rec.age
-                          << std::setw(12) << (rec.type == TouristType::CYCLIST ? "CYCLIST" : "PEDESTRIAN")
-                          << std::setw(6) << (rec.isVip ? "Yes" : "No")
-                          << std::setw(8) << rec.ridesCompleted
-                          << std::setw(12) << rec.entryGatePassages
-                          << rec.rideGatePassages << std::endl;
+                report << std::left << std::setw(10) << rec.touristId
+                       << std::setw(10) << rec.ticketId
+                       << std::setw(8) << rec.age
+                       << std::setw(12) << (rec.type == TouristType::CYCLIST ? "CYCLIST" : "PEDESTRIAN")
+                       << std::setw(6) << (rec.isVip ? "Yes" : "No")
+                       << std::setw(8) << rec.ridesCompleted
+                       << std::setw(12) << rec.entryGatePassages
+                       << rec.rideGatePassages << "\n";
+            }
+
+            // Emergency stop log
+            if (stats.emergencyRecordCount > 0) {
+                report << "\n--- EMERGENCY STOP LOG ---\n";
+                for (uint32_t i = 0; i < stats.emergencyRecordCount; ++i) {
+                    const EmergencyStopRecord& rec = stats.emergencyRecords[i];
+                    char startTimeStr[32], endTimeStr[32];
+                    struct tm* tm_start = localtime(&rec.startTime);
+                    strftime(startTimeStr, sizeof(startTimeStr), "%H:%M:%S", tm_start);
+
+                    report << "  [" << (i + 1) << "] Started: " << startTimeStr
+                           << " by Worker" << rec.initiatorWorkerId;
+
+                    if (rec.resumed && rec.endTime > 0) {
+                        struct tm* tm_end = localtime(&rec.endTime);
+                        strftime(endTimeStr, sizeof(endTimeStr), "%H:%M:%S", tm_end);
+                        report << " | Resumed: " << endTimeStr
+                               << " | Duration: " << (rec.endTime - rec.startTime) << "s";
+                    } else {
+                        report << " | NOT RESUMED";
+                    }
+                    report << "\n";
+                }
             }
 
             // Gate passage log summary
-            std::cout << "\n--- GATE PASSAGE LOG ---" << std::endl;
-            std::cout << "Total Gate Passages Recorded: " << shm->gateLog.count << std::endl;
+            report << "\n--- GATE PASSAGE LOG ---\n";
+            report << "Total Gate Passages Recorded: " << shm->gateLog.count << "\n";
 
             uint32_t entryAllowed = 0, entryDenied = 0, rideAllowed = 0, rideDenied = 0;
             for (uint32_t i = 0; i < shm->gateLog.count; ++i) {
@@ -364,28 +438,40 @@ int main() {
                     if (p.wasAllowed) rideAllowed++; else rideDenied++;
                 }
             }
-            std::cout << "Entry Gates: " << entryAllowed << " allowed, " << entryDenied << " denied" << std::endl;
-            std::cout << "Ride Gates:  " << rideAllowed << " allowed, " << rideDenied << " denied" << std::endl;
+            report << "Entry Gates: " << entryAllowed << " allowed, " << entryDenied << " denied\n";
+            report << "Ride Gates:  " << rideAllowed << " allowed, " << rideDenied << " denied\n";
 
-            // Recent gate passages
-            if (shm->gateLog.count > 0) {
-                std::cout << "\nRecent Gate Passages:" << std::endl;
-                uint32_t start = (shm->gateLog.count > 10) ? shm->gateLog.count - 10 : 0;
-                for (uint32_t i = start; i < shm->gateLog.count; ++i) {
-                    const GatePassage& p = shm->gateLog.entries[i];
-                    char timeStr[32];
-                    struct tm* tm_info = localtime(&p.timestamp);
-                    strftime(timeStr, sizeof(timeStr), "%H:%M:%S", tm_info);
-                    std::cout << "  [" << timeStr << "] "
-                              << (p.gateType == GateType::ENTRY ? "ENTRY" : "RIDE ")
-                              << " Gate " << p.gateNumber
-                              << " - Tourist " << p.touristId
-                              << " (Ticket " << p.ticketId << ")"
-                              << " - " << (p.wasAllowed ? "ALLOWED" : "DENIED") << std::endl;
-                }
+            // All gate passages for file report
+            report << "\n--- FULL GATE PASSAGE LOG ---\n";
+            for (uint32_t i = 0; i < shm->gateLog.count; ++i) {
+                const GatePassage& p = shm->gateLog.entries[i];
+                char timeStr[32];
+                struct tm* tm_info = localtime(&p.timestamp);
+                strftime(timeStr, sizeof(timeStr), "%H:%M:%S", tm_info);
+                report << "  [" << timeStr << "] "
+                       << (p.gateType == GateType::ENTRY ? "ENTRY" : "RIDE ")
+                       << " Gate " << p.gateNumber
+                       << " - Tourist " << p.touristId
+                       << " (Ticket " << p.ticketId << ")"
+                       << " - " << (p.wasAllowed ? "ALLOWED" : "DENIED") << "\n";
             }
+
+            report << std::string(60, '=') << "\n";
         }
-        std::cout << std::string(60, '=') << std::endl;
+
+        // Output to console (truncated gate log)
+        std::cout << "\n" << report.str();
+
+        // Save full report to file
+        std::string reportFilename = "daily_report_" + std::to_string(simulationEndTime) + ".txt";
+        std::ofstream reportFile(reportFilename);
+        if (reportFile.is_open()) {
+            reportFile << report.str();
+            reportFile.close();
+            std::cout << "\n[Main] Daily report saved to: " << reportFilename << std::endl;
+        } else {
+            std::cerr << "[Main] Warning: Could not save report to file" << std::endl;
+        }
 
         // Cleanup
         std::cout << "\n[Main] Cleaning up processes..." << std::endl;
