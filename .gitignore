@@ -1,0 +1,14 @@
+example_selective
+example_selective_import.cpp
+ropeway_simulation
+test_types
+.DS_Store
+.idea
+cmake-build-*
+out
+build
+*.o
+*.a
+*.so
+*.dylib
+*.tmp
