@@ -2,7 +2,7 @@
 
 #include <ctime>
 #include <sys/types.h>
-#include "common/enums.hpp"
+#include "common/ropeway_state.hpp"
 #include "common/config.hpp"
 #include "structures/chair.hpp"
 

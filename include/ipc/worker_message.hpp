@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ctime>
-#include "common/enums.hpp"
+#include "common/worker_signal.hpp"
 
 /**
  * Structure for worker-to-worker communication
