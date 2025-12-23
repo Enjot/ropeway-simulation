@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <ctime>
 #include "common/gate_type.hpp"
 
@@ -7,13 +8,18 @@
  * Structure for logging gate passages
  */
 struct GatePassage {
-    int touristId;               // Tourist ID
-    int passId;                  // Pass ID
-    GateType gateType;           // Entry or ride gate
-    int gateNumber;              // Specific gate number (0-3 for entry, 0-2 for ride)
-    time_t timestamp;            // Time of passage
-    bool wasAllowed;             // Whether passage was allowed
+    uint32_t touristId;
+    uint32_t ticketId;
+    GateType gateType; // Entry or ride gate
+    uint32_t gateNumber; // Specific gate number (0-3 for entry, 0-2 for ride)
+    time_t timestamp;
+    bool wasAllowed;
 
-    GatePassage() : touristId(0), passId(0), gateType(GateType::ENTRY),
-                    gateNumber(0), timestamp(0), wasAllowed(false) {}
+    GatePassage() : touristId{0},
+                    ticketId{0},
+                    gateType{GateType::ENTRY},
+                    gateNumber{0},
+                    timestamp{0},
+                    wasAllowed{false} {
+    }
 };

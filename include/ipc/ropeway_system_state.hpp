@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ctime>
+#include <cstdint>
 #include <sys/types.h>
 #include "common/ropeway_state.hpp"
 #include "common/config.hpp"
@@ -11,23 +11,28 @@
  * This is the main shared state accessible by all processes
  */
 struct RopewaySystemState {
-    RopewayState state;                          // Current operational state
-    int touristsInStation;                       // Current tourists in the lower station area
-    int touristsOnPlatform;                      // Tourists waiting on a platform
-    int activeChairs;                            // Number of chairs currently in use
-    Chair chairs[RopewayConfig::TOTAL_CHAIRS];   // All chairs
-    time_t openingTime;                          // Tp - opening time
-    time_t closingTime;                          // Tk - closing time
-    bool acceptingNewTourists;                   // Whether accepting new entries
-    int totalRidesToday;                         // Total rides completed today
-    pid_t worker1Pid;                            // Process ID of worker 1
-    pid_t worker2Pid;                            // Process ID of worker 2
+    RopewayState state;
+    uint32_t touristsInLowerStation;
+    uint32_t touristsOnPlatform;
+    uint32_t chairsInUse;
+    Chair chairs[Config::Chair::QUANTITY];
+    time_t openingTime;
+    time_t closingTime;
+    bool acceptingNewTourists;
+    uint32_t totalRidesToday;
+    pid_t worker1Pid;
+    pid_t worker2Pid;
 
-    RopewaySystemState() : state(RopewayState::STOPPED),
-                           touristsInStation(0), touristsOnPlatform(0),
-                           activeChairs(0),
-                           openingTime(RopewayConfig::DEFAULT_OPENING_TIME),
-                           closingTime(RopewayConfig::DEFAULT_CLOSING_TIME),
-                           acceptingNewTourists(false), totalRidesToday(0),
-                           worker1Pid(0), worker2Pid(0) {}
+    RopewaySystemState() : state{RopewayState::STOPPED},
+                           touristsInLowerStation{0},
+                           touristsOnPlatform{0},
+                           chairsInUse{0},
+                           chairs{},
+                           openingTime{Config::Ropeway::DEFAULT_OPENING_TIME},
+                           closingTime{Config::Ropeway::DEFAULT_CLOSING_TIME},
+                           acceptingNewTourists{false},
+                           totalRidesToday{0},
+                           worker1Pid{0},
+                           worker2Pid{0} {
+    }
 };
