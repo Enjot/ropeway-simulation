@@ -7,8 +7,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
-add_executable(ropeway_simulation main.cpp
-        # Common headers
+# Header files list (for IDE integration)
+set(COMMON_HEADERS
         include/common/config.hpp
         include/common/gate_type.hpp
         include/common/ropeway_state.hpp
@@ -17,16 +17,35 @@ add_executable(ropeway_simulation main.cpp
         include/common/tourist_type.hpp
         include/common/trail_difficulty.hpp
         include/common/worker_signal.hpp
-        # IPC headers
+)
+
+set(IPC_HEADERS
         include/ipc/MessageQueue.hpp
         include/ipc/ropeway_system_state.hpp
         include/ipc/semaphore_index.hpp
         include/ipc/Semaphore.hpp
         include/ipc/SharedMemory.hpp
         include/ipc/worker_message.hpp
-        # Structure headers
+)
+
+set(STRUCTURE_HEADERS
         include/structures/chair.hpp
         include/structures/daily_statistic.hpp
         include/structures/gate_passage.hpp
         include/structures/ticket.hpp
+        include/structures/tourist.hpp
+)
+
+# Main simulation controller
+add_executable(ropeway_simulation main.cpp
+        ${COMMON_HEADERS}
+        ${IPC_HEADERS}
+        ${STRUCTURE_HEADERS}
+)
+
+# Tourist process (spawned via fork/exec)
+add_executable(tourist_process src/processes/tourist_process.cpp
+        ${COMMON_HEADERS}
+        ${IPC_HEADERS}
+        ${STRUCTURE_HEADERS}
 )
