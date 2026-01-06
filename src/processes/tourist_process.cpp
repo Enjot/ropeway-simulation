@@ -335,6 +335,17 @@ private:
                     }
                     std::cout << std::endl;
 
+                    // Register tourist for daily report tracking
+                    {
+                        SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                        shm_->registerTourist(tourist_.id, tourist_.ticketId,
+                                              tourist_.age, tourist_.type, tourist_.isVip);
+                        shm_->dailyStats.totalTourists++;
+                        if (tourist_.isVip) shm_->dailyStats.vipTourists++;
+                        if (tourist_.age < 10) shm_->dailyStats.childrenServed++;
+                        if (tourist_.age >= 65) shm_->dailyStats.seniorsServed++;
+                    }
+
                     if (!tourist_.wantsToRide) {
                         changeState(TouristState::LEAVING);
                     } else {
@@ -375,14 +386,20 @@ private:
 
         if (!entryGate_.tryEnter(tourist_.id, tourist_.isVip, gateNumber)) {
             std::cerr << "[Tourist " << tourist_.id << "] Failed to enter station" << std::endl;
+            // Log denied entry
+            {
+                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                shm_->logGatePassage(tourist_.id, tourist_.ticketId, GateType::ENTRY, gateNumber, false);
+            }
             changeState(TouristState::LEAVING);
             return;
         }
 
-        // Update shared state
+        // Update shared state and log gate passage
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
             shm_->touristsInLowerStation++;
+            shm_->logGatePassage(tourist_.id, tourist_.ticketId, GateType::ENTRY, gateNumber, true);
         }
 
         std::cout << "[Tourist " << tourist_.id << "] Entered through entry gate " << gateNumber
@@ -551,13 +568,26 @@ private:
         // Scale down: 300s -> 3s for testing
         usleep((rideTime / 100) * 1000000);
 
-        // Update counts and release chair
+        // Update counts, record ride, and release chair
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
             if (shm_->touristsOnPlatform > 0) {
                 shm_->touristsOnPlatform--;
             }
             shm_->totalRidesToday++;
+
+            // Record ride for daily report
+            shm_->recordRide(tourist_.id);
+            shm_->dailyStats.totalRides++;
+            if (tourist_.type == TouristType::CYCLIST) {
+                shm_->dailyStats.cyclistRides++;
+            } else {
+                shm_->dailyStats.pedestrianRides++;
+            }
+
+            // Log ride gate passage
+            uint32_t rideGateNumber = tourist_.id % Config::Gate::NUM_RIDE_GATES;
+            shm_->logGatePassage(tourist_.id, tourist_.ticketId, GateType::RIDE, rideGateNumber, true);
 
             // Release chair (only first passenger does this to avoid double-release)
             if (assignedChairId_ >= 0 && static_cast<uint32_t>(assignedChairId_) < Config::Chair::QUANTITY) {

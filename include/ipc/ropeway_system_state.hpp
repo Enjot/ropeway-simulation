@@ -5,7 +5,10 @@
 #include "common/ropeway_state.hpp"
 #include "common/config.hpp"
 #include "structures/chair.hpp"
+#include "structures/daily_statistic.hpp"
+#include "structures/gate_passage.hpp"
 #include "common/tourist_type.hpp"
+#include "common/gate_type.hpp"
 
 /**
  * Tourist entry in the boarding queue
@@ -67,6 +70,43 @@ struct BoardingQueue {
 };
 
 /**
+ * Per-tourist ride record for daily report
+ */
+struct TouristRideRecord {
+    uint32_t touristId;
+    uint32_t ticketId;
+    uint32_t age;
+    TouristType type;
+    bool isVip;
+    uint32_t ridesCompleted;
+    uint32_t entryGatePassages;
+    uint32_t rideGatePassages;
+
+    TouristRideRecord() : touristId{0}, ticketId{0}, age{0},
+                          type{TouristType::PEDESTRIAN}, isVip{false},
+                          ridesCompleted{0}, entryGatePassages{0}, rideGatePassages{0} {}
+};
+
+/**
+ * Gate passage log for daily report
+ */
+struct GatePassageLog {
+    static constexpr uint32_t MAX_ENTRIES = 200;
+
+    GatePassage entries[MAX_ENTRIES];
+    uint32_t count;
+
+    GatePassageLog() : entries{}, count{0} {}
+
+    bool addEntry(const GatePassage& entry) {
+        if (count >= MAX_ENTRIES) return false;
+        entries[count] = entry;
+        ++count;
+        return true;
+    }
+};
+
+/**
  * Structure for shared memory - ropeway system state
  * This is the main shared state accessible by all processes
  */
@@ -77,6 +117,14 @@ struct RopewaySystemState {
     uint32_t chairsInUse;
     Chair chairs[Config::Chair::QUANTITY];
     BoardingQueue boardingQueue;    // Queue of tourists waiting to board
+
+    // Daily statistics and reporting
+    DailyStatistics dailyStats;
+    static constexpr uint32_t MAX_TOURIST_RECORDS = 100;
+    TouristRideRecord touristRecords[MAX_TOURIST_RECORDS];
+    uint32_t touristRecordCount;
+    GatePassageLog gateLog;
+
     time_t openingTime;
     time_t closingTime;
     bool acceptingNewTourists;
@@ -90,11 +138,82 @@ struct RopewaySystemState {
                            chairsInUse{0},
                            chairs{},
                            boardingQueue{},
+                           dailyStats{},
+                           touristRecords{},
+                           touristRecordCount{0},
+                           gateLog{},
                            openingTime{Config::Ropeway::DEFAULT_OPENING_TIME},
                            closingTime{Config::Ropeway::DEFAULT_CLOSING_TIME},
                            acceptingNewTourists{false},
                            totalRidesToday{0},
                            worker1Pid{0},
                            worker2Pid{0} {
+    }
+
+    /**
+     * Register a tourist for tracking
+     */
+    int32_t registerTourist(uint32_t touristId, uint32_t ticketId, uint32_t age,
+                            TouristType type, bool isVip) {
+        if (touristRecordCount >= MAX_TOURIST_RECORDS) return -1;
+
+        TouristRideRecord& record = touristRecords[touristRecordCount];
+        record.touristId = touristId;
+        record.ticketId = ticketId;
+        record.age = age;
+        record.type = type;
+        record.isVip = isVip;
+        record.ridesCompleted = 0;
+        record.entryGatePassages = 0;
+        record.rideGatePassages = 0;
+
+        return static_cast<int32_t>(touristRecordCount++);
+    }
+
+    /**
+     * Find tourist record index
+     */
+    int32_t findTouristRecord(uint32_t touristId) const {
+        for (uint32_t i = 0; i < touristRecordCount; ++i) {
+            if (touristRecords[i].touristId == touristId) {
+                return static_cast<int32_t>(i);
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Log a gate passage
+     */
+    void logGatePassage(uint32_t touristId, uint32_t ticketId,
+                        GateType gateType, uint32_t gateNumber, bool allowed) {
+        GatePassage passage;
+        passage.touristId = touristId;
+        passage.ticketId = ticketId;
+        passage.gateType = gateType;
+        passage.gateNumber = gateNumber;
+        passage.timestamp = time(nullptr);
+        passage.wasAllowed = allowed;
+        gateLog.addEntry(passage);
+
+        // Update tourist record
+        int32_t idx = findTouristRecord(touristId);
+        if (idx >= 0) {
+            if (gateType == GateType::ENTRY) {
+                touristRecords[idx].entryGatePassages++;
+            } else {
+                touristRecords[idx].rideGatePassages++;
+            }
+        }
+    }
+
+    /**
+     * Record a completed ride for a tourist
+     */
+    void recordRide(uint32_t touristId) {
+        int32_t idx = findTouristRecord(touristId);
+        if (idx >= 0) {
+            touristRecords[idx].ridesCompleted++;
+        }
     }
 };

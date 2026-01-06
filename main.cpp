@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <vector>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -176,8 +177,8 @@ namespace {
 }
 
 int main() {
-    std::cout << "=== Ropeway Simulation - Phase 6: Child Supervision Test ===" << std::endl;
-    std::cout << "Testing: Chair boarding with child-guardian pairing\n" << std::endl;
+    std::cout << "=== Ropeway Simulation - Phase 7: Daily Reports Test ===" << std::endl;
+    std::cout << "Testing: Gate logging and daily report generation\n" << std::endl;
 
     setupSignalHandlers();
     cleanupIpc();
@@ -298,11 +299,16 @@ int main() {
             usleep(500000); // 500ms
         }
 
-        // Print final statistics
-        std::cout << "\n=== Final Simulation Statistics ===" << std::endl;
+        // Generate comprehensive daily report
+        std::cout << "\n" << std::string(60, '=') << std::endl;
+        std::cout << "           DAILY REPORT - ROPEWAY SIMULATION" << std::endl;
+        std::cout << std::string(60, '=') << std::endl;
         {
             SemaphoreLock lock(sem, SemaphoreIndex::SHARED_MEMORY);
-            std::cout << "State: ";
+
+            // Overall statistics
+            std::cout << "\n--- OVERALL STATISTICS ---" << std::endl;
+            std::cout << "Final State: ";
             switch (shm->state) {
                 case RopewayState::STOPPED: std::cout << "STOPPED"; break;
                 case RopewayState::RUNNING: std::cout << "RUNNING"; break;
@@ -310,10 +316,76 @@ int main() {
                 case RopewayState::CLOSING: std::cout << "CLOSING"; break;
             }
             std::cout << std::endl;
-            std::cout << "Total rides today: " << shm->totalRidesToday << std::endl;
-            std::cout << "Tourists in station: " << shm->touristsInLowerStation << std::endl;
-            std::cout << "Tourists on platform: " << shm->touristsOnPlatform << std::endl;
+
+            const DailyStatistics& stats = shm->dailyStats;
+            std::cout << "Total Tourists Served: " << stats.totalTourists << std::endl;
+            std::cout << "  - VIP Tourists: " << stats.vipTourists << std::endl;
+            std::cout << "  - Children (under 10): " << stats.childrenServed << std::endl;
+            std::cout << "  - Seniors (65+): " << stats.seniorsServed << std::endl;
+            std::cout << "Total Rides Completed: " << stats.totalRides << std::endl;
+            std::cout << "  - Cyclist Rides: " << stats.cyclistRides << std::endl;
+            std::cout << "  - Pedestrian Rides: " << stats.pedestrianRides << std::endl;
+            std::cout << "Emergency Stops: " << stats.emergencyStops << std::endl;
+
+            // Per-tourist ride report
+            std::cout << "\n--- RIDES PER TOURIST/TICKET ---" << std::endl;
+            std::cout << std::left << std::setw(10) << "Tourist"
+                      << std::setw(10) << "Ticket"
+                      << std::setw(8) << "Age"
+                      << std::setw(12) << "Type"
+                      << std::setw(6) << "VIP"
+                      << std::setw(8) << "Rides"
+                      << std::setw(12) << "EntryGates"
+                      << "RideGates" << std::endl;
+            std::cout << std::string(76, '-') << std::endl;
+
+            for (uint32_t i = 0; i < shm->touristRecordCount; ++i) {
+                const TouristRideRecord& rec = shm->touristRecords[i];
+                std::cout << std::left << std::setw(10) << rec.touristId
+                          << std::setw(10) << rec.ticketId
+                          << std::setw(8) << rec.age
+                          << std::setw(12) << (rec.type == TouristType::CYCLIST ? "CYCLIST" : "PEDESTRIAN")
+                          << std::setw(6) << (rec.isVip ? "Yes" : "No")
+                          << std::setw(8) << rec.ridesCompleted
+                          << std::setw(12) << rec.entryGatePassages
+                          << rec.rideGatePassages << std::endl;
+            }
+
+            // Gate passage log summary
+            std::cout << "\n--- GATE PASSAGE LOG ---" << std::endl;
+            std::cout << "Total Gate Passages Recorded: " << shm->gateLog.count << std::endl;
+
+            uint32_t entryAllowed = 0, entryDenied = 0, rideAllowed = 0, rideDenied = 0;
+            for (uint32_t i = 0; i < shm->gateLog.count; ++i) {
+                const GatePassage& p = shm->gateLog.entries[i];
+                if (p.gateType == GateType::ENTRY) {
+                    if (p.wasAllowed) entryAllowed++; else entryDenied++;
+                } else {
+                    if (p.wasAllowed) rideAllowed++; else rideDenied++;
+                }
+            }
+            std::cout << "Entry Gates: " << entryAllowed << " allowed, " << entryDenied << " denied" << std::endl;
+            std::cout << "Ride Gates:  " << rideAllowed << " allowed, " << rideDenied << " denied" << std::endl;
+
+            // Recent gate passages
+            if (shm->gateLog.count > 0) {
+                std::cout << "\nRecent Gate Passages:" << std::endl;
+                uint32_t start = (shm->gateLog.count > 10) ? shm->gateLog.count - 10 : 0;
+                for (uint32_t i = start; i < shm->gateLog.count; ++i) {
+                    const GatePassage& p = shm->gateLog.entries[i];
+                    char timeStr[32];
+                    struct tm* tm_info = localtime(&p.timestamp);
+                    strftime(timeStr, sizeof(timeStr), "%H:%M:%S", tm_info);
+                    std::cout << "  [" << timeStr << "] "
+                              << (p.gateType == GateType::ENTRY ? "ENTRY" : "RIDE ")
+                              << " Gate " << p.gateNumber
+                              << " - Tourist " << p.touristId
+                              << " (Ticket " << p.ticketId << ")"
+                              << " - " << (p.wasAllowed ? "ALLOWED" : "DENIED") << std::endl;
+                }
+            }
         }
+        std::cout << std::string(60, '=') << std::endl;
 
         // Cleanup
         std::cout << "\n[Main] Cleaning up processes..." << std::endl;
