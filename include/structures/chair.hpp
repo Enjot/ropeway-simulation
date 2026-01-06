@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <ctime>
+#include "common/config.hpp"
 
 /**
  * Structure representing a chair
@@ -23,7 +25,7 @@ struct Chair {
               arrivalTime{0} {
     }
 
-    constexpr bool hasEnoughSpace(const uint32_t slotsNeeded) const {
-        return slotsUsed + slotsNeeded <= Config::Chair::QUANTITY;
+    [[nodiscard]] constexpr bool hasEnoughSpace(const uint32_t slotsNeeded) const {
+        return slotsUsed + slotsNeeded <= Config::Chair::SLOTS_PER_CHAIR;
     }
 };

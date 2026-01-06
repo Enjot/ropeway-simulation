@@ -2,25 +2,28 @@
 
 #include <cstdint>
 #include <ctime>
+#include <cstring>
 #include "common/worker_signal.hpp"
 
 /**
  * Structure for worker-to-worker communication
- * Used with message queues
+ * Used with System V message queues
+ * Note: mtype must be the first member (long type) for msgsnd/msgrcv
  */
 struct WorkerMessage {
-    uint64_t messageType;
+    long mtype;
     uint32_t senderId;
     uint32_t receiverId;
     WorkerSignal signal;
     time_t timestamp;
     char messageText[256];
 
-    WorkerMessage() : messageType{1},
+    WorkerMessage() : mtype{1},
                       senderId{0},
                       receiverId{0},
                       signal{WorkerSignal::STATION_CLEAR},
                       timestamp{0},
-                      messageText{""} {
+                      messageText{} {
+        std::memset(messageText, 0, sizeof(messageText));
     }
 };
