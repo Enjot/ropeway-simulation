@@ -9,6 +9,7 @@
 #include "ipc/MessageQueue.hpp"
 #include "ipc/ropeway_system_state.hpp"
 #include "ipc/semaphore_index.hpp"
+#include "ipc/cashier_message.hpp"
 #include "structures/tourist.hpp"
 #include "common/config.hpp"
 
@@ -43,17 +44,18 @@ namespace {
 
     void printUsage(const char* programName) {
         std::cerr << "Usage: " << programName
-                  << " <id> <age> <type> <isVip> <wantsToRide> <guardianId> <trail> <shmKey> <semKey> <msgKey>\n"
-                  << "  id:          Tourist ID (uint32)\n"
-                  << "  age:         Tourist age (uint32)\n"
-                  << "  type:        0=PEDESTRIAN, 1=CYCLIST\n"
-                  << "  isVip:       0=no, 1=yes\n"
-                  << "  wantsToRide: 0=no, 1=yes\n"
-                  << "  guardianId:  Guardian tourist ID (-1 if none)\n"
-                  << "  trail:       0=EASY, 1=MEDIUM, 2=HARD\n"
-                  << "  shmKey:      Shared memory key\n"
-                  << "  semKey:      Semaphore key\n"
-                  << "  msgKey:      Message queue key\n";
+                  << " <id> <age> <type> <isVip> <wantsToRide> <guardianId> <trail> <shmKey> <semKey> <msgKey> <cashierMsgKey>\n"
+                  << "  id:            Tourist ID (uint32)\n"
+                  << "  age:           Tourist age (uint32)\n"
+                  << "  type:          0=PEDESTRIAN, 1=CYCLIST\n"
+                  << "  isVip:         0=no, 1=yes (request VIP)\n"
+                  << "  wantsToRide:   0=no, 1=yes\n"
+                  << "  guardianId:    Guardian tourist ID (-1 if none)\n"
+                  << "  trail:         0=EASY, 1=MEDIUM, 2=HARD\n"
+                  << "  shmKey:        Shared memory key\n"
+                  << "  semKey:        Semaphore key\n"
+                  << "  msgKey:        Worker message queue key\n"
+                  << "  cashierMsgKey: Cashier message queue key\n";
     }
 
     struct TouristArgs {
@@ -67,10 +69,11 @@ namespace {
         key_t shmKey;
         key_t semKey;
         key_t msgKey;
+        key_t cashierMsgKey;
     };
 
     bool parseArgs(int argc, char* argv[], TouristArgs& args) {
-        if (argc != 11) {
+        if (argc != 12) {
             printUsage(argv[0]);
             return false;
         }
@@ -141,6 +144,12 @@ namespace {
             return false;
         }
 
+        args.cashierMsgKey = static_cast<key_t>(std::strtol(argv[11], &endPtr, 10));
+        if (*endPtr != '\0') {
+            std::cerr << "Error: Invalid cashierMsgKey\n";
+            return false;
+        }
+
         return true;
     }
 
@@ -179,13 +188,16 @@ public:
     TouristProcess(const TouristArgs& args)
         : tourist_{},
           shm_{args.shmKey, false},
-          sem_{args.semKey, SemaphoreIndex::TOTAL_SEMAPHORES, false} {
+          sem_{args.semKey, SemaphoreIndex::TOTAL_SEMAPHORES, false},
+          cashierRequestQueue_{args.cashierMsgKey, false},
+          cashierResponseQueue_{args.cashierMsgKey, false},
+          requestVip_{args.isVip} {
 
         tourist_.id = args.id;
         tourist_.pid = getpid();
         tourist_.age = args.age;
         tourist_.type = args.type;
-        tourist_.isVip = args.isVip;
+        tourist_.isVip = false; // Will be set by cashier
         tourist_.wantsToRide = args.wantsToRide;
         tourist_.guardianId = args.guardianId;
         tourist_.preferredTrail = args.trail;
@@ -195,7 +207,7 @@ public:
         std::cout << "[Tourist " << tourist_.id << "] Started: "
                   << typeToString(tourist_.type)
                   << ", age=" << tourist_.age
-                  << ", VIP=" << (tourist_.isVip ? "yes" : "no")
+                  << ", requestVIP=" << (requestVip_ ? "yes" : "no")
                   << ", wantsToRide=" << (tourist_.wantsToRide ? "yes" : "no")
                   << std::endl;
     }
@@ -277,20 +289,63 @@ private:
     }
 
     void handleAtCashier() {
-        // Simulate buying ticket (in real implementation, communicate with Cashier process)
-        usleep(200000 + (rand() % 300000)); // 200-500ms
+        // Send ticket request to Cashier
+        TicketRequest request;
+        request.mtype = CashierMsgType::REQUEST;
+        request.touristId = tourist_.id;
+        request.touristAge = tourist_.age;
+        request.requestedType = (tourist_.type == TouristType::CYCLIST)
+            ? TicketType::DAILY  // Cyclists typically want multiple rides
+            : TicketType::SINGLE_USE;
+        request.requestVip = requestVip_;
 
-        // For now, just get a ticket
-        tourist_.ticketId = tourist_.id * 1000 + 1;
-        tourist_.hasTicket = true;
+        std::cout << "[Tourist " << tourist_.id << "] Requesting ticket from cashier..." << std::endl;
 
-        std::cout << "[Tourist " << tourist_.id << "] Got ticket #" << tourist_.ticketId << std::endl;
-
-        if (!tourist_.wantsToRide) {
+        if (!cashierRequestQueue_.send(request)) {
+            std::cerr << "[Tourist " << tourist_.id << "] Failed to send ticket request" << std::endl;
             changeState(TouristState::LEAVING);
-        } else {
-            changeState(TouristState::WAITING_ENTRY);
+            return;
         }
+
+        // Wait for response (with timeout)
+        long myResponseType = CashierMsgType::RESPONSE_BASE + tourist_.id;
+        time_t startTime = time(nullptr);
+        constexpr int TIMEOUT_S = 10;
+
+        while (time(nullptr) - startTime < TIMEOUT_S && !g_shouldExit) {
+            auto response = cashierResponseQueue_.tryReceive(myResponseType);
+            if (response) {
+                if (response->success) {
+                    tourist_.ticketId = response->ticketId;
+                    tourist_.hasTicket = true;
+                    tourist_.isVip = response->isVip;
+
+                    std::cout << "[Tourist " << tourist_.id << "] Got ticket #" << response->ticketId
+                              << " - Price: " << response->price;
+                    if (response->discount > 0) {
+                        std::cout << " (discount: " << (response->discount * 100) << "%)";
+                    }
+                    if (response->isVip) {
+                        std::cout << " [VIP]";
+                    }
+                    std::cout << std::endl;
+
+                    if (!tourist_.wantsToRide) {
+                        changeState(TouristState::LEAVING);
+                    } else {
+                        changeState(TouristState::WAITING_ENTRY);
+                    }
+                } else {
+                    std::cout << "[Tourist " << tourist_.id << "] Ticket denied: " << response->message << std::endl;
+                    changeState(TouristState::LEAVING);
+                }
+                return;
+            }
+            usleep(50000); // 50ms
+        }
+
+        std::cerr << "[Tourist " << tourist_.id << "] Timeout waiting for ticket" << std::endl;
+        changeState(TouristState::LEAVING);
     }
 
     void handleWaitingEntry() {
@@ -431,6 +486,9 @@ private:
     Tourist tourist_;
     SharedMemory<RopewaySystemState> shm_;
     Semaphore sem_;
+    MessageQueue<TicketRequest> cashierRequestQueue_;
+    MessageQueue<TicketResponse> cashierResponseQueue_;
+    bool requestVip_;
 };
 
 int main(int argc, char* argv[]) {

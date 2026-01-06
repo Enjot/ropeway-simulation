@@ -20,6 +20,7 @@ set(COMMON_HEADERS
 )
 
 set(IPC_HEADERS
+        include/ipc/cashier_message.hpp
         include/ipc/MessageQueue.hpp
         include/ipc/ropeway_system_state.hpp
         include/ipc/semaphore_index.hpp
@@ -59,6 +60,13 @@ add_executable(worker1_process src/processes/worker1_process.cpp
 
 # Worker2 process - Upper Station Controller (spawned via fork/exec)
 add_executable(worker2_process src/processes/worker2_process.cpp
+        ${COMMON_HEADERS}
+        ${IPC_HEADERS}
+        ${STRUCTURE_HEADERS}
+)
+
+# Cashier process - Ticket sales (spawned via fork/exec)
+add_executable(cashier_process src/processes/cashier_process.cpp
         ${COMMON_HEADERS}
         ${IPC_HEADERS}
         ${STRUCTURE_HEADERS}
