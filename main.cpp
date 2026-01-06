@@ -176,8 +176,8 @@ namespace {
 }
 
 int main() {
-    std::cout << "=== Ropeway Simulation - Phase 5: VIP Priority Test ===" << std::endl;
-    std::cout << "Testing: Entry Gates with VIP Priority + Station Capacity Limits\n" << std::endl;
+    std::cout << "=== Ropeway Simulation - Phase 6: Child Supervision Test ===" << std::endl;
+    std::cout << "Testing: Chair boarding with child-guardian pairing\n" << std::endl;
 
     setupSignalHandlers();
     cleanupIpc();
@@ -191,9 +191,9 @@ int main() {
         MessageQueue<WorkerMessage> workerMsgQueue(MSG_KEY, true);
         MessageQueue<TicketRequest> cashierMsgQueue(CASHIER_MSG_KEY, true);
 
-        // Initialize semaphores - use small capacity to test queuing and VIP priority
-        constexpr int TEST_STATION_CAPACITY = 3; // Small capacity to force queuing
-        std::cout << "[Main] Station capacity set to " << TEST_STATION_CAPACITY << " for VIP priority testing" << std::endl;
+        // Initialize semaphores
+        constexpr int TEST_STATION_CAPACITY = 10; // Higher capacity for child supervision test
+        std::cout << "[Main] Station capacity set to " << TEST_STATION_CAPACITY << std::endl;
         sem.setValue(SemaphoreIndex::STATION_CAPACITY, TEST_STATION_CAPACITY);
         sem.setValue(SemaphoreIndex::SHARED_MEMORY, 1);
         sem.setValue(SemaphoreIndex::ENTRY_GATES, Config::Gate::NUM_ENTRY_GATES);
@@ -232,9 +232,9 @@ int main() {
 
         usleep(200000);
 
-        // Spawn tourists - testing VIP priority with limited station capacity
+        // Spawn tourists - testing child supervision
         std::vector<pid_t> touristPids;
-        std::cout << "\n[Main] Spawning tourists (testing VIP priority)..." << std::endl;
+        std::cout << "\n[Main] Spawning tourists (testing child supervision)..." << std::endl;
 
         struct TouristConfig {
             uint32_t id;
@@ -247,17 +247,17 @@ int main() {
             const char* description;
         };
 
-        // First spawn 4 regular tourists to fill station and create queue
-        // Then spawn VIPs who should skip ahead
+        // Test child supervision: children under 8 need adult guardian
+        // Adults can supervise max 2 children
         std::vector<TouristConfig> tourists = {
-            {1, 30, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Regular Tourist 1"},
-            {2, 35, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Regular Tourist 2"},
-            {3, 28, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Regular Tourist 3"},
-            {4, 40, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Regular Tourist 4 (should queue)"},
-            {5, 25, TouristType::PEDESTRIAN, true, true, -1, TrailDifficulty::EASY, "VIP Tourist (priority entry!)"},
-            {6, 32, TouristType::PEDESTRIAN, true, true, -1, TrailDifficulty::EASY, "VIP Tourist 2 (priority entry!)"},
-            {7, 45, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Regular Tourist 5"},
-            {8, 8, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child (discount)"},
+            {1, 35, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Adult 1 (potential guardian)"},
+            {2, 6, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child 6yo (needs guardian)"},
+            {3, 5, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child 5yo (needs guardian)"},
+            {4, 40, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Adult 2 (potential guardian)"},
+            {5, 7, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child 7yo (needs guardian)"},
+            {6, 30, TouristType::CYCLIST, false, true, -1, TrailDifficulty::MEDIUM, "Adult cyclist"},
+            {7, 10, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child 10yo (no guardian needed)"},
+            {8, 25, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Adult 3"},
         };
 
         for (const auto& t : tourists) {

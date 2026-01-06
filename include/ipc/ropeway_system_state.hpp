@@ -5,6 +5,66 @@
 #include "common/ropeway_state.hpp"
 #include "common/config.hpp"
 #include "structures/chair.hpp"
+#include "common/tourist_type.hpp"
+
+/**
+ * Tourist entry in the boarding queue
+ */
+struct BoardingQueueEntry {
+    uint32_t touristId;
+    pid_t touristPid;
+    uint32_t age;
+    TouristType type;
+    int32_t guardianId;         // Guardian tourist ID (-1 if none needed)
+    int32_t assignedChairId;    // Assigned chair (-1 if waiting)
+    bool needsSupervision;      // Child under 8
+    bool isAdult;               // Can supervise children
+    uint32_t dependentCount;    // Children currently assigned to this adult
+    bool readyToBoard;          // Set by Worker1 when group is ready
+
+    BoardingQueueEntry() : touristId{0}, touristPid{0}, age{0},
+                           type{TouristType::PEDESTRIAN}, guardianId{-1},
+                           assignedChairId{-1}, needsSupervision{false},
+                           isAdult{false}, dependentCount{0}, readyToBoard{false} {}
+};
+
+/**
+ * Boarding queue managed by Worker1
+ */
+struct BoardingQueue {
+    static constexpr uint32_t MAX_QUEUE_SIZE = 32;
+
+    BoardingQueueEntry entries[MAX_QUEUE_SIZE];
+    uint32_t count;
+    uint32_t nextChairId;
+
+    BoardingQueue() : entries{}, count{0}, nextChairId{0} {}
+
+    int32_t findTourist(uint32_t touristId) const {
+        for (uint32_t i = 0; i < count; ++i) {
+            if (entries[i].touristId == touristId) {
+                return static_cast<int32_t>(i);
+            }
+        }
+        return -1;
+    }
+
+    bool addTourist(const BoardingQueueEntry& entry) {
+        if (count >= MAX_QUEUE_SIZE) return false;
+        entries[count] = entry;
+        ++count;
+        return true;
+    }
+
+    void removeTourist(uint32_t index) {
+        if (index >= count) return;
+        for (uint32_t i = index; i < count - 1; ++i) {
+            entries[i] = entries[i + 1];
+        }
+        entries[count - 1] = BoardingQueueEntry{};
+        --count;
+    }
+};
 
 /**
  * Structure for shared memory - ropeway system state
@@ -16,6 +76,7 @@ struct RopewaySystemState {
     uint32_t touristsOnPlatform;
     uint32_t chairsInUse;
     Chair chairs[Config::Chair::QUANTITY];
+    BoardingQueue boardingQueue;    // Queue of tourists waiting to board
     time_t openingTime;
     time_t closingTime;
     bool acceptingNewTourists;
@@ -28,6 +89,7 @@ struct RopewaySystemState {
                            touristsOnPlatform{0},
                            chairsInUse{0},
                            chairs{},
+                           boardingQueue{},
                            openingTime{Config::Ropeway::DEFAULT_OPENING_TIME},
                            closingTime{Config::Ropeway::DEFAULT_CLOSING_TIME},
                            acceptingNewTourists{false},

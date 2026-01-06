@@ -4,6 +4,7 @@
 #include <csignal>
 #include <unistd.h>
 #include <ctime>
+#include <vector>
 
 #include "ipc/SharedMemory.hpp"
 #include "ipc/Semaphore.hpp"
@@ -260,13 +261,18 @@ private:
     }
 
     void handleRunningState() {
+        // Process boarding queue - assign tourists to chairs
+        processBoardingQueue();
+
         // Monitor platform and control ride gates
         uint32_t touristsOnPlatform;
         uint32_t chairsInUse;
+        uint32_t queueCount;
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
             touristsOnPlatform = shm_->touristsOnPlatform;
             chairsInUse = shm_->chairsInUse;
+            queueCount = shm_->boardingQueue.count;
         }
 
         // Log periodic status
@@ -275,6 +281,7 @@ private:
         if (now - lastStatusLog >= 5) {
             std::cout << "[Worker1] Status: Platform=" << touristsOnPlatform
                       << ", ChairsInUse=" << chairsInUse << "/" << Config::Chair::MAX_CONCURRENT_IN_USE
+                      << ", Queue=" << queueCount
                       << std::endl;
             lastStatusLog = now;
         }
@@ -294,6 +301,188 @@ private:
                 shm_->acceptingNewTourists = false;
             }
             sendMessage(WorkerSignal::STATION_CLEAR, "Closing time reached");
+        }
+    }
+
+    /**
+     * Process boarding queue - pair children with adults and assign to chairs
+     */
+    void processBoardingQueue() {
+        SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+
+        BoardingQueue& queue = shm_->boardingQueue;
+        if (queue.count == 0) return;
+
+        // First pass: pair children with available adults
+        pairChildrenWithAdults(queue);
+
+        // Second pass: assign tourists to chairs
+        assignTouristsToChairs(queue);
+    }
+
+    /**
+     * Pair children needing supervision with available adults
+     */
+    void pairChildrenWithAdults(BoardingQueue& queue) {
+        for (uint32_t i = 0; i < queue.count; ++i) {
+            BoardingQueueEntry& child = queue.entries[i];
+
+            // Skip if not a child needing supervision or already has guardian
+            if (!child.needsSupervision || child.guardianId != -1) {
+                continue;
+            }
+
+            // Find an available adult
+            for (uint32_t j = 0; j < queue.count; ++j) {
+                if (i == j) continue;
+
+                BoardingQueueEntry& adult = queue.entries[j];
+
+                // Check if can be guardian (adult, not already supervising max children)
+                if (adult.isAdult && adult.dependentCount < Config::Gate::MAX_CHILDREN_PER_ADULT) {
+                    // Assign guardian
+                    child.guardianId = static_cast<int32_t>(adult.touristId);
+                    adult.dependentCount++;
+
+                    std::cout << "[Worker1] Paired child " << child.touristId
+                              << " (age " << child.age << ") with guardian " << adult.touristId
+                              << std::endl;
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Assign tourists to chairs based on capacity rules
+     */
+    void assignTouristsToChairs(BoardingQueue& queue) {
+        // Check if we can allocate more chairs
+        if (shm_->chairsInUse >= Config::Chair::MAX_CONCURRENT_IN_USE) {
+            return;
+        }
+
+        // Find tourists ready to board (not children waiting for guardian)
+        // Group them for a chair
+        uint32_t slotsUsed = 0;
+        uint32_t cyclistCount = 0;
+        std::vector<uint32_t> groupIndices;
+
+        for (uint32_t i = 0; i < queue.count; ++i) {
+            BoardingQueueEntry& entry = queue.entries[i];
+
+            // Skip if already assigned or waiting for boarding
+            if (entry.readyToBoard || entry.assignedChairId >= 0) {
+                continue;
+            }
+
+            // Skip children without guardian
+            if (entry.needsSupervision && entry.guardianId == -1) {
+                continue;
+            }
+
+            // Calculate slot cost
+            uint32_t slotCost = (entry.type == TouristType::CYCLIST)
+                ? Config::Chair::CYCLIST_SLOT_COST
+                : Config::Chair::PEDESTRIAN_SLOT_COST;
+
+            // Check capacity constraints
+            if (slotsUsed + slotCost > Config::Chair::SLOTS_PER_CHAIR) {
+                continue; // Can't fit
+            }
+
+            // Check cyclist limit (max 2 per chair)
+            if (entry.type == TouristType::CYCLIST) {
+                if (cyclistCount >= Config::Chair::MAX_CYCLISTS_PER_CHAIR) {
+                    continue;
+                }
+                cyclistCount++;
+            }
+
+            // If child, ensure guardian is in this group
+            if (entry.needsSupervision && entry.guardianId != -1) {
+                // Check if guardian is already in group
+                bool guardianInGroup = false;
+                for (uint32_t idx : groupIndices) {
+                    if (queue.entries[idx].touristId == static_cast<uint32_t>(entry.guardianId)) {
+                        guardianInGroup = true;
+                        break;
+                    }
+                }
+                if (!guardianInGroup) {
+                    // Try to add guardian first
+                    int32_t guardianIdx = queue.findTourist(static_cast<uint32_t>(entry.guardianId));
+                    if (guardianIdx >= 0) {
+                        BoardingQueueEntry& guardian = queue.entries[guardianIdx];
+                        uint32_t guardianSlotCost = (guardian.type == TouristType::CYCLIST)
+                            ? Config::Chair::CYCLIST_SLOT_COST
+                            : Config::Chair::PEDESTRIAN_SLOT_COST;
+
+                        if (slotsUsed + guardianSlotCost + slotCost <= Config::Chair::SLOTS_PER_CHAIR) {
+                            groupIndices.push_back(static_cast<uint32_t>(guardianIdx));
+                            slotsUsed += guardianSlotCost;
+                            if (guardian.type == TouristType::CYCLIST) {
+                                cyclistCount++;
+                            }
+                        } else {
+                            continue; // Can't fit both
+                        }
+                    } else {
+                        continue; // Guardian not in queue
+                    }
+                }
+            }
+
+            groupIndices.push_back(i);
+            slotsUsed += slotCost;
+
+            // If chair is full, stop adding
+            if (slotsUsed >= Config::Chair::SLOTS_PER_CHAIR) {
+                break;
+            }
+        }
+
+        // If we have tourists to board, allocate a chair
+        if (!groupIndices.empty()) {
+            // Find available chair
+            int32_t chairId = -1;
+            for (uint32_t c = 0; c < Config::Chair::QUANTITY; ++c) {
+                uint32_t idx = (queue.nextChairId + c) % Config::Chair::QUANTITY;
+                if (!shm_->chairs[idx].isOccupied) {
+                    chairId = static_cast<int32_t>(idx);
+                    queue.nextChairId = (idx + 1) % Config::Chair::QUANTITY;
+                    break;
+                }
+            }
+
+            if (chairId >= 0) {
+                // Mark chair as occupied
+                shm_->chairs[chairId].isOccupied = true;
+                shm_->chairs[chairId].numPassengers = static_cast<uint32_t>(groupIndices.size());
+                shm_->chairs[chairId].slotsUsed = slotsUsed;
+                shm_->chairs[chairId].departureTime = time(nullptr);
+                shm_->chairs[chairId].arrivalTime = shm_->chairs[chairId].departureTime + Config::Chair::RIDE_TIME_S;
+                shm_->chairsInUse++;
+
+                std::cout << "[Worker1] Chair " << chairId << " assigned to group of "
+                          << groupIndices.size() << " tourists (slots: " << slotsUsed << "): ";
+
+                // Mark tourists as ready to board
+                for (size_t i = 0; i < groupIndices.size(); ++i) {
+                    BoardingQueueEntry& entry = queue.entries[groupIndices[i]];
+                    entry.assignedChairId = chairId;
+                    entry.readyToBoard = true;
+
+                    if (i < 4) {
+                        shm_->chairs[chairId].passengerIds[i] = static_cast<int32_t>(entry.touristId);
+                    }
+
+                    std::cout << entry.touristId;
+                    if (entry.needsSupervision) std::cout << "(child)";
+                    if (i < groupIndices.size() - 1) std::cout << ", ";
+                }
+                std::cout << std::endl;
+            }
         }
     }
 
