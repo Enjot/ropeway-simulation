@@ -110,7 +110,8 @@ public:
           msgQueue_{args.msgKey, false},
           isEmergencyStopped_{false},
           exitRoute1Active_{true},
-          exitRoute2Active_{true} {
+          exitRoute2Active_{true},
+          currentEmergencyRecordIndex_{-1} {
 
         // Register this worker's PID
         {
@@ -190,6 +191,7 @@ private:
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
             shm_->state = RopewayState::EMERGENCY_STOP;
+            currentEmergencyRecordIndex_ = shm_->dailyStats.recordEmergencyStart(WORKER_ID);
         }
 
         isEmergencyStopped_ = true;
@@ -236,6 +238,7 @@ private:
                 if (isStationClear()) {
                     sendMessage(WorkerSignal::READY_TO_START, "Worker2 confirms ready to resume");
                     isEmergencyStopped_ = false;
+                    currentEmergencyRecordIndex_ = -1;  // Clear our local tracking
                 } else {
                     sendMessage(WorkerSignal::DANGER_DETECTED, "Worker2 station not clear");
                 }
@@ -332,6 +335,7 @@ private:
     bool isEmergencyStopped_;
     bool exitRoute1Active_;
     bool exitRoute2Active_;
+    int32_t currentEmergencyRecordIndex_;
 };
 
 int main(int argc, char* argv[]) {

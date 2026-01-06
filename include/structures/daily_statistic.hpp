@@ -4,6 +4,19 @@
 #include <ctime>
 
 /**
+ * Record of an emergency stop event
+ */
+struct EmergencyStopRecord {
+    time_t startTime;
+    time_t endTime;
+    uint32_t initiatorWorkerId;  // 1 or 2
+    bool resumed;
+
+    EmergencyStopRecord() : startTime{0}, endTime{0},
+                            initiatorWorkerId{0}, resumed{false} {}
+};
+
+/**
  * Structure for daily statistics/report
  */
 struct DailyStatistics {
@@ -19,6 +32,12 @@ struct DailyStatistics {
     time_t simulationStartTime;
     time_t simulationEndTime;
 
+    // Emergency stop tracking
+    static constexpr uint32_t MAX_EMERGENCY_RECORDS = 10;
+    EmergencyStopRecord emergencyRecords[MAX_EMERGENCY_RECORDS];
+    uint32_t emergencyRecordCount;
+    time_t totalEmergencyDuration;
+
     DailyStatistics() : totalTourists{0},
                         totalRides{0},
                         vipTourists{0},
@@ -29,6 +48,41 @@ struct DailyStatistics {
                         emergencyStops{0},
                         totalRevenueWithDiscounts{0.0},
                         simulationStartTime{0},
-                        simulationEndTime{0} {
+                        simulationEndTime{0},
+                        emergencyRecords{},
+                        emergencyRecordCount{0},
+                        totalEmergencyDuration{0} {
+    }
+
+    /**
+     * Record start of an emergency stop
+     * @return index of the record, or -1 if full
+     */
+    int32_t recordEmergencyStart(uint32_t workerId) {
+        if (emergencyRecordCount >= MAX_EMERGENCY_RECORDS) return -1;
+
+        EmergencyStopRecord& record = emergencyRecords[emergencyRecordCount];
+        record.startTime = time(nullptr);
+        record.endTime = 0;
+        record.initiatorWorkerId = workerId;
+        record.resumed = false;
+
+        emergencyStops++;
+        return static_cast<int32_t>(emergencyRecordCount++);
+    }
+
+    /**
+     * Record end of an emergency stop (resume)
+     */
+    void recordEmergencyEnd(int32_t recordIndex) {
+        if (recordIndex < 0 || static_cast<uint32_t>(recordIndex) >= emergencyRecordCount) return;
+
+        EmergencyStopRecord& record = emergencyRecords[recordIndex];
+        record.endTime = time(nullptr);
+        record.resumed = true;
+
+        if (record.endTime > record.startTime) {
+            totalEmergencyDuration += (record.endTime - record.startTime);
+        }
     }
 };
