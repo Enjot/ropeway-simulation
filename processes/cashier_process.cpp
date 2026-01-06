@@ -4,7 +4,6 @@
 #include <csignal>
 #include <unistd.h>
 #include <ctime>
-#include <atomic>
 
 #include "ipc/SharedMemory.hpp"
 #include "ipc/Semaphore.hpp"

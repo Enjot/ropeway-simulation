@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <sys/types.h>
 #include "common/ropeway_state.hpp"
 #include "common/config.hpp"
