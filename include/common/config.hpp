@@ -24,6 +24,7 @@ namespace Config {
         constexpr uint32_t NUM_RIDE_GATES{3};
         constexpr uint32_t NUM_EXIT_ROUTES{2};
         constexpr uint32_t MAX_TOURISTS_ON_STATION{50};
+        constexpr uint32_t MAX_CHILDREN_PER_ADULT{2};
     }
 
     namespace Worker {
@@ -32,13 +33,12 @@ namespace Config {
 
     namespace Age {
         constexpr uint32_t SUPERVISION_AGE_LIMIT{8};
-        constexpr uint32_t CHILD_DISCOUNT_AGE{10};
-        constexpr uint32_t ADULT_AGE{18};
-        constexpr uint32_t SENIOR_AGE{65};
-        constexpr uint32_t MAX_CHILDREN_PER_ADULT{2};
+        constexpr uint32_t ADULT_AGE_FROM{18};
+        constexpr uint32_t SENIOR_AGE_FROM{65};
     }
 
     namespace Discount {
+        constexpr uint32_t CHILD_DISCOUNT_AGE{10};
         constexpr float CHILD_DISCOUNT{0.25};
         constexpr float SENIOR_DISCOUNT{0.25};
     }
