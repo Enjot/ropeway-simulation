@@ -176,8 +176,8 @@ namespace {
 }
 
 int main() {
-    std::cout << "=== Ropeway Simulation - Full System Test ===" << std::endl;
-    std::cout << "Testing: Workers + Cashier + Tourists + Discounts\n" << std::endl;
+    std::cout << "=== Ropeway Simulation - Phase 5: VIP Priority Test ===" << std::endl;
+    std::cout << "Testing: Entry Gates with VIP Priority + Station Capacity Limits\n" << std::endl;
 
     setupSignalHandlers();
     cleanupIpc();
@@ -191,8 +191,10 @@ int main() {
         MessageQueue<WorkerMessage> workerMsgQueue(MSG_KEY, true);
         MessageQueue<TicketRequest> cashierMsgQueue(CASHIER_MSG_KEY, true);
 
-        // Initialize semaphores
-        sem.setValue(SemaphoreIndex::STATION_CAPACITY, Config::Gate::MAX_TOURISTS_ON_STATION);
+        // Initialize semaphores - use small capacity to test queuing and VIP priority
+        constexpr int TEST_STATION_CAPACITY = 3; // Small capacity to force queuing
+        std::cout << "[Main] Station capacity set to " << TEST_STATION_CAPACITY << " for VIP priority testing" << std::endl;
+        sem.setValue(SemaphoreIndex::STATION_CAPACITY, TEST_STATION_CAPACITY);
         sem.setValue(SemaphoreIndex::SHARED_MEMORY, 1);
         sem.setValue(SemaphoreIndex::ENTRY_GATES, Config::Gate::NUM_ENTRY_GATES);
         sem.setValue(SemaphoreIndex::RIDE_GATES, Config::Gate::NUM_RIDE_GATES);
@@ -230,9 +232,9 @@ int main() {
 
         usleep(200000);
 
-        // Spawn tourists with various ages to test discounts
+        // Spawn tourists - testing VIP priority with limited station capacity
         std::vector<pid_t> touristPids;
-        std::cout << "\n[Main] Spawning tourists (testing discounts)..." << std::endl;
+        std::cout << "\n[Main] Spawning tourists (testing VIP priority)..." << std::endl;
 
         struct TouristConfig {
             uint32_t id;
@@ -245,12 +247,17 @@ int main() {
             const char* description;
         };
 
+        // First spawn 4 regular tourists to fill station and create queue
+        // Then spawn VIPs who should skip ahead
         std::vector<TouristConfig> tourists = {
-            {1, 8, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child (8yo, 25% discount)"},
-            {2, 70, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Senior (70yo, 25% discount)"},
-            {3, 30, TouristType::CYCLIST, false, true, -1, TrailDifficulty::MEDIUM, "Adult cyclist (no discount)"},
-            {4, 25, TouristType::PEDESTRIAN, true, true, -1, TrailDifficulty::EASY, "Adult VIP request"},
-            {5, 5, TouristType::PEDESTRIAN, false, true, 3, TrailDifficulty::EASY, "Young child (5yo, needs guardian)"},
+            {1, 30, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Regular Tourist 1"},
+            {2, 35, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Regular Tourist 2"},
+            {3, 28, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Regular Tourist 3"},
+            {4, 40, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Regular Tourist 4 (should queue)"},
+            {5, 25, TouristType::PEDESTRIAN, true, true, -1, TrailDifficulty::EASY, "VIP Tourist (priority entry!)"},
+            {6, 32, TouristType::PEDESTRIAN, true, true, -1, TrailDifficulty::EASY, "VIP Tourist 2 (priority entry!)"},
+            {7, 45, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Regular Tourist 5"},
+            {8, 8, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child (discount)"},
         };
 
         for (const auto& t : tourists) {
@@ -259,7 +266,7 @@ int main() {
             if (pid > 0) {
                 touristPids.push_back(pid);
             }
-            usleep(150000); // Stagger spawns
+            usleep(100000); // Stagger spawns - slightly faster to test VIP priority
         }
 
         // Main simulation loop
