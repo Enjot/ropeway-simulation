@@ -46,6 +46,12 @@ set(UTILS_HEADERS
         include/utils/GatePassageLogger.hpp
 )
 
+set(TEST_HEADERS
+        include/tests/TestConfig.hpp
+        include/tests/TestValidator.hpp
+        include/tests/TestRunner.hpp
+)
+
 # All headers combined
 set(ALL_HEADERS
         ${COMMON_HEADERS}
@@ -53,6 +59,7 @@ set(ALL_HEADERS
         ${STRUCTURE_HEADERS}
         ${GATE_HEADERS}
         ${UTILS_HEADERS}
+        ${TEST_HEADERS}
 )
 
 # Main simulation controller
@@ -69,3 +76,6 @@ add_executable(worker2_process src/processes/worker2_process.cpp ${ALL_HEADERS})
 
 # Cashier process - Ticket sales (spawned via fork/exec)
 add_executable(cashier_process src/processes/cashier_process.cpp ${ALL_HEADERS})
+
+# Test runner - Automated test suite (Phase 10)
+add_executable(test_runner src/tests/test_runner.cpp ${ALL_HEADERS})
