@@ -42,7 +42,7 @@ public:
         tourist_.wantsToRide = args.wantsToRide;
         tourist_.guardianId = args.guardianId;
         tourist_.preferredTrail = static_cast<TrailDifficulty>(args.trail);
-        tourist_.state = TouristState::ARRIVING;
+        tourist_.state = TouristState::BUYING_TICKET;
         tourist_.arrivalTime = time(nullptr);
 
         std::cout << "[Tourist " << tourist_.id << "] Started: "
@@ -60,20 +60,14 @@ public:
             }
 
             switch (tourist_.state) {
-                case TouristState::ARRIVING:
-                    handleArriving();
-                    break;
-                case TouristState::AT_CASHIER:
-                    handleAtCashier();
+                case TouristState::BUYING_TICKET:
+                    handleBuyingTicket();
                     break;
                 case TouristState::WAITING_ENTRY:
                     handleWaitingEntry();
                     break;
-                case TouristState::ON_STATION:
-                    handleOnStation();
-                    break;
-                case TouristState::WAITING_PLATFORM:
-                    handleWaitingPlatform();
+                case TouristState::WAITING_BOARDING:
+                    handleWaitingBoarding();
                     break;
                 case TouristState::ON_CHAIR:
                     handleOnChair();
@@ -83,9 +77,6 @@ public:
                     break;
                 case TouristState::ON_TRAIL:
                     handleOnTrail();
-                    break;
-                case TouristState::LEAVING:
-                    handleLeaving();
                     break;
                 default:
                     break;
@@ -112,22 +103,20 @@ private:
         std::cout << "[Tourist " << tourist_.id << "] Emergency cleared, resuming" << std::endl;
     }
 
-    void handleArriving() {
+    void handleBuyingTicket() {
+        // Simulate arrival time
         usleep(100000 + (rand() % 200000));
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
             if (!shm_->acceptingNewTourists) {
                 std::cout << "[Tourist " << tourist_.id << "] Ropeway not accepting tourists, leaving" << std::endl;
-                changeState(TouristState::LEAVING);
+                changeState(TouristState::FINISHED);
                 return;
             }
         }
 
-        changeState(TouristState::AT_CASHIER);
-    }
-
-    void handleAtCashier() {
+        // Request ticket from cashier
         TicketRequest request;
         request.mtype = CashierMsgType::REQUEST;
         request.touristId = tourist_.id;
@@ -141,7 +130,7 @@ private:
 
         if (!cashierRequestQueue_.send(request)) {
             std::cerr << "[Tourist " << tourist_.id << "] Failed to send ticket request" << std::endl;
-            changeState(TouristState::LEAVING);
+            changeState(TouristState::FINISHED);
             return;
         }
 
@@ -178,13 +167,13 @@ private:
                     }
 
                     if (!tourist_.wantsToRide) {
-                        changeState(TouristState::LEAVING);
+                        changeState(TouristState::FINISHED);
                     } else {
                         changeState(TouristState::WAITING_ENTRY);
                     }
                 } else {
                     std::cout << "[Tourist " << tourist_.id << "] Ticket denied: " << response->message << std::endl;
-                    changeState(TouristState::LEAVING);
+                    changeState(TouristState::FINISHED);
                 }
                 return;
             }
@@ -192,7 +181,7 @@ private:
         }
 
         std::cerr << "[Tourist " << tourist_.id << "] Timeout waiting for ticket" << std::endl;
-        changeState(TouristState::LEAVING);
+        changeState(TouristState::FINISHED);
     }
 
     void handleWaitingEntry() {
@@ -205,7 +194,7 @@ private:
 
         if (!validation.allowed) {
             std::cout << "[Tourist " << tourist_.id << "] Entry denied: " << validation.reason << std::endl;
-            changeState(TouristState::LEAVING);
+            changeState(TouristState::FINISHED);
             return;
         }
 
@@ -219,7 +208,7 @@ private:
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
                 shm_->logGatePassage(tourist_.id, tourist_.ticketId, GateType::ENTRY, gateNumber, false);
             }
-            changeState(TouristState::LEAVING);
+            changeState(TouristState::FINISHED);
             return;
         }
 
@@ -231,12 +220,11 @@ private:
 
         std::cout << "[Tourist " << tourist_.id << "] Entered through entry gate " << gateNumber
                   << (tourist_.isVip ? " [VIP]" : "") << std::endl;
-        changeState(TouristState::ON_STATION);
+        changeState(TouristState::WAITING_BOARDING);
     }
 
-    void handleOnStation() {
-        usleep(100000 + (rand() % 200000));
-
+    void handleWaitingBoarding() {
+        // Add to boarding queue
         BoardingQueueEntry entry;
         entry.touristId = tourist_.id;
         entry.touristPid = tourist_.pid;
@@ -253,11 +241,12 @@ private:
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
             if (!shm_->boardingQueue.addTourist(entry)) {
                 std::cerr << "[Tourist " << tourist_.id << "] Boarding queue full!" << std::endl;
-                changeState(TouristState::LEAVING);
+                changeState(TouristState::FINISHED);
                 return;
             }
         }
 
+        // Handle child-guardian pairing for children under 8
         if (tourist_.needsSupervision() && tourist_.guardianId == -1) {
             std::cout << "[Tourist " << tourist_.id << "] Child (age " << tourist_.age
                       << ") waiting for adult guardian..." << std::endl;
@@ -289,16 +278,13 @@ private:
                             shm_->boardingQueue.removeTourist(static_cast<uint32_t>(idx));
                         }
                     }
-                    changeState(TouristState::LEAVING);
+                    changeState(TouristState::FINISHED);
                     return;
                 }
             }
         }
 
-        changeState(TouristState::WAITING_PLATFORM);
-    }
-
-    void handleWaitingPlatform() {
+        // Wait for chair assignment
         std::cout << "[Tourist " << tourist_.id << "] Waiting for chair..." << std::endl;
 
         time_t waitStart = time(nullptr);
@@ -324,7 +310,7 @@ private:
                     if (shm_->touristsInLowerStation > 0) {
                         shm_->touristsInLowerStation--;
                     }
-                    changeState(TouristState::LEAVING);
+                    changeState(TouristState::FINISHED);
                     return;
                 }
 
@@ -348,7 +334,7 @@ private:
                     }
                 } else {
                     std::cerr << "[Tourist " << tourist_.id << "] Lost from boarding queue!" << std::endl;
-                    changeState(TouristState::LEAVING);
+                    changeState(TouristState::FINISHED);
                     return;
                 }
             }
@@ -365,7 +351,7 @@ private:
                         shm_->touristsInLowerStation--;
                     }
                 }
-                changeState(TouristState::LEAVING);
+                changeState(TouristState::FINISHED);
                 return;
             }
         }
@@ -430,7 +416,8 @@ private:
         if (tourist_.type == TouristType::CYCLIST) {
             changeState(TouristState::ON_TRAIL);
         } else {
-            changeState(TouristState::LEAVING);
+            std::cout << "[Tourist " << tourist_.id << "] Leaving the area" << std::endl;
+            changeState(TouristState::FINISHED);
         }
     }
 
@@ -451,12 +438,7 @@ private:
             }
         }
 
-        changeState(TouristState::LEAVING);
-    }
-
-    void handleLeaving() {
         std::cout << "[Tourist " << tourist_.id << "] Leaving the area" << std::endl;
-        usleep(100000);
         changeState(TouristState::FINISHED);
     }
 

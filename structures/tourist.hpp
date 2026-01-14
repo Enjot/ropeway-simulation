@@ -7,19 +7,17 @@
 #include "common/config.hpp"
 
 /**
- * Tourist state in the simulation
+ * Tourist state in the simulation.
+ * Simplified 7-state machine representing the tourist lifecycle.
  */
 enum class TouristState {
-    ARRIVING,           // Approaching the ropeway area
-    AT_CASHIER,         // Buying ticket at cashier
+    BUYING_TICKET,      // Arriving and purchasing ticket at cashier
     WAITING_ENTRY,      // Waiting in queue for entry gate
-    ON_STATION,         // On the lower station area (after entry gate)
-    WAITING_PLATFORM,   // Waiting to board a chair
-    ON_CHAIR,           // Riding on the chair
+    WAITING_BOARDING,   // On lower station, waiting for chair assignment
+    ON_CHAIR,           // Riding on the chairlift
     AT_TOP,             // At the upper station
     ON_TRAIL,           // Cyclist on downhill trail
-    LEAVING,            // Leaving the area
-    FINISHED            // Simulation finished for this tourist
+    FINISHED            // Left the area / simulation complete
 };
 
 /**
@@ -55,7 +53,7 @@ struct Tourist {
                 pid{0},
                 age{25},
                 type{TouristType::PEDESTRIAN},
-                state{TouristState::ARRIVING},
+                state{TouristState::BUYING_TICKET},
                 isVip{false},
                 wantsToRide{true},
                 ticketId{0},

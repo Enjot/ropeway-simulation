@@ -38,15 +38,12 @@ namespace EnumStrings {
      */
     constexpr const char* toString(TouristState state) {
         switch (state) {
-            case TouristState::ARRIVING:         return "ARRIVING";
-            case TouristState::AT_CASHIER:       return "AT_CASHIER";
+            case TouristState::BUYING_TICKET:    return "BUYING_TICKET";
             case TouristState::WAITING_ENTRY:    return "WAITING_ENTRY";
-            case TouristState::ON_STATION:       return "ON_STATION";
-            case TouristState::WAITING_PLATFORM: return "WAITING_PLATFORM";
+            case TouristState::WAITING_BOARDING: return "WAITING_BOARDING";
             case TouristState::ON_CHAIR:         return "ON_CHAIR";
             case TouristState::AT_TOP:           return "AT_TOP";
             case TouristState::ON_TRAIL:         return "ON_TRAIL";
-            case TouristState::LEAVING:          return "LEAVING";
             case TouristState::FINISHED:         return "FINISHED";
             default:                             return "UNKNOWN";
         }
