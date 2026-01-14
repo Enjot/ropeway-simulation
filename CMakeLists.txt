@@ -21,8 +21,10 @@ set(COMMON_HEADERS
 )
 
 set(IPC_HEADERS
+        ipc/boarding_queue.hpp
         ipc/cashier_message.hpp
         ipc/MessageQueue.hpp
+        ipc/reporting_data.hpp
         ipc/ropeway_system_state.hpp
         ipc/semaphore_index.hpp
         ipc/Semaphore.hpp
