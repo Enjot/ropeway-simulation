@@ -28,6 +28,7 @@ set(IPC_HEADERS
         ipc/Semaphore.hpp
         ipc/SharedMemory.hpp
         ipc/worker_message.hpp
+        ipc/IpcManager.hpp
 )
 
 set(STRUCTURE_HEADERS
@@ -45,6 +46,10 @@ set(GATE_HEADERS
 
 set(UTILS_HEADERS
         utils/GatePassageLogger.hpp
+        utils/SignalHelper.hpp
+        utils/EnumStrings.hpp
+        utils/ArgumentParser.hpp
+        utils/ProcessSpawner.hpp
 )
 
 set(TEST_HEADERS
