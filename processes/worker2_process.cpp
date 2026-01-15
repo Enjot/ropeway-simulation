@@ -1,4 +1,3 @@
-#include <iostream>
 #include <cstring>
 #include <unistd.h>
 #include <ctime>
@@ -14,9 +13,11 @@
 #include "utils/SignalHelper.hpp"
 #include "utils/EnumStrings.hpp"
 #include "utils/ArgumentParser.hpp"
+#include "utils/Logger.hpp"
 
 namespace {
     SignalHelper::SignalFlags g_signals;
+    constexpr const char* TAG = "Worker2";
 }
 
 class Worker2Process {
@@ -39,12 +40,12 @@ public:
             shm_->worker2Pid = getpid();
         }
 
-        std::cout << "[Worker2] Started (PID: " << getpid() << ") - Upper Station Controller" << std::endl;
+        Logger::info(TAG, "Started (PID: ", getpid(), ") - Upper Station Controller");
     }
 
     void run() {
-        std::cout << "[Worker2] Beginning operations" << std::endl;
-        std::cout << "[Worker2] Managing " << Config::Gate::NUM_EXIT_ROUTES << " exit routes" << std::endl;
+        Logger::info(TAG, "Beginning operations");
+        Logger::info(TAG, "Managing ", Config::Gate::NUM_EXIT_ROUTES, " exit routes");
 
         while (!SignalHelper::shouldExit(g_signals)) {
             if (SignalHelper::isEmergency(g_signals)) {
@@ -83,12 +84,12 @@ public:
             usleep(50000);
         }
 
-        std::cout << "[Worker2] Shutting down" << std::endl;
+        Logger::info(TAG, "Shutting down");
     }
 
 private:
     void handleEmergencyReceived() {
-        std::cout << "[Worker2] !!! EMERGENCY STOP RECEIVED FROM WORKER1 !!!" << std::endl;
+        Logger::info(TAG, "!!! EMERGENCY STOP RECEIVED FROM WORKER1 !!!");
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -100,7 +101,7 @@ private:
     }
 
     void handleLocalEmergencyTrigger() {
-        std::cout << "[Worker2] !!! LOCAL EMERGENCY TRIGGERED !!!" << std::endl;
+        Logger::info(TAG, "!!! LOCAL EMERGENCY TRIGGERED !!!");
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -120,7 +121,7 @@ private:
             kill(worker1Pid, SIGUSR1);
         }
 
-        std::cout << "[Worker2] Emergency stop signal sent to Worker1" << std::endl;
+        Logger::info(TAG, "Emergency stop signal sent to Worker1");
     }
 
     void checkMessages() {
@@ -131,11 +132,11 @@ private:
     }
 
     void handleMessage(const WorkerMessage& msg) {
-        std::cout << "[Worker2] Received message from Worker1: " << msg.messageText << std::endl;
+        Logger::info(TAG, "Received message from Worker1");
 
         switch (msg.signal) {
             case WorkerSignal::EMERGENCY_STOP:
-                std::cout << "[Worker2] Worker1 triggered emergency stop" << std::endl;
+                Logger::info(TAG, "Worker1 triggered emergency stop");
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
                     shm_->state = RopewayState::EMERGENCY_STOP;
@@ -144,7 +145,7 @@ private:
                 break;
 
             case WorkerSignal::READY_TO_START:
-                std::cout << "[Worker2] Worker1 requests resume - confirming ready" << std::endl;
+                Logger::info(TAG, "Worker1 requests resume - confirming ready");
                 if (isStationClear()) {
                     sendMessage(WorkerSignal::READY_TO_START, "Worker2 confirms ready to resume");
                     isEmergencyStopped_ = false;
@@ -155,11 +156,11 @@ private:
                 break;
 
             case WorkerSignal::STATION_CLEAR:
-                std::cout << "[Worker2] Worker1 reports station clear" << std::endl;
+                Logger::info(TAG, "Worker1 reports station clear");
                 break;
 
             case WorkerSignal::DANGER_DETECTED:
-                std::cout << "[Worker2] Worker1 detected danger - initiating emergency stop" << std::endl;
+                Logger::info(TAG, "Worker1 detected danger - initiating emergency stop");
                 handleEmergencyReceived();
                 break;
         }
@@ -181,11 +182,8 @@ private:
         static time_t lastStatusLog = 0;
         time_t now = time(nullptr);
         if (now - lastStatusLog >= 5) {
-            std::cout << "[Worker2] Status: ChairsInUse=" << chairsInUse
-                      << ", TotalRidesToday=" << totalRides
-                      << ", ExitRoutes=[" << (exitRoute1Active_ ? "1:ON" : "1:OFF")
-                      << ", " << (exitRoute2Active_ ? "2:ON" : "2:OFF") << "]"
-                      << std::endl;
+            Logger::info(TAG, "Status: ChairsInUse=", chairsInUse,
+                        ", TotalRidesToday=", totalRides);
             lastStatusLog = now;
         }
     }
@@ -194,7 +192,7 @@ private:
         static time_t lastLog = 0;
         time_t now = time(nullptr);
         if (now - lastLog >= 2) {
-            std::cout << "[Worker2] EMERGENCY STOP active - awaiting clearance from Worker1" << std::endl;
+            Logger::info(TAG, "EMERGENCY STOP active - awaiting clearance from Worker1");
             lastLog = now;
         }
     }
@@ -203,7 +201,7 @@ private:
         static time_t lastLog = 0;
         time_t now = time(nullptr);
         if (now - lastLog >= 2) {
-            std::cout << "[Worker2] Closing sequence - monitoring exit routes" << std::endl;
+            Logger::info(TAG, "Closing sequence - monitoring exit routes");
             lastLog = now;
         }
     }
@@ -211,7 +209,7 @@ private:
     void handleStoppedState() {
         static bool loggedOnce = false;
         if (!loggedOnce) {
-            std::cout << "[Worker2] Ropeway stopped. Closing exit routes." << std::endl;
+            Logger::info(TAG, "Ropeway stopped. Closing exit routes.");
             exitRoute1Active_ = false;
             exitRoute2Active_ = false;
             loggedOnce = true;
@@ -230,7 +228,7 @@ private:
         msg.messageText[sizeof(msg.messageText) - 1] = '\0';
 
         if (!msgQueue_.send(msg)) {
-            std::cerr << "[Worker2] Failed to send message to Worker1" << std::endl;
+            Logger::perr(TAG, "msgsnd to Worker1");
         }
     }
 
@@ -255,7 +253,7 @@ int main(int argc, char* argv[]) {
         Worker2Process worker(args);
         worker.run();
     } catch (const std::exception& e) {
-        std::cerr << "[Worker2] Error: " << e.what() << std::endl;
+        Logger::perr(TAG, e.what());
         return 1;
     }
 

@@ -6,6 +6,7 @@
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <sstream>
 #include "common/gate_type.hpp"
 #include "structures/gate_passage.hpp"
 
@@ -121,20 +122,18 @@ public:
 
 private:
     std::string formatPassage(const GatePassage& passage) {
-        char buffer[256];
         char timeStr[32];
         struct tm* tm_info = localtime(&passage.timestamp);
         strftime(timeStr, sizeof(timeStr), "%H:%M:%S", tm_info);
 
-        snprintf(buffer, sizeof(buffer),
-                 "[%s] %s Gate %u: Tourist %u (Ticket %u) - %s",
-                 timeStr,
-                 passage.gateType == GateType::ENTRY ? "ENTRY" : "RIDE",
-                 passage.gateNumber,
-                 passage.touristId,
-                 passage.ticketId,
-                 passage.wasAllowed ? "ALLOWED" : "DENIED");
-        return buffer;
+        std::ostringstream oss;
+        oss << "[" << timeStr << "] "
+            << (passage.gateType == GateType::ENTRY ? "ENTRY" : "RIDE")
+            << " Gate " << passage.gateNumber
+            << ": Tourist " << passage.touristId
+            << " (Ticket " << passage.ticketId << ") - "
+            << (passage.wasAllowed ? "ALLOWED" : "DENIED");
+        return oss.str();
     }
 
     std::string logFilePath_;

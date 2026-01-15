@@ -1,7 +1,7 @@
-#include <iostream>
 #include <unistd.h>
 #include <ctime>
 #include <cstdlib>
+#include <cstring>
 
 #include "ipc/SharedMemory.hpp"
 #include "ipc/Semaphore.hpp"
@@ -16,6 +16,7 @@
 #include "utils/SignalHelper.hpp"
 #include "utils/EnumStrings.hpp"
 #include "utils/ArgumentParser.hpp"
+#include "utils/Logger.hpp"
 
 namespace {
     SignalHelper::SignalFlags g_signals;
@@ -45,12 +46,17 @@ public:
         tourist_.state = TouristState::BUYING_TICKET;
         tourist_.arrivalTime = time(nullptr);
 
-        std::cout << "[Tourist " << tourist_.id << "] Started: "
-                  << EnumStrings::toString(tourist_.type)
-                  << ", age=" << tourist_.age
-                  << ", requestVIP=" << (requestVip_ ? "yes" : "no")
-                  << ", wantsToRide=" << (tourist_.wantsToRide ? "yes" : "no")
-                  << std::endl;
+        // Build tag using async-signal-safe method
+        strcpy(tag_, "Tourist ");
+        char idBuf[16];
+        char* ptr = idBuf + sizeof(idBuf) - 1;
+        *ptr = '\0';
+        unsigned int id = tourist_.id;
+        do { --ptr; *ptr = '0' + (id % 10); id /= 10; } while (id > 0);
+        strcat(tag_, ptr);
+
+        Logger::info(tag_, "Started: ", EnumStrings::toString(tourist_.type),
+                    requestVip_ ? ", VIP" : ", regular");
     }
 
     void run() {
@@ -83,24 +89,22 @@ public:
             }
         }
 
-        std::cout << "[Tourist " << tourist_.id << "] Finished, rides completed: "
-                  << tourist_.ridesCompleted << std::endl;
+        Logger::info(tag_, "Finished, rides completed: ", tourist_.ridesCompleted);
     }
 
 private:
     void changeState(TouristState newState) {
-        std::cout << "[Tourist " << tourist_.id << "] "
-                  << EnumStrings::toString(tourist_.state) << " -> "
-                  << EnumStrings::toString(newState) << std::endl;
+        Logger::stateChange(tag_, EnumStrings::toString(tourist_.state),
+                           EnumStrings::toString(newState));
         tourist_.state = newState;
     }
 
     void handleEmergencyStop() {
-        std::cout << "[Tourist " << tourist_.id << "] Emergency stop detected, waiting..." << std::endl;
+        Logger::info(tag_, "Emergency stop detected, waiting...");
         while (SignalHelper::isEmergency(g_signals) && !SignalHelper::shouldExit(g_signals)) {
             usleep(100000);
         }
-        std::cout << "[Tourist " << tourist_.id << "] Emergency cleared, resuming" << std::endl;
+        Logger::info(tag_, "Emergency cleared, resuming");
     }
 
     void handleBuyingTicket() {
@@ -110,7 +114,7 @@ private:
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
             if (!shm_->acceptingNewTourists) {
-                std::cout << "[Tourist " << tourist_.id << "] Ropeway not accepting tourists, leaving" << std::endl;
+                Logger::info(tag_, "Ropeway not accepting tourists, leaving");
                 changeState(TouristState::FINISHED);
                 return;
             }
@@ -126,10 +130,10 @@ private:
             : TicketType::SINGLE_USE;
         request.requestVip = requestVip_;
 
-        std::cout << "[Tourist " << tourist_.id << "] Requesting ticket from cashier..." << std::endl;
+        Logger::info(tag_, "Requesting ticket from cashier...");
 
         if (!cashierRequestQueue_.send(request)) {
-            std::cerr << "[Tourist " << tourist_.id << "] Failed to send ticket request" << std::endl;
+            Logger::perr(tag_, "Failed to send ticket request");
             changeState(TouristState::FINISHED);
             return;
         }
@@ -146,15 +150,11 @@ private:
                     tourist_.hasTicket = true;
                     tourist_.isVip = response->isVip;
 
-                    std::cout << "[Tourist " << tourist_.id << "] Got ticket #" << response->ticketId
-                              << " - Price: " << response->price;
-                    if (response->discount > 0) {
-                        std::cout << " (discount: " << (response->discount * 100) << "%)";
-                    }
                     if (response->isVip) {
-                        std::cout << " [VIP]";
+                        Logger::info(tag_, "Got ticket #", response->ticketId, " [VIP]");
+                    } else {
+                        Logger::info(tag_, "Got ticket #", response->ticketId);
                     }
-                    std::cout << std::endl;
 
                     {
                         SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -172,7 +172,7 @@ private:
                         changeState(TouristState::WAITING_ENTRY);
                     }
                 } else {
-                    std::cout << "[Tourist " << tourist_.id << "] Ticket denied: " << response->message << std::endl;
+                    Logger::info(tag_, "Ticket denied");
                     changeState(TouristState::FINISHED);
                 }
                 return;
@@ -180,7 +180,7 @@ private:
             usleep(50000);
         }
 
-        std::cerr << "[Tourist " << tourist_.id << "] Timeout waiting for ticket" << std::endl;
+        Logger::perr(tag_, "Timeout waiting for ticket");
         changeState(TouristState::FINISHED);
     }
 
@@ -193,17 +193,20 @@ private:
         );
 
         if (!validation.allowed) {
-            std::cout << "[Tourist " << tourist_.id << "] Entry denied: " << validation.reason << std::endl;
+            Logger::info(tag_, "Entry denied");
             changeState(TouristState::FINISHED);
             return;
         }
 
         uint32_t gateNumber = 0;
-        std::cout << "[Tourist " << tourist_.id << "] Waiting for entry gate"
-                  << (tourist_.isVip ? " [VIP PRIORITY]" : "") << "..." << std::endl;
+        if (tourist_.isVip) {
+            Logger::info(tag_, "Waiting for entry gate [VIP PRIORITY]...");
+        } else {
+            Logger::info(tag_, "Waiting for entry gate...");
+        }
 
         if (!entryGate_.tryEnter(tourist_.id, tourist_.isVip, gateNumber)) {
-            std::cerr << "[Tourist " << tourist_.id << "] Failed to enter station" << std::endl;
+            Logger::perr(tag_, "Failed to enter station");
             {
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
                 shm_->logGatePassage(tourist_.id, tourist_.ticketId, GateType::ENTRY, gateNumber, false);
@@ -218,8 +221,11 @@ private:
             shm_->logGatePassage(tourist_.id, tourist_.ticketId, GateType::ENTRY, gateNumber, true);
         }
 
-        std::cout << "[Tourist " << tourist_.id << "] Entered through entry gate " << gateNumber
-                  << (tourist_.isVip ? " [VIP]" : "") << std::endl;
+        if (tourist_.isVip) {
+            Logger::info(tag_, "Entered through entry gate ", gateNumber, " [VIP]");
+        } else {
+            Logger::info(tag_, "Entered through entry gate ", gateNumber);
+        }
         changeState(TouristState::WAITING_BOARDING);
     }
 
@@ -240,7 +246,7 @@ private:
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
             if (!shm_->boardingQueue.addTourist(entry)) {
-                std::cerr << "[Tourist " << tourist_.id << "] Boarding queue full!" << std::endl;
+                Logger::perr(tag_, "Boarding queue full!");
                 changeState(TouristState::FINISHED);
                 return;
             }
@@ -248,8 +254,7 @@ private:
 
         // Handle child-guardian pairing for children under 8
         if (tourist_.needsSupervision() && tourist_.guardianId == -1) {
-            std::cout << "[Tourist " << tourist_.id << "] Child (age " << tourist_.age
-                      << ") waiting for adult guardian..." << std::endl;
+            Logger::info(tag_, "Child (age ", tourist_.age, ") waiting for adult guardian...");
 
             bool guardianAssigned = false;
             time_t waitStart = time(nullptr);
@@ -264,13 +269,12 @@ private:
                     if (idx >= 0 && shm_->boardingQueue.entries[idx].guardianId != -1) {
                         tourist_.guardianId = shm_->boardingQueue.entries[idx].guardianId;
                         guardianAssigned = true;
-                        std::cout << "[Tourist " << tourist_.id << "] Assigned guardian: Tourist "
-                                  << tourist_.guardianId << std::endl;
+                        Logger::info(tag_, "Assigned guardian: Tourist ", tourist_.guardianId);
                     }
                 }
 
                 if (time(nullptr) - waitStart > GUARDIAN_TIMEOUT_S) {
-                    std::cout << "[Tourist " << tourist_.id << "] No guardian available, leaving" << std::endl;
+                    Logger::info(tag_, "No guardian available, leaving");
                     {
                         SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
                         int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
@@ -285,7 +289,7 @@ private:
         }
 
         // Wait for chair assignment
-        std::cout << "[Tourist " << tourist_.id << "] Waiting for chair..." << std::endl;
+        Logger::info(tag_, "Waiting for chair...");
 
         time_t waitStart = time(nullptr);
         constexpr int BOARDING_TIMEOUT_S = 30;
@@ -297,12 +301,12 @@ private:
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
 
                 if (shm_->state == RopewayState::EMERGENCY_STOP) {
-                    std::cout << "[Tourist " << tourist_.id << "] Ropeway emergency stop, waiting..." << std::endl;
+                    Logger::info(tag_, "Ropeway emergency stop, waiting...");
                     continue;
                 }
 
                 if (shm_->state == RopewayState::CLOSING || shm_->state == RopewayState::STOPPED) {
-                    std::cout << "[Tourist " << tourist_.id << "] Ropeway closing, leaving" << std::endl;
+                    Logger::info(tag_, "Ropeway closing, leaving");
                     int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
                     if (idx >= 0) {
                         shm_->boardingQueue.removeTourist(static_cast<uint32_t>(idx));
@@ -319,8 +323,7 @@ private:
                     BoardingQueueEntry& entry = shm_->boardingQueue.entries[idx];
                     if (entry.readyToBoard && entry.assignedChairId >= 0) {
                         assignedChairId_ = entry.assignedChairId;
-                        std::cout << "[Tourist " << tourist_.id << "] Assigned to chair "
-                                  << assignedChairId_ << std::endl;
+                        Logger::info(tag_, "Assigned to chair ", assignedChairId_);
 
                         shm_->boardingQueue.removeTourist(static_cast<uint32_t>(idx));
 
@@ -333,14 +336,14 @@ private:
                         return;
                     }
                 } else {
-                    std::cerr << "[Tourist " << tourist_.id << "] Lost from boarding queue!" << std::endl;
+                    Logger::perr(tag_, "Lost from boarding queue!");
                     changeState(TouristState::FINISHED);
                     return;
                 }
             }
 
             if (time(nullptr) - waitStart > BOARDING_TIMEOUT_S) {
-                std::cout << "[Tourist " << tourist_.id << "] Boarding timeout, leaving" << std::endl;
+                Logger::info(tag_, "Boarding timeout, leaving");
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
                     int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
@@ -358,8 +361,7 @@ private:
     }
 
     void handleOnChair() {
-        std::cout << "[Tourist " << tourist_.id << "] On chair " << assignedChairId_
-                  << ", riding up..." << std::endl;
+        Logger::info(tag_, "On chair ", assignedChairId_, ", riding up...");
 
         uint32_t rideTime = Config::Chair::RIDE_TIME_S;
         usleep((rideTime / 100) * 1000000);
@@ -394,7 +396,7 @@ private:
                     if (shm_->chairsInUse > 0) {
                         shm_->chairsInUse--;
                     }
-                    std::cout << "[Tourist " << tourist_.id << "] Released chair " << assignedChairId_ << std::endl;
+                    Logger::info(tag_, "Released chair ", assignedChairId_);
                 }
             }
         }
@@ -409,26 +411,25 @@ private:
     }
 
     void handleAtTop() {
-        std::cout << "[Tourist " << tourist_.id << "] Arrived at top station" << std::endl;
+        Logger::info(tag_, "Arrived at top station");
 
         usleep(100000 + (rand() % 200000));
 
         if (tourist_.type == TouristType::CYCLIST) {
             changeState(TouristState::ON_TRAIL);
         } else {
-            std::cout << "[Tourist " << tourist_.id << "] Leaving the area" << std::endl;
+            Logger::info(tag_, "Leaving the area");
             changeState(TouristState::FINISHED);
         }
     }
 
     void handleOnTrail() {
         uint32_t trailTime = EnumStrings::getTrailTimeSeconds(tourist_.preferredTrail);
-        std::cout << "[Tourist " << tourist_.id << "] Cycling down trail (difficulty: "
-                  << static_cast<int>(tourist_.preferredTrail) << ")" << std::endl;
+        Logger::info(tag_, "Cycling down trail (difficulty: ", static_cast<int>(tourist_.preferredTrail), ")");
 
         usleep((trailTime / 100) * 1000000);
 
-        std::cout << "[Tourist " << tourist_.id << "] Finished trail descent" << std::endl;
+        Logger::info(tag_, "Finished trail descent");
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -438,7 +439,7 @@ private:
             }
         }
 
-        std::cout << "[Tourist " << tourist_.id << "] Leaving the area" << std::endl;
+        Logger::info(tag_, "Leaving the area");
         changeState(TouristState::FINISHED);
     }
 
@@ -451,6 +452,7 @@ private:
     RideGate rideGate_;
     bool requestVip_;
     int32_t assignedChairId_;
+    char tag_[32];
 };
 
 int main(int argc, char* argv[]) {
@@ -462,11 +464,20 @@ int main(int argc, char* argv[]) {
     SignalHelper::setup(g_signals, SignalHelper::Mode::TOURIST);
     srand(static_cast<unsigned>(time(nullptr)) ^ static_cast<unsigned>(getpid()));
 
+    char tag[32];
+    strcpy(tag, "Tourist ");
+    char idBuf[16];
+    char* ptr = idBuf + sizeof(idBuf) - 1;
+    *ptr = '\0';
+    unsigned int id = args.id;
+    do { --ptr; *ptr = '0' + (id % 10); id /= 10; } while (id > 0);
+    strcat(tag, ptr);
+
     try {
         TouristProcess process(args);
         process.run();
     } catch (const std::exception& e) {
-        std::cerr << "[Tourist " << args.id << "] Error: " << e.what() << std::endl;
+        Logger::perr(tag, e.what());
         return 1;
     }
 

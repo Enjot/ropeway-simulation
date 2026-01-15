@@ -122,24 +122,18 @@ private:
     SignalHelper::SignalFlags signals_;
 
     pid_t spawnTourist(const TouristTestConfig& t, IpcManager& ipc) {
-        char idStr[16], ageStr[16], typeStr[16], vipStr[16], rideStr[16];
-        char guardianStr[16], trailStr[16], shmStr[16], semStr[16], msgStr[16], cashierMsgStr[16];
-
-        snprintf(idStr, sizeof(idStr), "%u", t.id);
-        snprintf(ageStr, sizeof(ageStr), "%u", t.age);
-        snprintf(typeStr, sizeof(typeStr), "%d", static_cast<int>(t.type));
-        snprintf(vipStr, sizeof(vipStr), "%d", t.requestVip ? 1 : 0);
-        snprintf(rideStr, sizeof(rideStr), "%d", t.wantsToRide ? 1 : 0);
-        snprintf(guardianStr, sizeof(guardianStr), "%d", t.guardianId);
-        snprintf(trailStr, sizeof(trailStr), "%d", static_cast<int>(t.trail));
-        snprintf(shmStr, sizeof(shmStr), "%d", ipc.shmKey());
-        snprintf(semStr, sizeof(semStr), "%d", ipc.semKey());
-        snprintf(msgStr, sizeof(msgStr), "%d", ipc.msgKey());
-        snprintf(cashierMsgStr, sizeof(cashierMsgStr), "%d", ipc.cashierMsgKey());
-
         return ProcessSpawner::spawn("tourist_process", {
-            idStr, ageStr, typeStr, vipStr, rideStr,
-            guardianStr, trailStr, shmStr, semStr, msgStr, cashierMsgStr
+            std::to_string(t.id),
+            std::to_string(t.age),
+            std::to_string(static_cast<int>(t.type)),
+            std::to_string(t.requestVip ? 1 : 0),
+            std::to_string(t.wantsToRide ? 1 : 0),
+            std::to_string(t.guardianId),
+            std::to_string(static_cast<int>(t.trail)),
+            std::to_string(ipc.shmKey()),
+            std::to_string(ipc.semKey()),
+            std::to_string(ipc.msgKey()),
+            std::to_string(ipc.cashierMsgKey())
         });
     }
 

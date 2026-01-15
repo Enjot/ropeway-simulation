@@ -92,11 +92,11 @@ namespace ProcessSpawner {
      * Convenience wrapper around spawn().
      */
     inline pid_t spawnWithKeys(const char* processName, key_t key1, key_t key2, key_t key3) {
-        char k1[16], k2[16], k3[16];
-        snprintf(k1, sizeof(k1), "%d", key1);
-        snprintf(k2, sizeof(k2), "%d", key2);
-        snprintf(k3, sizeof(k3), "%d", key3);
-        return spawn(processName, {k1, k2, k3});
+        return spawn(processName, {
+            std::to_string(key1),
+            std::to_string(key2),
+            std::to_string(key3)
+        });
     }
 
     /**

@@ -48,6 +48,7 @@ set(GATE_HEADERS
 
 set(UTILS_HEADERS
         utils/GatePassageLogger.hpp
+        utils/Logger.hpp
         utils/SignalHelper.hpp
         utils/EnumStrings.hpp
         utils/ArgumentParser.hpp

@@ -1,4 +1,3 @@
-#include <iostream>
 #include <cstring>
 #include <unistd.h>
 #include <ctime>
@@ -15,9 +14,11 @@
 #include "utils/SignalHelper.hpp"
 #include "utils/EnumStrings.hpp"
 #include "utils/ArgumentParser.hpp"
+#include "utils/Logger.hpp"
 
 namespace {
     SignalHelper::SignalFlags g_signals;
+    constexpr const char* TAG = "Worker1";
 }
 
 class Worker1Process {
@@ -38,11 +39,11 @@ public:
             shm_->worker1Pid = getpid();
         }
 
-        std::cout << "[Worker1] Started (PID: " << getpid() << ") - Lower Station Controller" << std::endl;
+        Logger::info(TAG, "Started (PID: ", getpid(), ") - Lower Station Controller");
     }
 
     void run() {
-        std::cout << "[Worker1] Beginning operations" << std::endl;
+        Logger::info(TAG, "Beginning operations");
 
         while (!SignalHelper::shouldExit(g_signals)) {
             if (SignalHelper::isEmergency(g_signals)) {
@@ -81,12 +82,12 @@ public:
             usleep(50000);
         }
 
-        std::cout << "[Worker1] Shutting down" << std::endl;
+        Logger::info(TAG, "Shutting down");
     }
 
 private:
     void handleEmergencyStopTrigger() {
-        std::cout << "[Worker1] !!! EMERGENCY STOP TRIGGERED !!!" << std::endl;
+        Logger::info(TAG, "!!! EMERGENCY STOP TRIGGERED !!!");
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -106,11 +107,11 @@ private:
             kill(worker2Pid, SIGUSR1);
         }
 
-        std::cout << "[Worker1] Emergency stop signal sent to Worker2" << std::endl;
+        Logger::info(TAG, "Emergency stop signal sent to Worker2");
     }
 
     void handleResumeRequest() {
-        std::cout << "[Worker1] Resume requested, checking with Worker2..." << std::endl;
+        Logger::info(TAG, "Resume requested, checking with Worker2...");
         sendMessage(WorkerSignal::READY_TO_START, "Worker1 ready to resume, awaiting confirmation");
 
         time_t startTime = time(nullptr);
@@ -119,7 +120,7 @@ private:
         while (time(nullptr) - startTime < TIMEOUT_S && !SignalHelper::shouldExit(g_signals)) {
             auto msg = msgQueue_.tryReceive(MSG_TYPE_FROM_WORKER2);
             if (msg && msg->signal == WorkerSignal::READY_TO_START) {
-                std::cout << "[Worker1] Worker2 confirmed ready. Resuming operations." << std::endl;
+                Logger::info(TAG, "Worker2 confirmed ready. Resuming operations.");
 
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -136,7 +137,7 @@ private:
             usleep(100000);
         }
 
-        std::cout << "[Worker1] Timeout waiting for Worker2 confirmation" << std::endl;
+        Logger::info(TAG, "Timeout waiting for Worker2 confirmation");
     }
 
     void checkMessages() {
@@ -147,11 +148,11 @@ private:
     }
 
     void handleMessage(const WorkerMessage& msg) {
-        std::cout << "[Worker1] Received message from Worker2: " << msg.messageText << std::endl;
+        Logger::info(TAG, "Received message from Worker2");
 
         switch (msg.signal) {
             case WorkerSignal::EMERGENCY_STOP:
-                std::cout << "[Worker1] Worker2 triggered emergency stop" << std::endl;
+                Logger::info(TAG, "Worker2 triggered emergency stop");
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
                     shm_->state = RopewayState::EMERGENCY_STOP;
@@ -160,15 +161,15 @@ private:
                 break;
 
             case WorkerSignal::STATION_CLEAR:
-                std::cout << "[Worker1] Worker2 reports station clear" << std::endl;
+                Logger::info(TAG, "Worker2 reports station clear");
                 break;
 
             case WorkerSignal::READY_TO_START:
-                std::cout << "[Worker1] Worker2 is ready to resume" << std::endl;
+                Logger::info(TAG, "Worker2 is ready to resume");
                 break;
 
             case WorkerSignal::DANGER_DETECTED:
-                std::cout << "[Worker1] Worker2 detected danger!" << std::endl;
+                Logger::info(TAG, "Worker2 detected danger!");
                 handleEmergencyStopTrigger();
                 break;
         }
@@ -190,10 +191,9 @@ private:
         static time_t lastStatusLog = 0;
         time_t now = time(nullptr);
         if (now - lastStatusLog >= 5) {
-            std::cout << "[Worker1] Status: Platform=" << touristsOnPlatform
-                      << ", ChairsInUse=" << chairsInUse << "/" << Config::Chair::MAX_CONCURRENT_IN_USE
-                      << ", Queue=" << queueCount
-                      << std::endl;
+            Logger::info(TAG, "Status: Platform=", touristsOnPlatform,
+                        ", ChairsInUse=", chairsInUse, "/", Config::Chair::MAX_CONCURRENT_IN_USE,
+                        ", Queue=", queueCount);
             lastStatusLog = now;
         }
 
@@ -204,7 +204,7 @@ private:
         }
 
         if (now >= closingTime) {
-            std::cout << "[Worker1] Closing time reached, initiating closing sequence" << std::endl;
+            Logger::info(TAG, "Closing time reached, initiating closing sequence");
             {
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
                 shm_->state = RopewayState::CLOSING;
@@ -241,9 +241,8 @@ private:
                     child.guardianId = static_cast<int32_t>(adult.touristId);
                     adult.dependentCount++;
 
-                    std::cout << "[Worker1] Paired child " << child.touristId
-                              << " (age " << child.age << ") with guardian " << adult.touristId
-                              << std::endl;
+                    Logger::info(TAG, "Paired child ", child.touristId,
+                                " (age ", child.age, ") with guardian ", adult.touristId);
                     break;
                 }
             }
@@ -343,9 +342,6 @@ private:
                 shm_->chairs[chairId].arrivalTime = shm_->chairs[chairId].departureTime + Config::Chair::RIDE_TIME_S;
                 shm_->chairsInUse++;
 
-                std::cout << "[Worker1] Chair " << chairId << " assigned to group of "
-                          << groupIndices.size() << " tourists (slots: " << slotsUsed << "): ";
-
                 for (size_t i = 0; i < groupIndices.size(); ++i) {
                     BoardingQueueEntry& entry = queue.entries[groupIndices[i]];
                     entry.assignedChairId = chairId;
@@ -354,12 +350,11 @@ private:
                     if (i < 4) {
                         shm_->chairs[chairId].passengerIds[i] = static_cast<int32_t>(entry.touristId);
                     }
-
-                    std::cout << entry.touristId;
-                    if (entry.needsSupervision) std::cout << "(child)";
-                    if (i < groupIndices.size() - 1) std::cout << ", ";
                 }
-                std::cout << std::endl;
+
+                Logger::info(TAG, "Chair ", static_cast<unsigned int>(chairId),
+                            " assigned to group of ", static_cast<unsigned int>(groupIndices.size()),
+                            " tourists (slots: ", slotsUsed, ")");
             }
         }
     }
@@ -368,7 +363,7 @@ private:
         static time_t lastLog = 0;
         time_t now = time(nullptr);
         if (now - lastLog >= 2) {
-            std::cout << "[Worker1] EMERGENCY STOP active - waiting for resume signal (SIGUSR2)" << std::endl;
+            Logger::info(TAG, "EMERGENCY STOP active - waiting for resume signal (SIGUSR2)");
             lastLog = now;
         }
     }
@@ -383,8 +378,7 @@ private:
         }
 
         if (touristsOnPlatform == 0 && touristsInStation == 0) {
-            std::cout << "[Worker1] All tourists cleared. Stopping ropeway in "
-                      << Config::Ropeway::SHUTDOWN_DELAY_S << " seconds..." << std::endl;
+            Logger::info(TAG, "All tourists cleared. Stopping ropeway in ", Config::Ropeway::SHUTDOWN_DELAY_S, " seconds...");
             sleep(Config::Ropeway::SHUTDOWN_DELAY_S);
 
             {
@@ -397,8 +391,8 @@ private:
             static time_t lastLog = 0;
             time_t now = time(nullptr);
             if (now - lastLog >= 2) {
-                std::cout << "[Worker1] Closing: waiting for " << touristsInStation
-                          << " in station, " << touristsOnPlatform << " on platform" << std::endl;
+                Logger::info(TAG, "Closing: waiting for ", touristsInStation,
+                            " in station, ", touristsOnPlatform, " on platform");
                 lastLog = now;
             }
         }
@@ -407,7 +401,7 @@ private:
     void handleStoppedState() {
         static bool loggedOnce = false;
         if (!loggedOnce) {
-            std::cout << "[Worker1] Ropeway stopped. End of operations." << std::endl;
+            Logger::info(TAG, "Ropeway stopped. End of operations.");
             loggedOnce = true;
         }
         usleep(500000);
@@ -424,7 +418,7 @@ private:
         msg.messageText[sizeof(msg.messageText) - 1] = '\0';
 
         if (!msgQueue_.send(msg)) {
-            std::cerr << "[Worker1] Failed to send message to Worker2" << std::endl;
+            Logger::perr(TAG, "msgsnd to Worker2");
         }
     }
 
@@ -447,7 +441,7 @@ int main(int argc, char* argv[]) {
         Worker1Process worker(args);
         worker.run();
     } catch (const std::exception& e) {
-        std::cerr << "[Worker1] Error: " << e.what() << std::endl;
+        Logger::perr(TAG, e.what());
         return 1;
     }
 

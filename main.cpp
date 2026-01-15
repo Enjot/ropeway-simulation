@@ -1,4 +1,3 @@
-#include <iostream>
 #include <iomanip>
 #include <fstream>
 #include <sstream>
@@ -11,6 +10,7 @@
 #include "utils/SignalHelper.hpp"
 #include "utils/ProcessSpawner.hpp"
 #include "utils/EnumStrings.hpp"
+#include "utils/Logger.hpp"
 #include "structures/tourist.hpp"
 
 namespace {
@@ -18,79 +18,76 @@ namespace {
     pid_t g_worker1Pid = 0;
     pid_t g_worker2Pid = 0;
     pid_t g_cashierPid = 0;
+    constexpr const char* TAG = "Main";
 
     pid_t spawnTourist(uint32_t id, uint32_t age, TouristType type, bool isVip,
                        bool wantsToRide, int32_t guardianId, TrailDifficulty trail,
                        key_t shmKey, key_t semKey, key_t msgKey, key_t cashierMsgKey) {
-        char idStr[16], ageStr[16], typeStr[16], vipStr[16], rideStr[16];
-        char guardianStr[16], trailStr[16], shmStr[16], semStr[16], msgStr[16], cashierMsgStr[16];
-
-        snprintf(idStr, sizeof(idStr), "%u", id);
-        snprintf(ageStr, sizeof(ageStr), "%u", age);
-        snprintf(typeStr, sizeof(typeStr), "%d", static_cast<int>(type));
-        snprintf(vipStr, sizeof(vipStr), "%d", isVip ? 1 : 0);
-        snprintf(rideStr, sizeof(rideStr), "%d", wantsToRide ? 1 : 0);
-        snprintf(guardianStr, sizeof(guardianStr), "%d", guardianId);
-        snprintf(trailStr, sizeof(trailStr), "%d", static_cast<int>(trail));
-        snprintf(shmStr, sizeof(shmStr), "%d", shmKey);
-        snprintf(semStr, sizeof(semStr), "%d", semKey);
-        snprintf(msgStr, sizeof(msgStr), "%d", msgKey);
-        snprintf(cashierMsgStr, sizeof(cashierMsgStr), "%d", cashierMsgKey);
-
         return ProcessSpawner::spawn("tourist_process", {
-            idStr, ageStr, typeStr, vipStr, rideStr,
-            guardianStr, trailStr, shmStr, semStr, msgStr, cashierMsgStr
+            std::to_string(id),
+            std::to_string(age),
+            std::to_string(static_cast<int>(type)),
+            std::to_string(isVip ? 1 : 0),
+            std::to_string(wantsToRide ? 1 : 0),
+            std::to_string(guardianId),
+            std::to_string(static_cast<int>(trail)),
+            std::to_string(shmKey),
+            std::to_string(semKey),
+            std::to_string(msgKey),
+            std::to_string(cashierMsgKey)
         });
     }
 }
 
 int main() {
-    std::cout << "=== Ropeway Simulation ===" << std::endl;
+    Logger::separator('=', 60);
+    Logger::log("           ROPEWAY SIMULATION");
+    Logger::separator('=', 60);
 
     SignalHelper::setup(g_signals, SignalHelper::Mode::ORCHESTRATOR);
     IpcManager::cleanup(Config::Ipc::SHM_KEY_BASE);
 
     try {
-        std::cout << "[Main] Creating IPC structures..." << std::endl;
+        Logger::info(TAG, "Creating IPC structures...");
 
         IpcManager ipc(Config::Ipc::SHM_KEY_BASE, true);
 
         constexpr int TEST_STATION_CAPACITY = 10;
-        std::cout << "[Main] Station capacity set to " << TEST_STATION_CAPACITY << std::endl;
+        Logger::info(TAG, "Station capacity set to ", TEST_STATION_CAPACITY);
 
         ipc.initializeSemaphores(TEST_STATION_CAPACITY);
 
         time_t simulationStartTime = time(nullptr);
         ipc.initializeState(simulationStartTime, simulationStartTime + 25);
 
-        std::cout << "[Main] IPC structures initialized" << std::endl;
+        Logger::info(TAG, "IPC structures initialized");
 
-        std::cout << "\n[Main] Spawning cashier..." << std::endl;
+        Logger::info(TAG, "Spawning cashier...");
         g_cashierPid = ProcessSpawner::spawnWithKeys("cashier_process",
             ipc.shmKey(), ipc.semKey(), ipc.cashierMsgKey());
         if (g_cashierPid > 0) {
-            std::cout << "[Main] Cashier spawned with PID " << g_cashierPid << std::endl;
+            Logger::info(TAG, "Cashier spawned with PID ", g_cashierPid);
         }
         usleep(100000);
 
-        std::cout << "\n[Main] Spawning workers..." << std::endl;
+        Logger::info(TAG, "Spawning workers...");
 
         g_worker1Pid = ProcessSpawner::spawnWithKeys("worker1_process",
             ipc.shmKey(), ipc.semKey(), ipc.msgKey());
         if (g_worker1Pid > 0) {
-            std::cout << "[Main] Worker1 spawned with PID " << g_worker1Pid << std::endl;
+            Logger::info(TAG, "Worker1 spawned with PID ", g_worker1Pid);
         }
 
         g_worker2Pid = ProcessSpawner::spawnWithKeys("worker2_process",
             ipc.shmKey(), ipc.semKey(), ipc.msgKey());
         if (g_worker2Pid > 0) {
-            std::cout << "[Main] Worker2 spawned with PID " << g_worker2Pid << std::endl;
+            Logger::info(TAG, "Worker2 spawned with PID ", g_worker2Pid);
         }
 
         usleep(200000);
 
         std::vector<pid_t> touristPids;
-        std::cout << "\n[Main] Spawning tourists..." << std::endl;
+        Logger::info(TAG, "Spawning tourists...");
 
         struct TouristConfig {
             uint32_t id;
@@ -115,7 +112,7 @@ int main() {
         };
 
         for (const auto& t : tourists) {
-            std::cout << "[Main] Spawning Tourist " << t.id << ": " << t.description << std::endl;
+            Logger::info(TAG, "Spawning Tourist ", t.id, ": ", t.description);
             pid_t pid = spawnTourist(t.id, t.age, t.type, t.isVip, t.wantsToRide, t.guardianId, t.trail,
                                      ipc.shmKey(), ipc.semKey(), ipc.msgKey(), ipc.cashierMsgKey());
             if (pid > 0) {
@@ -124,9 +121,9 @@ int main() {
             usleep(100000);
         }
 
-        std::cout << "\n[Main] Simulation running..." << std::endl;
-        std::cout << "[Main] Emergency stop scheduled at 8 seconds" << std::endl;
-        std::cout << "[Main] Resume scheduled at 13 seconds" << std::endl;
+        Logger::info(TAG, "Simulation running...");
+        Logger::info(TAG, "Emergency stop scheduled at 8 seconds");
+        Logger::info(TAG, "Resume scheduled at 13 seconds");
 
         time_t startTime = time(nullptr);
         bool emergencyTriggered = false;
@@ -142,13 +139,13 @@ int main() {
             }
 
             if (currentState == RopewayState::STOPPED) {
-                std::cout << "\n[Main] Ropeway stopped. Ending simulation." << std::endl;
+                Logger::info(TAG, "Ropeway stopped. Ending simulation.");
                 break;
             }
 
             if (elapsed >= 8 && !emergencyTriggered) {
-                std::cout << "\n[Main] >>> TRIGGERING EMERGENCY STOP <<<" << std::endl;
-                std::cout << "[Main] Sending SIGUSR1 to Worker1 (PID: " << g_worker1Pid << ")" << std::endl;
+                Logger::info(TAG, ">>> TRIGGERING EMERGENCY STOP <<<");
+                Logger::info(TAG, "Sending SIGUSR1 to Worker1 (PID: ", g_worker1Pid, ")");
                 if (g_worker1Pid > 0) {
                     kill(g_worker1Pid, SIGUSR1);
                 }
@@ -156,8 +153,8 @@ int main() {
             }
 
             if (elapsed >= 13 && emergencyTriggered && !resumeTriggered) {
-                std::cout << "\n[Main] >>> TRIGGERING RESUME <<<" << std::endl;
-                std::cout << "[Main] Sending SIGUSR2 to Worker1 (PID: " << g_worker1Pid << ")" << std::endl;
+                Logger::info(TAG, ">>> TRIGGERING RESUME <<<");
+                Logger::info(TAG, "Sending SIGUSR2 to Worker1 (PID: ", g_worker1Pid, ")");
                 if (g_worker1Pid > 0) {
                     kill(g_worker1Pid, SIGUSR2);
                 }
@@ -165,7 +162,7 @@ int main() {
             }
 
             if (elapsed >= 30) {
-                std::cout << "\n[Main] Timeout reached." << std::endl;
+                Logger::info(TAG, "Timeout reached.");
                 break;
             }
 
@@ -230,17 +227,20 @@ int main() {
             report << std::string(60, '=') << "\n";
         }
 
-        std::cout << "\n" << report.str();
+        // Write report to stdout using write()
+        std::string reportStr = report.str();
+        write(STDOUT_FILENO, "\n", 1);
+        write(STDOUT_FILENO, reportStr.c_str(), reportStr.length());
 
         std::string reportFilename = "daily_report_" + std::to_string(simulationEndTime) + ".txt";
         std::ofstream reportFile(reportFilename);
         if (reportFile.is_open()) {
-            reportFile << report.str();
+            reportFile << reportStr;
             reportFile.close();
-            std::cout << "\n[Main] Daily report saved to: " << reportFilename << std::endl;
+            Logger::info(TAG, "Daily report saved to: ", reportFilename.c_str(), "");
         }
 
-        std::cout << "\n[Main] Cleaning up processes..." << std::endl;
+        Logger::info(TAG, "Cleaning up processes...");
 
         ProcessSpawner::terminate(g_cashierPid, "Cashier");
         ProcessSpawner::terminate(g_worker1Pid, "Worker1");
@@ -251,7 +251,7 @@ int main() {
         ProcessSpawner::waitForAll();
 
     } catch (const std::exception& e) {
-        std::cerr << "[Main] Error: " << e.what() << std::endl;
+        Logger::perr(TAG, e.what());
         ProcessSpawner::terminate(g_cashierPid, "Cashier");
         ProcessSpawner::terminate(g_worker1Pid, "Worker1");
         ProcessSpawner::terminate(g_worker2Pid, "Worker2");
@@ -259,9 +259,9 @@ int main() {
         return 1;
     }
 
-    std::cout << "\n[Main] Cleaning up IPC structures..." << std::endl;
+    Logger::info(TAG, "Cleaning up IPC structures...");
     IpcManager::cleanup(Config::Ipc::SHM_KEY_BASE);
-    std::cout << "[Main] Done." << std::endl;
+    Logger::info(TAG, "Done.");
 
     return 0;
 }

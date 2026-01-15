@@ -1,7 +1,7 @@
-#include <iostream>
 #include <cstring>
 #include <unistd.h>
 #include <ctime>
+#include <cstdlib>
 
 #include "ipc/SharedMemory.hpp"
 #include "ipc/Semaphore.hpp"
@@ -13,9 +13,11 @@
 #include "utils/SignalHelper.hpp"
 #include "utils/EnumStrings.hpp"
 #include "utils/ArgumentParser.hpp"
+#include "utils/Logger.hpp"
 
 namespace {
     SignalHelper::SignalFlags g_signals;
+    constexpr const char* TAG = "Cashier";
 }
 
 class CashierProcess {
@@ -31,16 +33,12 @@ public:
           vipTickets_{0},
           discountsGiven_{0} {
 
-        std::cout << "[Cashier] Started (PID: " << getpid() << ")" << std::endl;
+        Logger::info(TAG, "Started (PID: ", getpid(), ")");
     }
 
     void run() {
-        std::cout << "[Cashier] Ready to serve customers" << std::endl;
-        std::cout << "[Cashier] Prices: Single=" << TicketPricing::SINGLE_USE
-                  << ", Tk1=" << TicketPricing::TIME_TK1
-                  << ", Tk2=" << TicketPricing::TIME_TK2
-                  << ", Tk3=" << TicketPricing::TIME_TK3
-                  << ", Daily=" << TicketPricing::DAILY << std::endl;
+        Logger::info(TAG, "Ready to serve customers");
+        Logger::info(TAG, "Prices configured");
 
         while (!SignalHelper::shouldExit(g_signals)) {
             bool accepting;
@@ -58,14 +56,13 @@ public:
         }
 
         printStatistics();
-        std::cout << "[Cashier] Shutting down" << std::endl;
+        Logger::info(TAG, "Shutting down");
     }
 
 private:
     void processRequest(const TicketRequest& request, bool accepting) {
-        std::cout << "[Cashier] Processing request from Tourist " << request.touristId
-                  << " (age: " << request.touristAge << ", type: "
-                  << EnumStrings::toDescriptiveString(request.requestedType) << ")" << std::endl;
+        Logger::info(TAG, "Processing request from Tourist ", request.touristId,
+                    " (age: ", request.touristAge, ")");
 
         TicketResponse response;
         response.mtype = CashierMsgType::RESPONSE_BASE + request.touristId;
@@ -75,7 +72,7 @@ private:
             response.success = false;
             std::strncpy(response.message, "Ropeway is closed", sizeof(response.message) - 1);
             sendResponse(response);
-            std::cout << "[Cashier] Rejected: Ropeway closed" << std::endl;
+            Logger::info(TAG, "Rejected: Ropeway closed");
             return;
         }
 
@@ -137,45 +134,35 @@ private:
         response.validFrom = now;
         response.validUntil = validUntil;
 
-        char discountStr[32] = "";
-        if (discount > 0) {
-            snprintf(discountStr, sizeof(discountStr), " (%.0f%% discount)", discount * 100);
+        strcpy(response.message, "Ticket issued");
+        if (isVip) {
+            strcat(response.message, " [VIP]");
         }
-        snprintf(response.message, sizeof(response.message),
-                 "Ticket #%u issued%s%s",
-                 ticketId,
-                 discountStr,
-                 isVip ? " [VIP]" : "");
 
         sendResponse(response);
 
         totalRevenue_ += finalPrice;
         ticketsSold_++;
 
-        std::cout << "[Cashier] Sold ticket #" << ticketId << " to Tourist " << request.touristId
-                  << " - " << EnumStrings::toDescriptiveString(request.requestedType)
-                  << " - Price: " << finalPrice;
-        if (discount > 0) {
-            std::cout << " (discount: " << (discount * 100) << "%)";
-        }
         if (isVip) {
-            std::cout << " [VIP]";
+            Logger::info(TAG, "Sold ticket #", ticketId, " to Tourist ", request.touristId, " [VIP]");
+        } else {
+            Logger::info(TAG, "Sold ticket #", ticketId, " to Tourist ", request.touristId);
         }
-        std::cout << std::endl;
     }
 
     void sendResponse(const TicketResponse& response) {
         if (!responseQueue_.send(response)) {
-            std::cerr << "[Cashier] Failed to send response to Tourist " << response.touristId << std::endl;
+            Logger::perr(TAG, "msgsnd response");
         }
     }
 
     void printStatistics() {
-        std::cout << "\n[Cashier] === Sales Statistics ===" << std::endl;
-        std::cout << "[Cashier] Tickets sold: " << ticketsSold_ << std::endl;
-        std::cout << "[Cashier] VIP tickets: " << vipTickets_ << std::endl;
-        std::cout << "[Cashier] Discounts given: " << discountsGiven_ << std::endl;
-        std::cout << "[Cashier] Total revenue: " << totalRevenue_ << std::endl;
+        Logger::info(TAG, "=== Sales Statistics ===");
+        Logger::info(TAG, "Tickets sold: ", ticketsSold_);
+        Logger::info(TAG, "VIP tickets: ", vipTickets_);
+        Logger::info(TAG, "Discounts given: ", discountsGiven_);
+        Logger::info(TAG, "Total revenue: ", static_cast<unsigned int>(totalRevenue_));
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -208,7 +195,7 @@ int main(int argc, char* argv[]) {
         CashierProcess cashier(args);
         cashier.run();
     } catch (const std::exception& e) {
-        std::cerr << "[Cashier] Error: " << e.what() << std::endl;
+        Logger::perr(TAG, e.what());
         return 1;
     }
 
