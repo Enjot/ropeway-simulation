@@ -3,6 +3,7 @@
 #include <csignal>
 #include <unistd.h>
 #include <iostream>
+#include "../common/config.hpp"
 
 /**
  * Centralized signal handling utilities for multi-process simulation.
@@ -148,7 +149,7 @@ namespace SignalHelper {
         }
 
         while (flag && !exitFlag) {
-            usleep(100000); // 100ms
+            usleep(Config::Timing::SIGNAL_HANDLER_REAP_US);
         }
 
         if (logName && !exitFlag) {

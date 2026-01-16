@@ -41,6 +41,9 @@ public:
         }
 
         Logger::info(TAG, "Started (PID: ", getpid(), ") - Upper Station Controller");
+
+        // Signal readiness to parent process
+        sem_.signal(SemaphoreIndex::WORKER2_READY);
     }
 
     void run() {
@@ -81,7 +84,7 @@ public:
                     break;
             }
 
-            usleep(50000);
+            usleep(Config::Timing::WORKER_LOOP_POLL_US);
         }
 
         Logger::info(TAG, "Shutting down");
@@ -214,7 +217,7 @@ private:
             exitRoute2Active_ = false;
             loggedOnce = true;
         }
-        usleep(500000);
+        usleep(Config::Timing::STOPPED_STATE_IDLE_US);
     }
 
     void sendMessage(WorkerSignal signal, const char* text) {

@@ -40,6 +40,9 @@ public:
         }
 
         Logger::info(TAG, "Started (PID: ", getpid(), ") - Lower Station Controller");
+
+        // Signal readiness to parent process
+        sem_.signal(SemaphoreIndex::WORKER1_READY);
     }
 
     void run() {
@@ -79,7 +82,7 @@ public:
                     break;
             }
 
-            usleep(50000);
+            usleep(Config::Timing::WORKER_LOOP_POLL_US);
         }
 
         Logger::info(TAG, "Shutting down");
@@ -134,7 +137,7 @@ private:
                 currentEmergencyRecordIndex_ = -1;
                 return;
             }
-            usleep(100000);
+            usleep(Config::Timing::TOURIST_LOOP_POLL_US);
         }
 
         Logger::info(TAG, "Timeout waiting for Worker2 confirmation");
@@ -404,7 +407,7 @@ private:
             Logger::info(TAG, "Ropeway stopped. End of operations.");
             loggedOnce = true;
         }
-        usleep(500000);
+        usleep(Config::Timing::STOPPED_STATE_IDLE_US);
     }
 
     void sendMessage(WorkerSignal signal, const char* text) {

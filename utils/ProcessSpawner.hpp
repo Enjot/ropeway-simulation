@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <csignal>
 #include <sys/wait.h>
+#include "../common/config.hpp"
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -114,7 +115,7 @@ namespace ProcessSpawner {
 
         // Try graceful termination first
         kill(pid, SIGTERM);
-        usleep(100000);  // 100ms grace period
+        usleep(Config::Timing::SIGNAL_HANDLER_REAP_US);  // Grace period
 
         // Force kill if still running
         kill(pid, SIGKILL);

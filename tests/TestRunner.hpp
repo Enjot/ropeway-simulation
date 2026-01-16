@@ -64,7 +64,7 @@ public:
 
             pid_t cashierPid = ProcessSpawner::spawnWithKeys("cashier_process",
                 ipc.shmKey(), ipc.semKey(), ipc.cashierMsgKey());
-            usleep(100000);
+            ipc.semaphores().wait(SemaphoreIndex::CASHIER_READY);
 
             pid_t worker1Pid = ProcessSpawner::spawnWithKeys("worker1_process",
                 ipc.shmKey(), ipc.semKey(), ipc.msgKey());
@@ -76,7 +76,8 @@ public:
                 ipc.state()->core.worker1Pid = worker1Pid;
                 ipc.state()->core.worker2Pid = worker2Pid;
             }
-            usleep(200000);
+            ipc.semaphores().wait(SemaphoreIndex::WORKER1_READY);
+            ipc.semaphores().wait(SemaphoreIndex::WORKER2_READY);
 
             std::cout << "[Test] Spawning " << scenario.tourists.size() << " tourists...\n";
 
@@ -96,7 +97,7 @@ public:
             ProcessSpawner::terminate(worker2Pid, "Worker2");
             ProcessSpawner::terminateAll(touristPids);
 
-            usleep(300000);
+            usleep(Config::Timing::PROCESS_CLEANUP_WAIT_US);
 
             result.zombieProcesses = TestValidator::checkForZombies();
             if (result.zombieProcesses > 0 && scenario.expectNoZombies) {
@@ -195,7 +196,7 @@ private:
                 break;
             }
 
-            usleep(200000);
+            usleep(Config::Timing::MAIN_LOOP_POLL_US);
         }
 
         {

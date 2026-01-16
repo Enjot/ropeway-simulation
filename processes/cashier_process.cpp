@@ -34,6 +34,9 @@ public:
           discountsGiven_{0} {
 
         Logger::info(TAG, "Started (PID: ", getpid(), ")");
+
+        // Signal readiness to parent process
+        sem_.signal(SemaphoreIndex::CASHIER_READY);
     }
 
     void run() {
@@ -52,7 +55,7 @@ public:
                 processRequest(*request, accepting);
             }
 
-            usleep(10000);
+            usleep(Config::Timing::CASHIER_LOOP_POLL_US);
         }
 
         printStatistics();

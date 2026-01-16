@@ -65,4 +65,32 @@ namespace Config {
         constexpr key_t MSG_KEY_BASE{0x3000};
     }
 
+    /**
+     * Timing constants for delays and polling intervals (in microseconds)
+     * NOTE: usleep() should NOT be used for synchronization - use semaphores instead
+     * These are only for simulation delays and non-critical polling
+     */
+    namespace Timing {
+        // Polling intervals for main loops (non-synchronization)
+        constexpr uint32_t MAIN_LOOP_POLL_US{500000};         // 500ms - orchestrator main loop
+        constexpr uint32_t WORKER_LOOP_POLL_US{50000};        // 50ms - worker main loop
+        constexpr uint32_t CASHIER_LOOP_POLL_US{10000};       // 10ms - cashier main loop
+        constexpr uint32_t TOURIST_LOOP_POLL_US{100000};      // 100ms - tourist main loop
+        constexpr uint32_t TICKET_RESPONSE_POLL_US{50000};    // 50ms - ticket response polling
+        constexpr uint32_t STOPPED_STATE_IDLE_US{500000};     // 500ms - idle when stopped
+
+        // Simulation delays (simulating real-world time)
+        constexpr uint32_t ARRIVAL_DELAY_BASE_US{100000};     // 100ms base arrival delay
+        constexpr uint32_t ARRIVAL_DELAY_RANDOM_US{200000};   // 200ms random component
+        constexpr uint32_t EXIT_ROUTE_DELAY_BASE_US{100000};  // 100ms base exit delay
+        constexpr uint32_t EXIT_ROUTE_DELAY_RANDOM_US{200000};// 200ms random component
+
+        // Process management delays (for cleanup, not sync)
+        constexpr uint32_t PROCESS_CLEANUP_WAIT_US{300000};   // 300ms wait for cleanup
+        constexpr uint32_t SIGNAL_HANDLER_REAP_US{100000};    // 100ms child reaping interval
+
+        // Ride time scaling (divide real time for simulation)
+        constexpr uint32_t RIDE_TIME_SCALE{100};              // Divide ride time by this
+    }
+
 }

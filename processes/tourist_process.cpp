@@ -102,14 +102,14 @@ private:
     void handleEmergencyStop() {
         Logger::info(tag_, "Emergency stop detected, waiting...");
         while (SignalHelper::isEmergency(g_signals) && !SignalHelper::shouldExit(g_signals)) {
-            usleep(100000);
+            usleep(Config::Timing::TOURIST_LOOP_POLL_US);
         }
         Logger::info(tag_, "Emergency cleared, resuming");
     }
 
     void handleBuyingTicket() {
         // Simulate arrival time
-        usleep(100000 + (rand() % 200000));
+        usleep(Config::Timing::ARRIVAL_DELAY_BASE_US + (rand() % Config::Timing::ARRIVAL_DELAY_RANDOM_US));
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -177,7 +177,7 @@ private:
                 }
                 return;
             }
-            usleep(50000);
+            usleep(Config::Timing::TICKET_RESPONSE_POLL_US);
         }
 
         Logger::perr(tag_, "Timeout waiting for ticket");
@@ -261,7 +261,7 @@ private:
             constexpr int GUARDIAN_TIMEOUT_S = 10;
 
             while (!guardianAssigned && !SignalHelper::shouldExit(g_signals)) {
-                usleep(100000);
+                usleep(Config::Timing::TOURIST_LOOP_POLL_US);
 
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -295,7 +295,7 @@ private:
         constexpr int BOARDING_TIMEOUT_S = 30;
 
         while (!SignalHelper::shouldExit(g_signals)) {
-            usleep(100000);
+            usleep(Config::Timing::TOURIST_LOOP_POLL_US);
 
             {
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -364,7 +364,7 @@ private:
         Logger::info(tag_, "On chair ", assignedChairId_, ", riding up...");
 
         uint32_t rideTime = Config::Chair::RIDE_TIME_S;
-        usleep((rideTime / 100) * 1000000);
+        usleep((rideTime / Config::Timing::RIDE_TIME_SCALE) * 1000000);
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -413,7 +413,7 @@ private:
     void handleAtTop() {
         Logger::info(tag_, "Arrived at top station");
 
-        usleep(100000 + (rand() % 200000));
+        usleep(Config::Timing::EXIT_ROUTE_DELAY_BASE_US + (rand() % Config::Timing::EXIT_ROUTE_DELAY_RANDOM_US));
 
         if (tourist_.type == TouristType::CYCLIST) {
             changeState(TouristState::ON_TRAIL);
@@ -427,7 +427,7 @@ private:
         uint32_t trailTime = EnumStrings::getTrailTimeSeconds(tourist_.preferredTrail);
         Logger::info(tag_, "Cycling down trail (difficulty: ", static_cast<int>(tourist_.preferredTrail), ")");
 
-        usleep((trailTime / 100) * 1000000);
+        usleep((trailTime / Config::Timing::RIDE_TIME_SCALE) * 1000000);
 
         Logger::info(tag_, "Finished trail descent");
 

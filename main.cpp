@@ -68,7 +68,9 @@ int main() {
         if (g_cashierPid > 0) {
             Logger::info(TAG, "Cashier spawned with PID ", g_cashierPid);
         }
-        usleep(100000);
+        // Wait for cashier to signal ready (proper synchronization via semaphore)
+        ipc.semaphores().wait(SemaphoreIndex::CASHIER_READY);
+        Logger::info(TAG, "Cashier ready");
 
         Logger::info(TAG, "Spawning workers...");
 
@@ -84,7 +86,11 @@ int main() {
             Logger::info(TAG, "Worker2 spawned with PID ", g_worker2Pid);
         }
 
-        usleep(200000);
+        // Wait for workers to signal ready (proper synchronization via semaphores)
+        ipc.semaphores().wait(SemaphoreIndex::WORKER1_READY);
+        Logger::info(TAG, "Worker1 ready");
+        ipc.semaphores().wait(SemaphoreIndex::WORKER2_READY);
+        Logger::info(TAG, "Worker2 ready");
 
         std::vector<pid_t> touristPids;
         Logger::info(TAG, "Spawning tourists...");
@@ -118,7 +124,7 @@ int main() {
             if (pid > 0) {
                 touristPids.push_back(pid);
             }
-            usleep(100000);
+            usleep(Config::Timing::TOURIST_LOOP_POLL_US);  // Staggered tourist spawning
         }
 
         Logger::info(TAG, "Simulation running...");
@@ -166,7 +172,7 @@ int main() {
                 break;
             }
 
-            usleep(500000);
+            usleep(Config::Timing::MAIN_LOOP_POLL_US);
         }
 
         time_t simulationEndTime = time(nullptr);
@@ -247,7 +253,7 @@ int main() {
         ProcessSpawner::terminate(g_worker2Pid, "Worker2");
         ProcessSpawner::terminateAll(touristPids);
 
-        usleep(300000);
+        usleep(Config::Timing::PROCESS_CLEANUP_WAIT_US);
         ProcessSpawner::waitForAll();
 
     } catch (const std::exception& e) {

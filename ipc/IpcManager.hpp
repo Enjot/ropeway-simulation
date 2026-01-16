@@ -94,6 +94,10 @@ public:
         sem_.setValue(SemaphoreIndex::RIDE_GATES, Config::Gate::NUM_RIDE_GATES);
         sem_.setValue(SemaphoreIndex::CHAIR_ALLOCATION, 1);
         sem_.setValue(SemaphoreIndex::WORKER_SYNC, 0);
+        // Process readiness semaphores - initialized to 0, processes signal when ready
+        sem_.setValue(SemaphoreIndex::CASHIER_READY, 0);
+        sem_.setValue(SemaphoreIndex::WORKER1_READY, 0);
+        sem_.setValue(SemaphoreIndex::WORKER2_READY, 0);
     }
 
     /**
