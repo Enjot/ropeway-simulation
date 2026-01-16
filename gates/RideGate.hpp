@@ -115,11 +115,11 @@ public:
         // Check ropeway state
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            if (state_->state == RopewayState::EMERGENCY_STOP) {
+            if (state_->core.state == RopewayState::EMERGENCY_STOP) {
                 result.reason = "Emergency stop active";
                 return result;
             }
-            if (state_->state == RopewayState::STOPPED) {
+            if (state_->core.state == RopewayState::STOPPED) {
                 result.reason = "Ropeway stopped";
                 return result;
             }
@@ -169,18 +169,18 @@ public:
         SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
 
         // Check if we have chairs available
-        if (state_->chairsInUse >= Config::Chair::MAX_CONCURRENT_IN_USE) {
+        if (state_->chairPool.chairsInUse >= Config::Chair::MAX_CONCURRENT_IN_USE) {
             return -1;
         }
 
         // Find an available chair
         for (uint32_t i = 0; i < Config::Chair::QUANTITY; ++i) {
             uint32_t chairIdx = (nextChairId_ + i) % Config::Chair::QUANTITY;
-            if (!state_->chairs[chairIdx].isOccupied) {
-                state_->chairs[chairIdx].isOccupied = true;
-                state_->chairs[chairIdx].numPassengers = 0;
-                state_->chairs[chairIdx].slotsUsed = 0;
-                state_->chairsInUse++;
+            if (!state_->chairPool.chairs[chairIdx].isOccupied) {
+                state_->chairPool.chairs[chairIdx].isOccupied = true;
+                state_->chairPool.chairs[chairIdx].numPassengers = 0;
+                state_->chairPool.chairs[chairIdx].slotsUsed = 0;
+                state_->chairPool.chairsInUse++;
                 nextChairId_ = (chairIdx + 1) % Config::Chair::QUANTITY;
                 return static_cast<int32_t>(chairIdx);
             }
@@ -199,7 +199,7 @@ public:
 
         SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
 
-        Chair& chair = state_->chairs[chairId];
+        Chair& chair = state_->chairPool.chairs[chairId];
         chair.numPassengers = static_cast<uint32_t>(group.touristIds.size());
         chair.slotsUsed = group.slotsUsed;
         chair.departureTime = time(nullptr);
@@ -226,7 +226,7 @@ public:
 
         SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
 
-        Chair& chair = state_->chairs[chairId];
+        Chair& chair = state_->chairPool.chairs[chairId];
         chair.isOccupied = false;
         chair.numPassengers = 0;
         chair.slotsUsed = 0;
@@ -234,8 +234,8 @@ public:
             chair.passengerIds[i] = -1;
         }
 
-        if (state_->chairsInUse > 0) {
-            state_->chairsInUse--;
+        if (state_->chairPool.chairsInUse > 0) {
+            state_->chairPool.chairsInUse--;
         }
     }
 
@@ -251,7 +251,7 @@ public:
      */
     bool isBoardingAllowed() {
         SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-        return state_->state == RopewayState::RUNNING;
+        return state_->core.state == RopewayState::RUNNING;
     }
 
 private:

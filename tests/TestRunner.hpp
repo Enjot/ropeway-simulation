@@ -73,8 +73,8 @@ public:
 
             {
                 SemaphoreLock lock(ipc.semaphores(), SemaphoreIndex::SHARED_MEMORY);
-                ipc.state()->worker1Pid = worker1Pid;
-                ipc.state()->worker2Pid = worker2Pid;
+                ipc.state()->core.worker1Pid = worker1Pid;
+                ipc.state()->core.worker2Pid = worker2Pid;
             }
             usleep(200000);
 
@@ -154,12 +154,12 @@ private:
 
             {
                 SemaphoreLock lock(ipc.semaphores(), SemaphoreIndex::SHARED_MEMORY);
-                uint32_t currentCapacity = ipc.state()->touristsInLowerStation;
+                uint32_t currentCapacity = ipc.state()->core.touristsInLowerStation;
                 if (currentCapacity > maxObservedCapacity) {
                     maxObservedCapacity = currentCapacity;
                 }
 
-                if (ipc.state()->state == RopewayState::STOPPED) {
+                if (ipc.state()->core.state == RopewayState::STOPPED) {
                     std::cout << "[Test] Ropeway stopped.\n";
                     break;
                 }
@@ -200,7 +200,7 @@ private:
 
         {
             SemaphoreLock lock(ipc.semaphores(), SemaphoreIndex::SHARED_MEMORY);
-            ipc.state()->dailyStats.simulationEndTime = time(nullptr);
+            ipc.state()->stats.dailyStats.simulationEndTime = time(nullptr);
             result = TestValidator::validate(scenario, *ipc.state(), maxObservedCapacity);
         }
 

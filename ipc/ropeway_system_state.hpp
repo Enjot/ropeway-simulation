@@ -10,67 +10,30 @@
 #include "ipc/boarding_queue.hpp"
 #include "ipc/reporting_data.hpp"
 
+// ============================================================================
+// SUB-STRUCTURES FOR LOGICAL ORGANIZATION
+// ============================================================================
+
 /**
- * Main shared memory structure for the ropeway simulation.
+ * Core operational state of the ropeway.
+ * Contains primary status flags, timing, and station counters.
  *
- * This structure is shared across all processes via System V shared memory.
- * Access must be synchronized using semaphores (SHARED_MEMORY semaphore).
- *
- * OWNERSHIP/RESPONSIBILITY:
- * - Main orchestrator: Creates and initializes, sets opening/closing times
- * - Worker1 (lower station): Manages boardingQueue, assigns chairs
- * - Worker2 (upper station): Monitors arrivals at top
- * - Cashier: Reads acceptingNewTourists flag
- * - Tourists: Update counters, register for tracking, log gate passages
+ * OWNERSHIP: Main orchestrator initializes; workers update state/counters.
  */
-struct RopewaySystemState {
-
-    // ==================== CORE OPERATIONAL STATE ====================
-    // Primary ropeway status - read by all, written by workers
-
+struct RopewayCoreState {
     RopewayState state;             // STOPPED, RUNNING, EMERGENCY_STOP, CLOSING
     bool acceptingNewTourists;      // False after closing time (Tk)
     time_t openingTime;             // Tp - simulation start
     time_t closingTime;             // Tk - gates stop accepting
 
-    // ==================== STATION COUNTERS ====================
-    // Updated by tourists as they move through the system
-
     uint32_t touristsInLowerStation;  // After entry gate, before platform
     uint32_t touristsOnPlatform;      // On chairs, in transit
     uint32_t totalRidesToday;         // Cumulative ride count
 
-    // ==================== CHAIR SYSTEM ====================
-    // Managed by Worker1 (assignment) and tourists (boarding/disembarking)
-
-    uint32_t chairsInUse;                       // Currently occupied chairs
-    Chair chairs[Config::Chair::QUANTITY];      // All 72 chairs
-
-    // ==================== BOARDING QUEUE ====================
-    // Owned by Worker1 - tourists waiting to board at lower station
-
-    BoardingQueue boardingQueue;
-
-    // ==================== WORKER COORDINATION ====================
-    // PIDs for inter-worker signal communication
-
     pid_t worker1Pid;  // Lower station controller
     pid_t worker2Pid;  // Upper station controller
 
-    // ==================== REPORTING & STATISTICS ====================
-    // Accumulated throughout simulation, used for daily report
-
-    DailyStatistics dailyStats;
-
-    static constexpr uint32_t MAX_TOURIST_RECORDS = 100;
-    TouristRideRecord touristRecords[MAX_TOURIST_RECORDS];
-    uint32_t touristRecordCount;
-
-    GatePassageLog gateLog;
-
-    // ==================== CONSTRUCTOR ====================
-
-    RopewaySystemState()
+    RopewayCoreState()
         : state{RopewayState::STOPPED},
           acceptingNewTourists{false},
           openingTime{Config::Ropeway::DEFAULT_OPENING_TIME},
@@ -78,15 +41,80 @@ struct RopewaySystemState {
           touristsInLowerStation{0},
           touristsOnPlatform{0},
           totalRidesToday{0},
-          chairsInUse{0},
-          chairs{},
-          boardingQueue{},
           worker1Pid{0},
-          worker2Pid{0},
-          dailyStats{},
+          worker2Pid{0} {}
+};
+
+/**
+ * Chair management pool.
+ * Contains all chairs and the boarding queue.
+ *
+ * OWNERSHIP: Worker1 manages assignments; tourists update on board/disembark.
+ */
+struct ChairPool {
+    Chair chairs[Config::Chair::QUANTITY];  // All 72 chairs
+    uint32_t chairsInUse;                   // Currently occupied chairs
+    BoardingQueue boardingQueue;            // Tourists waiting to board
+
+    ChairPool()
+        : chairs{},
+          chairsInUse{0},
+          boardingQueue{} {}
+};
+
+/**
+ * Simulation statistics and reporting data.
+ * Accumulated throughout simulation for daily report generation.
+ *
+ * OWNERSHIP: Various processes update; main orchestrator reads for report.
+ */
+struct SimulationStatistics {
+    static constexpr uint32_t MAX_TOURIST_RECORDS = 100;
+
+    DailyStatistics dailyStats;
+    TouristRideRecord touristRecords[MAX_TOURIST_RECORDS];
+    uint32_t touristRecordCount;
+    GatePassageLog gateLog;
+
+    SimulationStatistics()
+        : dailyStats{},
           touristRecords{},
           touristRecordCount{0},
           gateLog{} {}
+};
+
+// ============================================================================
+// MAIN SHARED MEMORY STRUCTURE
+// ============================================================================
+
+/**
+ * Main shared memory structure for the ropeway simulation.
+ *
+ * This structure is shared across all processes via System V shared memory.
+ * Access must be synchronized using semaphores (SHARED_MEMORY semaphore).
+ *
+ * Organized into three logical sections:
+ * - core: Operational state, timing, counters, worker PIDs
+ * - chairPool: Chair management and boarding queue
+ * - stats: Statistics and reporting data
+ *
+ * OWNERSHIP/RESPONSIBILITY:
+ * - Main orchestrator: Creates and initializes, sets opening/closing times
+ * - Worker1 (lower station): Manages chairPool.boardingQueue, assigns chairs
+ * - Worker2 (upper station): Monitors arrivals at top
+ * - Cashier: Reads core.acceptingNewTourists flag
+ * - Tourists: Update counters, register for tracking, log gate passages
+ */
+struct RopewaySystemState {
+
+    RopewayCoreState core;
+    ChairPool chairPool;
+    SimulationStatistics stats;
+
+    RopewaySystemState()
+        : core{},
+          chairPool{},
+          stats{} {}
 
     // ==================== TOURIST TRACKING METHODS ====================
 
@@ -97,9 +125,9 @@ struct RopewaySystemState {
      */
     int32_t registerTourist(uint32_t touristId, uint32_t ticketId, uint32_t age,
                             TouristType type, bool isVip) {
-        if (touristRecordCount >= MAX_TOURIST_RECORDS) return -1;
+        if (stats.touristRecordCount >= SimulationStatistics::MAX_TOURIST_RECORDS) return -1;
 
-        TouristRideRecord& record = touristRecords[touristRecordCount];
+        TouristRideRecord& record = stats.touristRecords[stats.touristRecordCount];
         record.touristId = touristId;
         record.ticketId = ticketId;
         record.age = age;
@@ -109,7 +137,7 @@ struct RopewaySystemState {
         record.entryGatePassages = 0;
         record.rideGatePassages = 0;
 
-        return static_cast<int32_t>(touristRecordCount++);
+        return static_cast<int32_t>(stats.touristRecordCount++);
     }
 
     /**
@@ -117,8 +145,8 @@ struct RopewaySystemState {
      * @return Record index or -1 if not found
      */
     int32_t findTouristRecord(uint32_t touristId) const {
-        for (uint32_t i = 0; i < touristRecordCount; ++i) {
-            if (touristRecords[i].touristId == touristId) {
+        for (uint32_t i = 0; i < stats.touristRecordCount; ++i) {
+            if (stats.touristRecords[i].touristId == touristId) {
                 return static_cast<int32_t>(i);
             }
         }
@@ -137,15 +165,15 @@ struct RopewaySystemState {
         passage.gateNumber = gateNumber;
         passage.timestamp = time(nullptr);
         passage.wasAllowed = allowed;
-        gateLog.addEntry(passage);
+        stats.gateLog.addEntry(passage);
 
         // Update tourist record counters
         int32_t idx = findTouristRecord(touristId);
         if (idx >= 0) {
             if (gateType == GateType::ENTRY) {
-                touristRecords[idx].entryGatePassages++;
+                stats.touristRecords[idx].entryGatePassages++;
             } else {
-                touristRecords[idx].rideGatePassages++;
+                stats.touristRecords[idx].rideGatePassages++;
             }
         }
     }
@@ -156,7 +184,7 @@ struct RopewaySystemState {
     void recordRide(uint32_t touristId) {
         int32_t idx = findTouristRecord(touristId);
         if (idx >= 0) {
-            touristRecords[idx].ridesCompleted++;
+            stats.touristRecords[idx].ridesCompleted++;
         }
     }
 };

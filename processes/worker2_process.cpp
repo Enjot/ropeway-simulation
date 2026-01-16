@@ -37,7 +37,7 @@ public:
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            shm_->worker2Pid = getpid();
+            shm_->core.worker2Pid = getpid();
         }
 
         Logger::info(TAG, "Started (PID: ", getpid(), ") - Upper Station Controller");
@@ -63,7 +63,7 @@ public:
             RopewayState currentState;
             {
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                currentState = shm_->state;
+                currentState = shm_->core.state;
             }
 
             switch (currentState) {
@@ -93,7 +93,7 @@ private:
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            shm_->state = RopewayState::EMERGENCY_STOP;
+            shm_->core.state = RopewayState::EMERGENCY_STOP;
         }
 
         isEmergencyStopped_ = true;
@@ -105,8 +105,8 @@ private:
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            shm_->state = RopewayState::EMERGENCY_STOP;
-            currentEmergencyRecordIndex_ = shm_->dailyStats.recordEmergencyStart(WORKER_ID);
+            shm_->core.state = RopewayState::EMERGENCY_STOP;
+            currentEmergencyRecordIndex_ = shm_->stats.dailyStats.recordEmergencyStart(WORKER_ID);
         }
 
         isEmergencyStopped_ = true;
@@ -115,7 +115,7 @@ private:
         pid_t worker1Pid;
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            worker1Pid = shm_->worker1Pid;
+            worker1Pid = shm_->core.worker1Pid;
         }
         if (worker1Pid > 0) {
             kill(worker1Pid, SIGUSR1);
@@ -139,7 +139,7 @@ private:
                 Logger::info(TAG, "Worker1 triggered emergency stop");
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                    shm_->state = RopewayState::EMERGENCY_STOP;
+                    shm_->core.state = RopewayState::EMERGENCY_STOP;
                 }
                 isEmergencyStopped_ = true;
                 break;
@@ -175,8 +175,8 @@ private:
         uint32_t totalRides;
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            chairsInUse = shm_->chairsInUse;
-            totalRides = shm_->totalRidesToday;
+            chairsInUse = shm_->chairPool.chairsInUse;
+            totalRides = shm_->core.totalRidesToday;
         }
 
         static time_t lastStatusLog = 0;

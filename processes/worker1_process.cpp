@@ -36,7 +36,7 @@ public:
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            shm_->worker1Pid = getpid();
+            shm_->core.worker1Pid = getpid();
         }
 
         Logger::info(TAG, "Started (PID: ", getpid(), ") - Lower Station Controller");
@@ -61,7 +61,7 @@ public:
             RopewayState currentState;
             {
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                currentState = shm_->state;
+                currentState = shm_->core.state;
             }
 
             switch (currentState) {
@@ -91,8 +91,8 @@ private:
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            shm_->state = RopewayState::EMERGENCY_STOP;
-            currentEmergencyRecordIndex_ = shm_->dailyStats.recordEmergencyStart(WORKER_ID);
+            shm_->core.state = RopewayState::EMERGENCY_STOP;
+            currentEmergencyRecordIndex_ = shm_->stats.dailyStats.recordEmergencyStart(WORKER_ID);
         }
 
         isEmergencyStopped_ = true;
@@ -101,7 +101,7 @@ private:
         pid_t worker2Pid;
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            worker2Pid = shm_->worker2Pid;
+            worker2Pid = shm_->core.worker2Pid;
         }
         if (worker2Pid > 0) {
             kill(worker2Pid, SIGUSR1);
@@ -124,9 +124,9 @@ private:
 
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                    shm_->state = RopewayState::RUNNING;
+                    shm_->core.state = RopewayState::RUNNING;
                     if (currentEmergencyRecordIndex_ >= 0) {
-                        shm_->dailyStats.recordEmergencyEnd(currentEmergencyRecordIndex_);
+                        shm_->stats.dailyStats.recordEmergencyEnd(currentEmergencyRecordIndex_);
                     }
                 }
 
@@ -155,7 +155,7 @@ private:
                 Logger::info(TAG, "Worker2 triggered emergency stop");
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                    shm_->state = RopewayState::EMERGENCY_STOP;
+                    shm_->core.state = RopewayState::EMERGENCY_STOP;
                 }
                 isEmergencyStopped_ = true;
                 break;
@@ -183,9 +183,9 @@ private:
         uint32_t queueCount;
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            touristsOnPlatform = shm_->touristsOnPlatform;
-            chairsInUse = shm_->chairsInUse;
-            queueCount = shm_->boardingQueue.count;
+            touristsOnPlatform = shm_->core.touristsOnPlatform;
+            chairsInUse = shm_->chairPool.chairsInUse;
+            queueCount = shm_->chairPool.boardingQueue.count;
         }
 
         static time_t lastStatusLog = 0;
@@ -200,15 +200,15 @@ private:
         time_t closingTime;
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            closingTime = shm_->closingTime;
+            closingTime = shm_->core.closingTime;
         }
 
         if (now >= closingTime) {
             Logger::info(TAG, "Closing time reached, initiating closing sequence");
             {
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                shm_->state = RopewayState::CLOSING;
-                shm_->acceptingNewTourists = false;
+                shm_->core.state = RopewayState::CLOSING;
+                shm_->core.acceptingNewTourists = false;
             }
             sendMessage(WorkerSignal::STATION_CLEAR, "Closing time reached");
         }
@@ -217,7 +217,7 @@ private:
     void processBoardingQueue() {
         SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
 
-        BoardingQueue& queue = shm_->boardingQueue;
+        BoardingQueue& queue = shm_->chairPool.boardingQueue;
         if (queue.count == 0) return;
 
         pairChildrenWithAdults(queue);
@@ -250,7 +250,7 @@ private:
     }
 
     void assignTouristsToChairs(BoardingQueue& queue) {
-        if (shm_->chairsInUse >= Config::Chair::MAX_CONCURRENT_IN_USE) {
+        if (shm_->chairPool.chairsInUse >= Config::Chair::MAX_CONCURRENT_IN_USE) {
             return;
         }
 
@@ -327,7 +327,7 @@ private:
             int32_t chairId = -1;
             for (uint32_t c = 0; c < Config::Chair::QUANTITY; ++c) {
                 uint32_t idx = (queue.nextChairId + c) % Config::Chair::QUANTITY;
-                if (!shm_->chairs[idx].isOccupied) {
+                if (!shm_->chairPool.chairs[idx].isOccupied) {
                     chairId = static_cast<int32_t>(idx);
                     queue.nextChairId = (idx + 1) % Config::Chair::QUANTITY;
                     break;
@@ -335,12 +335,12 @@ private:
             }
 
             if (chairId >= 0) {
-                shm_->chairs[chairId].isOccupied = true;
-                shm_->chairs[chairId].numPassengers = static_cast<uint32_t>(groupIndices.size());
-                shm_->chairs[chairId].slotsUsed = slotsUsed;
-                shm_->chairs[chairId].departureTime = time(nullptr);
-                shm_->chairs[chairId].arrivalTime = shm_->chairs[chairId].departureTime + Config::Chair::RIDE_TIME_S;
-                shm_->chairsInUse++;
+                shm_->chairPool.chairs[chairId].isOccupied = true;
+                shm_->chairPool.chairs[chairId].numPassengers = static_cast<uint32_t>(groupIndices.size());
+                shm_->chairPool.chairs[chairId].slotsUsed = slotsUsed;
+                shm_->chairPool.chairs[chairId].departureTime = time(nullptr);
+                shm_->chairPool.chairs[chairId].arrivalTime = shm_->chairPool.chairs[chairId].departureTime + Config::Chair::RIDE_TIME_S;
+                shm_->chairPool.chairsInUse++;
 
                 for (size_t i = 0; i < groupIndices.size(); ++i) {
                     BoardingQueueEntry& entry = queue.entries[groupIndices[i]];
@@ -348,7 +348,7 @@ private:
                     entry.readyToBoard = true;
 
                     if (i < 4) {
-                        shm_->chairs[chairId].passengerIds[i] = static_cast<int32_t>(entry.touristId);
+                        shm_->chairPool.chairs[chairId].passengerIds[i] = static_cast<int32_t>(entry.touristId);
                     }
                 }
 
@@ -373,8 +373,8 @@ private:
         uint32_t touristsInStation;
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            touristsOnPlatform = shm_->touristsOnPlatform;
-            touristsInStation = shm_->touristsInLowerStation;
+            touristsOnPlatform = shm_->core.touristsOnPlatform;
+            touristsInStation = shm_->core.touristsInLowerStation;
         }
 
         if (touristsOnPlatform == 0 && touristsInStation == 0) {
@@ -383,7 +383,7 @@ private:
 
             {
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                shm_->state = RopewayState::STOPPED;
+                shm_->core.state = RopewayState::STOPPED;
             }
 
             sendMessage(WorkerSignal::STATION_CLEAR, "Ropeway stopped for the day");

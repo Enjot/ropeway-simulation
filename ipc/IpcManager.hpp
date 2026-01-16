@@ -103,11 +103,11 @@ public:
      * @param closingTime Simulation end time (Tk) - gates stop accepting after this
      */
     void initializeState(time_t openingTime, time_t closingTime) {
-        shm_->state = RopewayState::RUNNING;
-        shm_->acceptingNewTourists = true;
-        shm_->openingTime = openingTime;
-        shm_->closingTime = closingTime;
-        shm_->dailyStats.simulationStartTime = openingTime;
+        shm_->core.state = RopewayState::RUNNING;
+        shm_->core.acceptingNewTourists = true;
+        shm_->core.openingTime = openingTime;
+        shm_->core.closingTime = closingTime;
+        shm_->stats.dailyStats.simulationStartTime = openingTime;
     }
 
     // ==================== Key Accessors ====================

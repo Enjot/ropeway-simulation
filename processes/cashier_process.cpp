@@ -44,7 +44,7 @@ public:
             bool accepting;
             {
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                accepting = shm_->acceptingNewTourists;
+                accepting = shm_->core.acceptingNewTourists;
             }
 
             auto request = requestQueue_.tryReceive(CashierMsgType::REQUEST);
@@ -120,7 +120,7 @@ private:
             case TicketType::DAILY:
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                    validUntil = shm_->closingTime;
+                    validUntil = shm_->core.closingTime;
                 }
                 break;
         }
@@ -166,7 +166,7 @@ private:
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            shm_->dailyStats.totalRevenueWithDiscounts = totalRevenue_;
+            shm_->stats.dailyStats.totalRevenueWithDiscounts = totalRevenue_;
         }
     }
 

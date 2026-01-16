@@ -113,7 +113,7 @@ private:
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            if (!shm_->acceptingNewTourists) {
+            if (!shm_->core.acceptingNewTourists) {
                 Logger::info(tag_, "Ropeway not accepting tourists, leaving");
                 changeState(TouristState::FINISHED);
                 return;
@@ -160,10 +160,10 @@ private:
                         SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
                         shm_->registerTourist(tourist_.id, tourist_.ticketId,
                                               tourist_.age, tourist_.type, tourist_.isVip);
-                        shm_->dailyStats.totalTourists++;
-                        if (tourist_.isVip) shm_->dailyStats.vipTourists++;
-                        if (tourist_.age < 10) shm_->dailyStats.childrenServed++;
-                        if (tourist_.age >= 65) shm_->dailyStats.seniorsServed++;
+                        shm_->stats.dailyStats.totalTourists++;
+                        if (tourist_.isVip) shm_->stats.dailyStats.vipTourists++;
+                        if (tourist_.age < 10) shm_->stats.dailyStats.childrenServed++;
+                        if (tourist_.age >= 65) shm_->stats.dailyStats.seniorsServed++;
                     }
 
                     if (!tourist_.wantsToRide) {
@@ -217,7 +217,7 @@ private:
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            shm_->touristsInLowerStation++;
+            shm_->core.touristsInLowerStation++;
             shm_->logGatePassage(tourist_.id, tourist_.ticketId, GateType::ENTRY, gateNumber, true);
         }
 
@@ -245,7 +245,7 @@ private:
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            if (!shm_->boardingQueue.addTourist(entry)) {
+            if (!shm_->chairPool.boardingQueue.addTourist(entry)) {
                 Logger::perr(tag_, "Boarding queue full!");
                 changeState(TouristState::FINISHED);
                 return;
@@ -265,9 +265,9 @@ private:
 
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                    int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
-                    if (idx >= 0 && shm_->boardingQueue.entries[idx].guardianId != -1) {
-                        tourist_.guardianId = shm_->boardingQueue.entries[idx].guardianId;
+                    int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
+                    if (idx >= 0 && shm_->chairPool.boardingQueue.entries[idx].guardianId != -1) {
+                        tourist_.guardianId = shm_->chairPool.boardingQueue.entries[idx].guardianId;
                         guardianAssigned = true;
                         Logger::info(tag_, "Assigned guardian: Tourist ", tourist_.guardianId);
                     }
@@ -277,9 +277,9 @@ private:
                     Logger::info(tag_, "No guardian available, leaving");
                     {
                         SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                        int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
+                        int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
                         if (idx >= 0) {
-                            shm_->boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+                            shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
                         }
                     }
                     changeState(TouristState::FINISHED);
@@ -300,37 +300,37 @@ private:
             {
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
 
-                if (shm_->state == RopewayState::EMERGENCY_STOP) {
+                if (shm_->core.state == RopewayState::EMERGENCY_STOP) {
                     Logger::info(tag_, "Ropeway emergency stop, waiting...");
                     continue;
                 }
 
-                if (shm_->state == RopewayState::CLOSING || shm_->state == RopewayState::STOPPED) {
+                if (shm_->core.state == RopewayState::CLOSING || shm_->core.state == RopewayState::STOPPED) {
                     Logger::info(tag_, "Ropeway closing, leaving");
-                    int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
+                    int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
                     if (idx >= 0) {
-                        shm_->boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+                        shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
                     }
-                    if (shm_->touristsInLowerStation > 0) {
-                        shm_->touristsInLowerStation--;
+                    if (shm_->core.touristsInLowerStation > 0) {
+                        shm_->core.touristsInLowerStation--;
                     }
                     changeState(TouristState::FINISHED);
                     return;
                 }
 
-                int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
+                int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
                 if (idx >= 0) {
-                    BoardingQueueEntry& entry = shm_->boardingQueue.entries[idx];
+                    BoardingQueueEntry& entry = shm_->chairPool.boardingQueue.entries[idx];
                     if (entry.readyToBoard && entry.assignedChairId >= 0) {
                         assignedChairId_ = entry.assignedChairId;
                         Logger::info(tag_, "Assigned to chair ", assignedChairId_);
 
-                        shm_->boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+                        shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
 
-                        if (shm_->touristsInLowerStation > 0) {
-                            shm_->touristsInLowerStation--;
+                        if (shm_->core.touristsInLowerStation > 0) {
+                            shm_->core.touristsInLowerStation--;
                         }
-                        shm_->touristsOnPlatform++;
+                        shm_->core.touristsOnPlatform++;
 
                         changeState(TouristState::ON_CHAIR);
                         return;
@@ -346,12 +346,12 @@ private:
                 Logger::info(tag_, "Boarding timeout, leaving");
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                    int32_t idx = shm_->boardingQueue.findTourist(tourist_.id);
+                    int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
                     if (idx >= 0) {
-                        shm_->boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+                        shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
                     }
-                    if (shm_->touristsInLowerStation > 0) {
-                        shm_->touristsInLowerStation--;
+                    if (shm_->core.touristsInLowerStation > 0) {
+                        shm_->core.touristsInLowerStation--;
                     }
                 }
                 changeState(TouristState::FINISHED);
@@ -368,24 +368,24 @@ private:
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            if (shm_->touristsOnPlatform > 0) {
-                shm_->touristsOnPlatform--;
+            if (shm_->core.touristsOnPlatform > 0) {
+                shm_->core.touristsOnPlatform--;
             }
-            shm_->totalRidesToday++;
+            shm_->core.totalRidesToday++;
 
             shm_->recordRide(tourist_.id);
-            shm_->dailyStats.totalRides++;
+            shm_->stats.dailyStats.totalRides++;
             if (tourist_.type == TouristType::CYCLIST) {
-                shm_->dailyStats.cyclistRides++;
+                shm_->stats.dailyStats.cyclistRides++;
             } else {
-                shm_->dailyStats.pedestrianRides++;
+                shm_->stats.dailyStats.pedestrianRides++;
             }
 
             uint32_t rideGateNumber = tourist_.id % Config::Gate::NUM_RIDE_GATES;
             shm_->logGatePassage(tourist_.id, tourist_.ticketId, GateType::RIDE, rideGateNumber, true);
 
             if (assignedChairId_ >= 0 && static_cast<uint32_t>(assignedChairId_) < Config::Chair::QUANTITY) {
-                Chair& chair = shm_->chairs[assignedChairId_];
+                Chair& chair = shm_->chairPool.chairs[assignedChairId_];
                 if (chair.passengerIds[0] == static_cast<int32_t>(tourist_.id)) {
                     chair.isOccupied = false;
                     chair.numPassengers = 0;
@@ -393,8 +393,8 @@ private:
                     for (int i = 0; i < 4; ++i) {
                         chair.passengerIds[i] = -1;
                     }
-                    if (shm_->chairsInUse > 0) {
-                        shm_->chairsInUse--;
+                    if (shm_->chairPool.chairsInUse > 0) {
+                        shm_->chairPool.chairsInUse--;
                     }
                     Logger::info(tag_, "Released chair ", assignedChairId_);
                 }
@@ -433,7 +433,7 @@ private:
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            if (shm_->acceptingNewTourists && shm_->state == RopewayState::RUNNING) {
+            if (shm_->core.acceptingNewTourists && shm_->core.state == RopewayState::RUNNING) {
                 changeState(TouristState::WAITING_ENTRY);
                 return;
             }

@@ -52,8 +52,8 @@ public:
         validateMinimumRides(scenario, state, result);
 
         // Copy statistics
-        result.totalRidesCompleted = state.dailyStats.totalRides;
-        result.emergencyStopsTriggered = state.dailyStats.emergencyStops;
+        result.totalRidesCompleted = state.stats.dailyStats.totalRides;
+        result.emergencyStopsTriggered = state.stats.dailyStats.emergencyStops;
         result.emergenciesResumed = countResumedEmergencies(state);
 
         return result;
@@ -82,24 +82,24 @@ public:
                                   const RopewaySystemState& stateAfter,
                                   uint32_t timeoutSec) {
         // If state changed, not deadlocked
-        if (stateBefore.totalRidesToday != stateAfter.totalRidesToday) {
+        if (stateBefore.core.totalRidesToday != stateAfter.core.totalRidesToday) {
             return false;
         }
-        if (stateBefore.touristsInLowerStation != stateAfter.touristsInLowerStation) {
+        if (stateBefore.core.touristsInLowerStation != stateAfter.core.touristsInLowerStation) {
             return false;
         }
-        if (stateBefore.boardingQueue.count != stateAfter.boardingQueue.count) {
+        if (stateBefore.chairPool.boardingQueue.count != stateAfter.chairPool.boardingQueue.count) {
             return false;
         }
 
         // If emergency stop, don't consider it a deadlock
-        if (stateAfter.state == RopewayState::EMERGENCY_STOP) {
+        if (stateAfter.core.state == RopewayState::EMERGENCY_STOP) {
             return false;
         }
 
         // If stopped or closing, not a deadlock
-        if (stateAfter.state == RopewayState::STOPPED ||
-            stateAfter.state == RopewayState::CLOSING) {
+        if (stateAfter.core.state == RopewayState::STOPPED ||
+            stateAfter.core.state == RopewayState::CLOSING) {
             return false;
         }
 
@@ -138,8 +138,8 @@ private:
         uint32_t childrenRodeAlone = 0;
         uint32_t childrenTotal = 0;
 
-        for (uint32_t i = 0; i < state.touristRecordCount; ++i) {
-            const TouristRideRecord& rec = state.touristRecords[i];
+        for (uint32_t i = 0; i < state.stats.touristRecordCount; ++i) {
+            const TouristRideRecord& rec = state.stats.touristRecords[i];
 
             // Find if this is a child under 8
             if (rec.age < Config::Age::SUPERVISION_AGE_LIMIT) {
@@ -157,8 +157,8 @@ private:
         result.childrenWithoutGuardian = childrenRodeAlone;
 
         // Check boarding queue for any stranded children (edge case)
-        for (uint32_t i = 0; i < state.boardingQueue.count; ++i) {
-            const BoardingQueueEntry& entry = state.boardingQueue.entries[i];
+        for (uint32_t i = 0; i < state.chairPool.boardingQueue.count; ++i) {
+            const BoardingQueueEntry& entry = state.chairPool.boardingQueue.entries[i];
             if (entry.needsSupervision && entry.guardianId < 0 && !entry.readyToBoard) {
                 // Child waiting without guardian - could be waiting for pairing
                 // Only a failure if simulation ended with them still waiting
@@ -168,8 +168,8 @@ private:
         // Validate max 2 children per adult constraint
         // Count dependents per adult from boarding queue
         uint32_t adultsWithExcess = 0;
-        for (uint32_t i = 0; i < state.boardingQueue.count; ++i) {
-            const BoardingQueueEntry& entry = state.boardingQueue.entries[i];
+        for (uint32_t i = 0; i < state.chairPool.boardingQueue.count; ++i) {
+            const BoardingQueueEntry& entry = state.chairPool.boardingQueue.entries[i];
             if (entry.isAdult && entry.dependentCount > Config::Gate::MAX_CHILDREN_PER_ADULT) {
                 ++adultsWithExcess;
             }
@@ -204,8 +204,8 @@ private:
         time_t firstVipEntry = 0;
         time_t firstRegularEntry = 0;
 
-        for (uint32_t i = 0; i < state.gateLog.count; ++i) {
-            const GatePassage& passage = state.gateLog.entries[i];
+        for (uint32_t i = 0; i < state.stats.gateLog.count; ++i) {
+            const GatePassage& passage = state.stats.gateLog.entries[i];
 
             if (passage.gateType != GateType::ENTRY || !passage.wasAllowed) {
                 continue;
@@ -213,15 +213,15 @@ private:
 
             // Find if this tourist is VIP
             int32_t recordIdx = -1;
-            for (uint32_t j = 0; j < state.touristRecordCount; ++j) {
-                if (state.touristRecords[j].touristId == passage.touristId) {
+            for (uint32_t j = 0; j < state.stats.touristRecordCount; ++j) {
+                if (state.stats.touristRecords[j].touristId == passage.touristId) {
                     recordIdx = static_cast<int32_t>(j);
                     break;
                 }
             }
 
             if (recordIdx >= 0) {
-                if (state.touristRecords[recordIdx].isVip) {
+                if (state.stats.touristRecords[recordIdx].isVip) {
                     ++vipEntries;
                     if (firstVipEntry == 0) {
                         firstVipEntry = passage.timestamp;
@@ -254,7 +254,7 @@ private:
         // If we have VIPs and regulars, VIP system is working
         if (vipEntries > 0 && regularEntries > 0) {
             // Success - both groups served
-        } else if (regularEntries == 0 && state.touristRecordCount > state.dailyStats.vipTourists) {
+        } else if (regularEntries == 0 && state.stats.touristRecordCount > state.stats.dailyStats.vipTourists) {
             result.addFailure("STARVATION DETECTED: Regular tourists not served despite being present");
         }
     }
@@ -265,7 +265,7 @@ private:
     static void validateEmergencyHandling(const TestScenario& scenario,
                                            const RopewaySystemState& state,
                                            TestResult& result) {
-        const DailyStatistics& stats = state.dailyStats;
+        const DailyStatistics& stats = state.stats.dailyStats;
 
         // Should have at least one emergency stop
         if (stats.emergencyStops == 0) {
@@ -316,14 +316,14 @@ private:
     static void validateMinimumRides(const TestScenario& scenario,
                                       const RopewaySystemState& state,
                                       TestResult& result) {
-        if (state.dailyStats.totalRides < scenario.expectedMinRides) {
+        if (state.stats.dailyStats.totalRides < scenario.expectedMinRides) {
             std::ostringstream oss;
-            oss << "INSUFFICIENT RIDES: " << state.dailyStats.totalRides
+            oss << "INSUFFICIENT RIDES: " << state.stats.dailyStats.totalRides
                 << " completed, expected at least " << scenario.expectedMinRides;
             result.addFailure(oss.str());
         } else {
             std::ostringstream oss;
-            oss << "Rides OK: " << state.dailyStats.totalRides
+            oss << "Rides OK: " << state.stats.dailyStats.totalRides
                 << " completed (min: " << scenario.expectedMinRides << ")";
             result.addWarning(oss.str());
         }
@@ -334,8 +334,8 @@ private:
      */
     static uint32_t countResumedEmergencies(const RopewaySystemState& state) {
         uint32_t count = 0;
-        for (uint32_t i = 0; i < state.dailyStats.emergencyRecordCount; ++i) {
-            if (state.dailyStats.emergencyRecords[i].resumed) {
+        for (uint32_t i = 0; i < state.stats.dailyStats.emergencyRecordCount; ++i) {
+            if (state.stats.dailyStats.emergencyRecords[i].resumed) {
                 ++count;
             }
         }

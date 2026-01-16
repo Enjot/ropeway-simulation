@@ -46,7 +46,7 @@ public:
         // Check if ropeway is accepting tourists
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-            if (!state_->acceptingNewTourists) {
+            if (!state_->core.acceptingNewTourists) {
                 result.reason = "Ropeway not accepting new tourists";
                 return result;
             }

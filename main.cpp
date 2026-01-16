@@ -135,7 +135,7 @@ int main() {
             RopewayState currentState;
             {
                 SemaphoreLock lock(ipc.semaphores(), SemaphoreIndex::SHARED_MEMORY);
-                currentState = ipc.state()->state;
+                currentState = ipc.state()->core.state;
             }
 
             if (currentState == RopewayState::STOPPED) {
@@ -174,12 +174,12 @@ int main() {
         std::stringstream report;
         {
             SemaphoreLock lock(ipc.semaphores(), SemaphoreIndex::SHARED_MEMORY);
-            ipc.state()->dailyStats.simulationEndTime = simulationEndTime;
+            ipc.state()->stats.dailyStats.simulationEndTime = simulationEndTime;
 
             char startTimeStr[64], endTimeStr[64];
-            struct tm* tm_start = localtime(&ipc.state()->dailyStats.simulationStartTime);
+            struct tm* tm_start = localtime(&ipc.state()->stats.dailyStats.simulationStartTime);
             strftime(startTimeStr, sizeof(startTimeStr), "%Y-%m-%d %H:%M:%S", tm_start);
-            struct tm* tm_end = localtime(&ipc.state()->dailyStats.simulationEndTime);
+            struct tm* tm_end = localtime(&ipc.state()->stats.dailyStats.simulationEndTime);
             strftime(endTimeStr, sizeof(endTimeStr), "%Y-%m-%d %H:%M:%S", tm_end);
 
             report << std::string(60, '=') << "\n";
@@ -189,21 +189,21 @@ int main() {
             report << "--- SIMULATION TIMING ---\n";
             report << "Start Time: " << startTimeStr << "\n";
             report << "End Time:   " << endTimeStr << "\n";
-            report << "Duration:   " << (simulationEndTime - ipc.state()->dailyStats.simulationStartTime) << " seconds\n";
+            report << "Duration:   " << (simulationEndTime - ipc.state()->stats.dailyStats.simulationStartTime) << " seconds\n";
 
             report << "\n--- OVERALL STATISTICS ---\n";
-            report << "Final State: " << EnumStrings::toString(ipc.state()->state) << "\n";
+            report << "Final State: " << EnumStrings::toString(ipc.state()->core.state) << "\n";
 
-            const DailyStatistics& stats = ipc.state()->dailyStats;
-            report << "Total Tourists Served: " << stats.totalTourists << "\n";
-            report << "  - VIP Tourists: " << stats.vipTourists << "\n";
-            report << "  - Children (under 10): " << stats.childrenServed << "\n";
-            report << "  - Seniors (65+): " << stats.seniorsServed << "\n";
-            report << "Total Rides Completed: " << stats.totalRides << "\n";
-            report << "  - Cyclist Rides: " << stats.cyclistRides << "\n";
-            report << "  - Pedestrian Rides: " << stats.pedestrianRides << "\n";
-            report << "Total Revenue: " << std::fixed << std::setprecision(2) << stats.totalRevenueWithDiscounts << "\n";
-            report << "Emergency Stops: " << stats.emergencyStops << "\n";
+            const DailyStatistics& dailyStats = ipc.state()->stats.dailyStats;
+            report << "Total Tourists Served: " << dailyStats.totalTourists << "\n";
+            report << "  - VIP Tourists: " << dailyStats.vipTourists << "\n";
+            report << "  - Children (under 10): " << dailyStats.childrenServed << "\n";
+            report << "  - Seniors (65+): " << dailyStats.seniorsServed << "\n";
+            report << "Total Rides Completed: " << dailyStats.totalRides << "\n";
+            report << "  - Cyclist Rides: " << dailyStats.cyclistRides << "\n";
+            report << "  - Pedestrian Rides: " << dailyStats.pedestrianRides << "\n";
+            report << "Total Revenue: " << std::fixed << std::setprecision(2) << dailyStats.totalRevenueWithDiscounts << "\n";
+            report << "Emergency Stops: " << dailyStats.emergencyStops << "\n";
 
             report << "\n--- RIDES PER TOURIST/TICKET ---\n";
             report << std::left << std::setw(10) << "Tourist"
@@ -214,8 +214,8 @@ int main() {
                    << std::setw(8) << "Rides\n";
             report << std::string(54, '-') << "\n";
 
-            for (uint32_t i = 0; i < ipc.state()->touristRecordCount; ++i) {
-                const TouristRideRecord& rec = ipc.state()->touristRecords[i];
+            for (uint32_t i = 0; i < ipc.state()->stats.touristRecordCount; ++i) {
+                const TouristRideRecord& rec = ipc.state()->stats.touristRecords[i];
                 report << std::left << std::setw(10) << rec.touristId
                        << std::setw(10) << rec.ticketId
                        << std::setw(8) << rec.age
