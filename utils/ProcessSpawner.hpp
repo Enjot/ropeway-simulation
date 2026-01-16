@@ -114,15 +114,30 @@ namespace ProcessSpawner {
         }
 
         // Send SIGTERM for graceful termination
-        kill(pid, SIGTERM);
-
-        // Wait for this specific process to terminate (blocking)
-        int status;
-        pid_t result = waitpid(pid, &status, 0);
-        if (result == -1 && errno == ECHILD) {
-            // Process already reaped or doesn't exist
+        if (kill(pid, SIGTERM) == -1 && errno == ESRCH) {
+            // Process doesn't exist
             return;
         }
+
+        // Poll with timeout for process to terminate
+        // (SIGCHLD=SIG_IGN means blocking waitpid may hang on auto-reaped children)
+        int status;
+        for (int i = 0; i < 50; ++i) {  // 5 second timeout
+            pid_t result = waitpid(pid, &status, WNOHANG);
+            if (result == pid) {
+                // Process exited
+                return;
+            }
+            if (result == -1) {
+                // ECHILD means already reaped or doesn't exist
+                return;
+            }
+            usleep(100000);  // 100ms
+        }
+
+        // Process didn't terminate gracefully, force kill
+        kill(pid, SIGKILL);
+        waitpid(pid, &status, WNOHANG);
     }
 
     /**

@@ -231,25 +231,24 @@ private:
         struct sembuf operation{};
         operation.sem_num = static_cast<unsigned short>(semNum);
         operation.sem_op = op;
-        operation.sem_flg = static_cast<short>(flags);
+        operation.sem_flg = static_cast<short>(flags | SEM_UNDO);
 
-        while (true) {
-            if (semop(semId_, &operation, 1) == -1) {
-                if (errno == EINTR) {
-                    continue;
-                }
-                if (errno == EAGAIN && (flags & IPC_NOWAIT)) {
-                    return false;
-                }
-                // EIDRM: semaphore was removed during shutdown - exit gracefully
-                if (errno == EIDRM) {
-                    return false;
-                }
-                perror("semop");
+        if (semop(semId_, &operation, 1) == -1) {
+            if (errno == EINTR) {
+                // Signal interrupted - return false to let caller check signals
                 return false;
             }
-            return true;
+            if (errno == EAGAIN && (flags & IPC_NOWAIT)) {
+                return false;
+            }
+            // EIDRM: semaphore was removed during shutdown - exit gracefully
+            if (errno == EIDRM) {
+                return false;
+            }
+            perror("semop");
+            return false;
         }
+        return true;
     }
 
     key_t key_;

@@ -84,19 +84,18 @@ public:
      * @return true on success, false on error
      */
     bool send(const T& message, int flags = 0) {
-        while (true) {
-            if (msgsnd(msgId_, &message, sizeof(T) - sizeof(long), flags) == -1) {
-                if (errno == EINTR) {
-                    continue;
-                }
-                if (errno == EAGAIN && (flags & IPC_NOWAIT)) {
-                    return false;
-                }
-                perror("msgsnd");
+        if (msgsnd(msgId_, &message, sizeof(T) - sizeof(long), flags) == -1) {
+            if (errno == EINTR) {
+                // Signal interrupted - return false to let caller check signals
                 return false;
             }
-            return true;
+            if (errno == EAGAIN && (flags & IPC_NOWAIT)) {
+                return false;
+            }
+            perror("msgsnd");
+            return false;
         }
+        return true;
     }
 
     /**
@@ -107,20 +106,19 @@ public:
      */
     std::optional<T> receive(long msgType = 0, int flags = 0) {
         T message{};
-        while (true) {
-            ssize_t result = msgrcv(msgId_, &message, sizeof(T) - sizeof(long), msgType, flags);
-            if (result == -1) {
-                if (errno == EINTR) {
-                    continue;
-                }
-                if (errno == ENOMSG && (flags & IPC_NOWAIT)) {
-                    return std::nullopt;
-                }
-                perror("msgrcv");
+        ssize_t result = msgrcv(msgId_, &message, sizeof(T) - sizeof(long), msgType, flags);
+        if (result == -1) {
+            if (errno == EINTR) {
+                // Signal interrupted - return nullopt to let caller check signals
                 return std::nullopt;
             }
-            return message;
+            if (errno == ENOMSG && (flags & IPC_NOWAIT)) {
+                return std::nullopt;
+            }
+            perror("msgrcv");
+            return std::nullopt;
         }
+        return message;
     }
 
     /**
