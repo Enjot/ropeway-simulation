@@ -66,10 +66,12 @@ public:
                 handleMessage(*msg);
             }
 
-            RopewayState currentState;
+            RopewayState currentState = RopewayState::RUNNING;  // Default if lock fails
             {
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                currentState = shm_->core.state;
+                if (lock.isLocked()) {
+                    currentState = shm_->core.state;
+                }
             }
 
             switch (currentState) {
