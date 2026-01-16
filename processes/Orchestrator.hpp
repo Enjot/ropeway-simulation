@@ -5,6 +5,7 @@
 #include <sstream>
 #include <vector>
 #include <memory>
+#include <random>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <csignal>
@@ -109,25 +110,37 @@ private:
     void spawnTourists() {
         Logger::info(TAG, "Spawning tourists...");
 
-        std::vector<TouristConfig> tourists = {
-            {1, 35, TouristType::PEDESTRIAN, true, true, -1, TrailDifficulty::EASY, "Adult VIP 1"},
-            {2, 6, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child 6yo (needs guardian)"},
-            {3, 70, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Senior 70yo (25% discount)"},
-            {4, 40, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Adult 2 (potential guardian)"},
-            {5, 7, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child 7yo (needs guardian)"},
-            {6, 30, TouristType::CYCLIST, false, true, -1, TrailDifficulty::MEDIUM, "Adult cyclist"},
-            {7, 9, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, "Child 9yo (discount, no guardian)"},
-            {8, 25, TouristType::PEDESTRIAN, true, true, -1, TrailDifficulty::EASY, "Adult VIP 2"},
-        };
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> ageDist(5, 75);
+        std::uniform_int_distribution<> typeDist(0, 1);
+        std::uniform_real_distribution<> vipDist(0.0, 1.0);
+        std::uniform_real_distribution<> rideDist(0.0, 1.0);
+        std::uniform_int_distribution<> trailDist(0, 2);
 
+        constexpr uint32_t NUM_TOURISTS = 1000;
+        std::vector<TouristConfig> tourists;
+        tourists.reserve(NUM_TOURISTS);
+
+        for (uint32_t id = 1; id <= NUM_TOURISTS; ++id) {
+            uint32_t age = ageDist(gen);
+            TouristType type = (typeDist(gen) == 0) ? TouristType::PEDESTRIAN : TouristType::CYCLIST;
+            bool isVip = vipDist(gen) < Config::Vip::VIP_CHANCE_PERCENTAGE;
+            bool wantsToRide = rideDist(gen) > 0.1;
+            TrailDifficulty trail = static_cast<TrailDifficulty>(trailDist(gen));
+
+            tourists.push_back({id, age, type, isVip, wantsToRide, -1, trail, ""});
+        }
+
+        Logger::info(TAG, "Spawning ", NUM_TOURISTS, " tourists...");
         for (const auto& t : tourists) {
-            Logger::info(TAG, "Spawning Tourist ", t.id, ": ", t.description);
             pid_t pid = spawnTourist(t);
             if (pid > 0) {
                 touristPids_.push_back(pid);
             }
-            usleep(Config::Timing::TOURIST_LOOP_POLL_US);
+            usleep(Config::Timing::ARRIVAL_DELAY_BASE_US + (gen() % Config::Timing::ARRIVAL_DELAY_RANDOM_US));
         }
+        Logger::info(TAG, "All tourists spawned");
     }
 
     pid_t spawnTourist(const TouristConfig& t) {

@@ -80,8 +80,8 @@ namespace Config {
         constexpr uint32_t STOPPED_STATE_IDLE_US{500000};     // 500ms - idle when stopped
 
         // Simulation delays (simulating real-world time)
-        constexpr uint32_t ARRIVAL_DELAY_BASE_US{100000};     // 100ms base arrival delay
-        constexpr uint32_t ARRIVAL_DELAY_RANDOM_US{200000};   // 200ms random component
+        constexpr uint32_t ARRIVAL_DELAY_BASE_US{5000};       // 5ms base arrival delay
+        constexpr uint32_t ARRIVAL_DELAY_RANDOM_US{10000};    // 10ms random component
         constexpr uint32_t EXIT_ROUTE_DELAY_BASE_US{100000};  // 100ms base exit delay
         constexpr uint32_t EXIT_ROUTE_DELAY_RANDOM_US{200000};// 200ms random component
 
