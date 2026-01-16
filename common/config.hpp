@@ -7,6 +7,9 @@
  */
 namespace Config {
 
+    constexpr uint32_t NUM_TOURISTS{500};
+    constexpr uint32_t STATION_CAPACITY{50};
+
     namespace Chair {
         constexpr uint32_t QUANTITY{72};
         constexpr uint32_t MAX_CONCURRENT_IN_USE{36};

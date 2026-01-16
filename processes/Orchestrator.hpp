@@ -25,7 +25,6 @@
 class Orchestrator {
 public:
     static constexpr const char* TAG = "Orchestrator";
-    static constexpr int TEST_STATION_CAPACITY = 10;
 
     Orchestrator()
         : cashierPid_{0},
@@ -67,9 +66,9 @@ private:
         Logger::info(TAG, "Creating IPC structures...");
 
         ipc_ = std::make_unique<IpcManager>(Config::Ipc::SHM_KEY_BASE, true);
-        Logger::info(TAG, "Station capacity set to ", TEST_STATION_CAPACITY);
+        Logger::info(TAG, "Station capacity set to ", Config::STATION_CAPACITY);
 
-        ipc_->initializeSemaphores(TEST_STATION_CAPACITY);
+        ipc_->initializeSemaphores(Config::STATION_CAPACITY);
 
         simulationStartTime_ = time(nullptr);
         ipc_->initializeState(simulationStartTime_, simulationStartTime_ + 25);
@@ -118,7 +117,7 @@ private:
         std::uniform_real_distribution<> rideDist(0.0, 1.0);
         std::uniform_int_distribution<> trailDist(0, 2);
 
-        constexpr uint32_t NUM_TOURISTS = 1000;
+        constexpr uint32_t NUM_TOURISTS = Config::NUM_TOURISTS;
         std::vector<TouristConfig> tourists;
         tourists.reserve(NUM_TOURISTS);
 

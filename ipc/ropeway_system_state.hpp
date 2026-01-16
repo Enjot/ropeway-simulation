@@ -69,10 +69,9 @@ struct ChairPool {
  * OWNERSHIP: Various processes update; main orchestrator reads for report.
  */
 struct SimulationStatistics {
-    static constexpr uint32_t MAX_TOURIST_RECORDS = 100;
 
     DailyStatistics dailyStats;
-    TouristRideRecord touristRecords[MAX_TOURIST_RECORDS];
+    TouristRideRecord touristRecords[Config::NUM_TOURISTS];
     uint32_t touristRecordCount;
     GatePassageLog gateLog;
 
@@ -125,7 +124,7 @@ struct RopewaySystemState {
      */
     int32_t registerTourist(uint32_t touristId, uint32_t ticketId, uint32_t age,
                             TouristType type, bool isVip) {
-        if (stats.touristRecordCount >= SimulationStatistics::MAX_TOURIST_RECORDS) return -1;
+        if (stats.touristRecordCount >= Config::NUM_TOURISTS) return -1;
 
         TouristRideRecord& record = stats.touristRecords[stats.touristRecordCount];
         record.touristId = touristId;
