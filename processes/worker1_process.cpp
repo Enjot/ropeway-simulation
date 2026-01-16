@@ -32,7 +32,8 @@ public:
           sem_{args.semKey, SemaphoreIndex::TOTAL_SEMAPHORES, false},
           msgQueue_{args.msgKey, false},
           isEmergencyStopped_{false},
-          currentEmergencyRecordIndex_{-1} {
+          currentEmergencyRecordIndex_{-1},
+          touristsToNotify_{0} {
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -59,7 +60,11 @@ public:
                 SignalHelper::clearFlag(g_signals.resume);
             }
 
-            checkMessages();
+            // Check for messages from Worker2 (non-blocking)
+            auto msg = msgQueue_.tryReceive(MSG_TYPE_FROM_WORKER2);
+            if (msg) {
+                handleMessage(*msg);
+            }
 
             RopewayState currentState;
             {
@@ -70,26 +75,29 @@ public:
             switch (currentState) {
                 case RopewayState::RUNNING:
                     handleRunningState();
+                    // Wait for work notification (tourist joining queue) - will be interrupted by signals
+                    sem_.wait(SemaphoreIndex::BOARDING_QUEUE_WORK);
                     break;
                 case RopewayState::EMERGENCY_STOP:
                     handleEmergencyState();
+                    // Wait for signal (resume) using pause()
+                    pause();
                     break;
                 case RopewayState::CLOSING:
                     handleClosingState();
+                    // Wait for work or signal
+                    sem_.wait(SemaphoreIndex::BOARDING_QUEUE_WORK);
                     break;
                 case RopewayState::STOPPED:
                     handleStoppedState();
                     break;
             }
-
-            usleep(Config::Timing::WORKER_LOOP_POLL_US);
         }
 
         Logger::info(TAG, "Shutting down");
     }
 
-private:
-    void handleEmergencyStopTrigger() {
+private:    void handleEmergencyStopTrigger() {
         Logger::info(TAG, "!!! EMERGENCY STOP TRIGGERED !!!");
 
         {
@@ -115,39 +123,45 @@ private:
 
     void handleResumeRequest() {
         Logger::info(TAG, "Resume requested, checking with Worker2...");
+
+        // Drain any old messages from Worker2 before sending resume request
+        while (auto old = msgQueue_.tryReceive(MSG_TYPE_FROM_WORKER2)) {
+            Logger::info(TAG, "Discarding old message from Worker2");
+        }
+
         sendMessage(WorkerSignal::READY_TO_START, "Worker1 ready to resume, awaiting confirmation");
 
-        time_t startTime = time(nullptr);
-        constexpr int TIMEOUT_S = 10;
-
-        while (time(nullptr) - startTime < TIMEOUT_S && !SignalHelper::shouldExit(g_signals)) {
-            auto msg = msgQueue_.tryReceive(MSG_TYPE_FROM_WORKER2);
-            if (msg && msg->signal == WorkerSignal::READY_TO_START) {
-                Logger::info(TAG, "Worker2 confirmed ready. Resuming operations.");
-
-                {
-                    SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                    shm_->core.state = RopewayState::RUNNING;
-                    if (currentEmergencyRecordIndex_ >= 0) {
-                        shm_->stats.dailyStats.recordEmergencyEnd(currentEmergencyRecordIndex_);
-                    }
-                }
-
-                isEmergencyStopped_ = false;
-                currentEmergencyRecordIndex_ = -1;
-                return;
-            }
-            usleep(Config::Timing::TOURIST_LOOP_POLL_US);
+        // Send signal to wake up Worker2 (in case it's in pause())
+        pid_t worker2Pid;
+        {
+            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            worker2Pid = shm_->core.worker2Pid;
+        }
+        if (worker2Pid > 0) {
+            kill(worker2Pid, SIGUSR2);  // Wake up Worker2
         }
 
-        Logger::info(TAG, "Timeout waiting for Worker2 confirmation");
-    }
+        // Use blocking receive - will be interrupted by signals if needed
+        auto msg = msgQueue_.receive(MSG_TYPE_FROM_WORKER2);
+        if (msg && msg->signal == WorkerSignal::READY_TO_START) {
+            Logger::info(TAG, "Worker2 confirmed ready. Resuming operations.");
 
-    void checkMessages() {
-        auto msg = msgQueue_.tryReceive(MSG_TYPE_FROM_WORKER2);
-        if (msg) {
+            {
+                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                shm_->core.state = RopewayState::RUNNING;
+                if (currentEmergencyRecordIndex_ >= 0) {
+                    shm_->stats.dailyStats.recordEmergencyEnd(currentEmergencyRecordIndex_);
+                }
+            }
+
+            isEmergencyStopped_ = false;
+            currentEmergencyRecordIndex_ = -1;
+        } else if (msg) {
+            // Handle other message types
+            Logger::info(TAG, "Received unexpected message type during resume");
             handleMessage(*msg);
         }
+        // If no message (interrupted), just return and continue main loop
     }
 
     void handleMessage(const WorkerMessage& msg) {
@@ -218,13 +232,22 @@ private:
     }
 
     void processBoardingQueue() {
-        SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+        touristsToNotify_ = 0;
 
-        BoardingQueue& queue = shm_->chairPool.boardingQueue;
-        if (queue.count == 0) return;
+        {
+            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
 
-        pairChildrenWithAdults(queue);
-        assignTouristsToChairs(queue);
+            BoardingQueue& queue = shm_->chairPool.boardingQueue;
+            if (queue.count == 0) return;
+
+            pairChildrenWithAdults(queue);
+            assignTouristsToChairs(queue);
+        }
+
+        // Signal waiting tourists outside the lock
+        for (uint32_t i = 0; i < touristsToNotify_; ++i) {
+            sem_.signal(SemaphoreIndex::CHAIR_ASSIGNED);
+        }
     }
 
     void pairChildrenWithAdults(BoardingQueue& queue) {
@@ -358,6 +381,10 @@ private:
                 Logger::info(TAG, "Chair ", static_cast<unsigned int>(chairId),
                             " assigned to group of ", static_cast<unsigned int>(groupIndices.size()),
                             " tourists (slots: ", slotsUsed, ")");
+
+                // Signal all waiting tourists that a chair has been assigned
+                // Signal multiple times for each tourist assigned
+                touristsToNotify_ = static_cast<uint32_t>(groupIndices.size());
             }
         }
     }
@@ -407,7 +434,8 @@ private:
             Logger::info(TAG, "Ropeway stopped. End of operations.");
             loggedOnce = true;
         }
-        usleep(Config::Timing::STOPPED_STATE_IDLE_US);
+        // Wait for termination signal
+        pause();
     }
 
     void sendMessage(WorkerSignal signal, const char* text) {
@@ -430,6 +458,7 @@ private:
     MessageQueue<WorkerMessage> msgQueue_;
     bool isEmergencyStopped_;
     int32_t currentEmergencyRecordIndex_;
+    uint32_t touristsToNotify_;
 };
 
 int main(int argc, char* argv[]) {

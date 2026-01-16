@@ -101,8 +101,9 @@ private:
 
     void handleEmergencyStop() {
         Logger::info(tag_, "Emergency stop detected, waiting...");
+        // Wait for signal to clear emergency state using pause()
         while (SignalHelper::isEmergency(g_signals) && !SignalHelper::shouldExit(g_signals)) {
-            usleep(Config::Timing::TOURIST_LOOP_POLL_US);
+            pause();
         }
         Logger::info(tag_, "Emergency cleared, resuming");
     }
@@ -138,50 +139,51 @@ private:
             return;
         }
 
+        // Use blocking receive for response - will be interrupted by signals
         long myResponseType = CashierMsgType::RESPONSE_BASE + tourist_.id;
-        time_t startTime = time(nullptr);
-        constexpr int TIMEOUT_S = 10;
+        auto response = cashierResponseQueue_.receive(myResponseType);
 
-        while (time(nullptr) - startTime < TIMEOUT_S && !SignalHelper::shouldExit(g_signals)) {
-            auto response = cashierResponseQueue_.tryReceive(myResponseType);
-            if (response) {
-                if (response->success) {
-                    tourist_.ticketId = response->ticketId;
-                    tourist_.hasTicket = true;
-                    tourist_.isVip = response->isVip;
-
-                    if (response->isVip) {
-                        Logger::info(tag_, "Got ticket #", response->ticketId, " [VIP]");
-                    } else {
-                        Logger::info(tag_, "Got ticket #", response->ticketId);
-                    }
-
-                    {
-                        SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                        shm_->registerTourist(tourist_.id, tourist_.ticketId,
-                                              tourist_.age, tourist_.type, tourist_.isVip);
-                        shm_->stats.dailyStats.totalTourists++;
-                        if (tourist_.isVip) shm_->stats.dailyStats.vipTourists++;
-                        if (tourist_.age < 10) shm_->stats.dailyStats.childrenServed++;
-                        if (tourist_.age >= 65) shm_->stats.dailyStats.seniorsServed++;
-                    }
-
-                    if (!tourist_.wantsToRide) {
-                        changeState(TouristState::FINISHED);
-                    } else {
-                        changeState(TouristState::WAITING_ENTRY);
-                    }
-                } else {
-                    Logger::info(tag_, "Ticket denied");
-                    changeState(TouristState::FINISHED);
-                }
+        if (!response) {
+            // Interrupted by signal (likely shutdown)
+            if (SignalHelper::shouldExit(g_signals)) {
+                changeState(TouristState::FINISHED);
                 return;
             }
-            usleep(Config::Timing::TICKET_RESPONSE_POLL_US);
+            Logger::perr(tag_, "Failed to receive ticket response");
+            changeState(TouristState::FINISHED);
+            return;
         }
 
-        Logger::perr(tag_, "Timeout waiting for ticket");
-        changeState(TouristState::FINISHED);
+        if (response->success) {
+            tourist_.ticketId = response->ticketId;
+            tourist_.hasTicket = true;
+            tourist_.isVip = response->isVip;
+
+            if (response->isVip) {
+                Logger::info(tag_, "Got ticket #", response->ticketId, " [VIP]");
+            } else {
+                Logger::info(tag_, "Got ticket #", response->ticketId);
+            }
+
+            {
+                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                shm_->registerTourist(tourist_.id, tourist_.ticketId,
+                                      tourist_.age, tourist_.type, tourist_.isVip);
+                shm_->stats.dailyStats.totalTourists++;
+                if (tourist_.isVip) shm_->stats.dailyStats.vipTourists++;
+                if (tourist_.age < 10) shm_->stats.dailyStats.childrenServed++;
+                if (tourist_.age >= 65) shm_->stats.dailyStats.seniorsServed++;
+            }
+
+            if (!tourist_.wantsToRide) {
+                changeState(TouristState::FINISHED);
+            } else {
+                changeState(TouristState::WAITING_ENTRY);
+            }
+        } else {
+            Logger::info(tag_, "Ticket denied");
+            changeState(TouristState::FINISHED);
+        }
     }
 
     void handleWaitingEntry() {
@@ -252,50 +254,64 @@ private:
             }
         }
 
+        // Signal Worker1 that there's work in the boarding queue
+        sem_.signal(SemaphoreIndex::BOARDING_QUEUE_WORK);
+
         // Handle child-guardian pairing for children under 8
         if (tourist_.needsSupervision() && tourist_.guardianId == -1) {
             Logger::info(tag_, "Child (age ", tourist_.age, ") waiting for adult guardian...");
 
-            bool guardianAssigned = false;
-            time_t waitStart = time(nullptr);
-            constexpr int GUARDIAN_TIMEOUT_S = 10;
-
-            while (!guardianAssigned && !SignalHelper::shouldExit(g_signals)) {
-                usleep(Config::Timing::TOURIST_LOOP_POLL_US);
+            // Wait for guardian assignment using semaphore
+            while (!SignalHelper::shouldExit(g_signals)) {
+                // Wait on CHAIR_ASSIGNED semaphore - will be signaled when Worker1 processes queue
+                if (!sem_.wait(SemaphoreIndex::CHAIR_ASSIGNED)) {
+                    // Semaphore removed or error
+                    break;
+                }
 
                 {
                     SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
                     int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
                     if (idx >= 0 && shm_->chairPool.boardingQueue.entries[idx].guardianId != -1) {
                         tourist_.guardianId = shm_->chairPool.boardingQueue.entries[idx].guardianId;
-                        guardianAssigned = true;
                         Logger::info(tag_, "Assigned guardian: Tourist ", tourist_.guardianId);
+                        break;
                     }
-                }
-
-                if (time(nullptr) - waitStart > GUARDIAN_TIMEOUT_S) {
-                    Logger::info(tag_, "No guardian available, leaving");
-                    {
-                        SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                        int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
-                        if (idx >= 0) {
-                            shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+                    // Check for ropeway closing
+                    if (shm_->core.state == RopewayState::CLOSING || shm_->core.state == RopewayState::STOPPED) {
+                        Logger::info(tag_, "Ropeway closing, leaving");
+                        int32_t idx2 = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
+                        if (idx2 >= 0) {
+                            shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx2));
                         }
+                        changeState(TouristState::FINISHED);
+                        return;
                     }
-                    changeState(TouristState::FINISHED);
-                    return;
                 }
+            }
+
+            if (SignalHelper::shouldExit(g_signals)) {
+                {
+                    SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                    int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
+                    if (idx >= 0) {
+                        shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+                    }
+                }
+                changeState(TouristState::FINISHED);
+                return;
             }
         }
 
-        // Wait for chair assignment
+        // Wait for chair assignment using semaphore
         Logger::info(tag_, "Waiting for chair...");
 
-        time_t waitStart = time(nullptr);
-        constexpr int BOARDING_TIMEOUT_S = 30;
-
         while (!SignalHelper::shouldExit(g_signals)) {
-            usleep(Config::Timing::TOURIST_LOOP_POLL_US);
+            // Wait on CHAIR_ASSIGNED semaphore - will be signaled when Worker1 assigns chairs
+            if (!sem_.wait(SemaphoreIndex::CHAIR_ASSIGNED)) {
+                // Semaphore removed or error - likely shutdown
+                break;
+            }
 
             {
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -341,23 +357,20 @@ private:
                     return;
                 }
             }
+        }
 
-            if (time(nullptr) - waitStart > BOARDING_TIMEOUT_S) {
-                Logger::info(tag_, "Boarding timeout, leaving");
-                {
-                    SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                    int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
-                    if (idx >= 0) {
-                        shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
-                    }
-                    if (shm_->core.touristsInLowerStation > 0) {
-                        shm_->core.touristsInLowerStation--;
-                    }
-                }
-                changeState(TouristState::FINISHED);
-                return;
+        // Exit requested
+        {
+            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
+            if (idx >= 0) {
+                shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+            }
+            if (shm_->core.touristsInLowerStation > 0) {
+                shm_->core.touristsInLowerStation--;
             }
         }
+        changeState(TouristState::FINISHED);
     }
 
     void handleOnChair() {

@@ -44,18 +44,20 @@ public:
         Logger::info(TAG, "Prices configured");
 
         while (!SignalHelper::shouldExit(g_signals)) {
+            // Use blocking receive - will be interrupted by signals (SIGTERM)
+            auto request = requestQueue_.receive(CashierMsgType::REQUEST);
+            if (!request) {
+                // Interrupted by signal or error
+                continue;
+            }
+
             bool accepting;
             {
                 SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
                 accepting = shm_->core.acceptingNewTourists;
             }
 
-            auto request = requestQueue_.tryReceive(CashierMsgType::REQUEST);
-            if (request) {
-                processRequest(*request, accepting);
-            }
-
-            usleep(Config::Timing::CASHIER_LOOP_POLL_US);
+            processRequest(*request, accepting);
         }
 
         printStatistics();

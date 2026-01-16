@@ -113,12 +113,16 @@ namespace ProcessSpawner {
             std::cout << "Terminating " << name << " (PID: " << pid << ")" << std::endl;
         }
 
-        // Try graceful termination first
+        // Send SIGTERM for graceful termination
         kill(pid, SIGTERM);
-        usleep(Config::Timing::SIGNAL_HANDLER_REAP_US);  // Grace period
 
-        // Force kill if still running
-        kill(pid, SIGKILL);
+        // Wait for this specific process to terminate (blocking)
+        int status;
+        pid_t result = waitpid(pid, &status, 0);
+        if (result == -1 && errno == ECHILD) {
+            // Process already reaped or doesn't exist
+            return;
+        }
     }
 
     /**

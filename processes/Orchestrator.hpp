@@ -289,8 +289,11 @@ private:
         ProcessSpawner::terminate(worker2Pid_, "Worker2");
         ProcessSpawner::terminateAll(touristPids_);
 
-        usleep(Config::Timing::PROCESS_CLEANUP_WAIT_US);
-        ProcessSpawner::waitForAll();
+        // Wait for ALL child processes to terminate (blocking)
+        int status;
+        while (waitpid(-1, &status, 0) > 0) {
+            // Reap all children
+        }
 
         Logger::info(TAG, "Cleaning up IPC structures...");
         ipc_.reset();

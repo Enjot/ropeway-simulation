@@ -241,6 +241,10 @@ private:
                 if (errno == EAGAIN && (flags & IPC_NOWAIT)) {
                     return false;
                 }
+                // EIDRM: semaphore was removed during shutdown - exit gracefully
+                if (errno == EIDRM) {
+                    return false;
+                }
                 perror("semop");
                 return false;
             }

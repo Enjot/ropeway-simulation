@@ -18,5 +18,9 @@ namespace SemaphoreIndex {
     constexpr uint8_t WORKER1_READY{7};     // Signaled when worker1 is ready
     constexpr uint8_t WORKER2_READY{8};     // Signaled when worker2 is ready
 
-    constexpr uint8_t TOTAL_SEMAPHORES{9};  // Total number of semaphores needed
+    // Event notification semaphores (for blocking instead of polling)
+    constexpr uint8_t CHAIR_ASSIGNED{9};       // Signaled when a chair is assigned to tourists
+    constexpr uint8_t BOARDING_QUEUE_WORK{10}; // Signaled when tourist joins boarding queue
+
+    constexpr uint8_t TOTAL_SEMAPHORES{11}; // Total number of semaphores needed
 }

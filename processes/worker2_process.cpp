@@ -57,11 +57,15 @@ public:
             }
 
             if (g_signals.resume) {
-                handleLocalEmergencyTrigger();
+                // Resume signal received - check messages for resume request from Worker1
                 SignalHelper::clearFlag(g_signals.resume);
             }
 
-            checkMessages();
+            // Check for messages from Worker1 (non-blocking)
+            auto msg = msgQueue_.tryReceive(MSG_TYPE_FROM_WORKER1);
+            if (msg) {
+                handleMessage(*msg);
+            }
 
             RopewayState currentState;
             {
@@ -72,25 +76,36 @@ public:
             switch (currentState) {
                 case RopewayState::RUNNING:
                     handleRunningState();
+                    // Worker2 just waits for messages/signals - use blocking receive
+                    waitForMessage();
                     break;
                 case RopewayState::EMERGENCY_STOP:
                     handleEmergencyState();
+                    // Wait for signal using pause() - will wake up on SIGUSR2 from Worker1
+                    pause();
                     break;
                 case RopewayState::CLOSING:
                     handleClosingState();
+                    waitForMessage();
                     break;
                 case RopewayState::STOPPED:
                     handleStoppedState();
                     break;
             }
-
-            usleep(Config::Timing::WORKER_LOOP_POLL_US);
         }
 
         Logger::info(TAG, "Shutting down");
     }
 
 private:
+    void waitForMessage() {
+        // Try to receive message - will be interrupted by signals
+        auto msg = msgQueue_.receive(MSG_TYPE_FROM_WORKER1);
+        if (msg) {
+            handleMessage(*msg);
+        }
+        // If no message (interrupted), just continue loop
+    }
     void handleEmergencyReceived() {
         Logger::info(TAG, "!!! EMERGENCY STOP RECEIVED FROM WORKER1 !!!");
 
@@ -125,13 +140,6 @@ private:
         }
 
         Logger::info(TAG, "Emergency stop signal sent to Worker1");
-    }
-
-    void checkMessages() {
-        auto msg = msgQueue_.tryReceive(MSG_TYPE_FROM_WORKER1);
-        if (msg) {
-            handleMessage(*msg);
-        }
     }
 
     void handleMessage(const WorkerMessage& msg) {
@@ -217,7 +225,8 @@ private:
             exitRoute2Active_ = false;
             loggedOnce = true;
         }
-        usleep(Config::Timing::STOPPED_STATE_IDLE_US);
+        // Wait for termination signal
+        pause();
     }
 
     void sendMessage(WorkerSignal signal, const char* text) {

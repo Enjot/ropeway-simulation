@@ -135,7 +135,7 @@ namespace SignalHelper {
 
     /**
      * Wait while a flag is set (e.g., during emergency stop).
-     * Sleeps in 100ms intervals to avoid busy waiting.
+     * Uses pause() to efficiently wait for signals instead of busy-waiting.
      *
      * @param flag     Reference to the flag to wait on
      * @param exitFlag Reference to exit flag - returns early if set
@@ -149,7 +149,9 @@ namespace SignalHelper {
         }
 
         while (flag && !exitFlag) {
-            usleep(Config::Timing::SIGNAL_HANDLER_REAP_US);
+            // pause() blocks until a signal is delivered
+            // It will return when any signal (including the one that clears the flag) arrives
+            pause();
         }
 
         if (logName && !exitFlag) {
