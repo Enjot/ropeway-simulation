@@ -75,10 +75,10 @@ set(ALL_HEADERS
 add_executable(tourist_process processes/Touristprocess.cpp ${ALL_HEADERS})
 
 # Worker1 process - Lower Station Controller (spawned via fork/exec)
-add_executable(worker1_process processes/worker1_process.cpp ${ALL_HEADERS})
+add_executable(worker1_process processes/LowerStationWorker.cpp ${ALL_HEADERS})
 
 # Worker2 process - Upper Station Controller (spawned via fork/exec)
-add_executable(worker2_process processes/worker2_process.cpp ${ALL_HEADERS})
+add_executable(worker2_process processes/UpperStationWorker.cpp ${ALL_HEADERS})
 
 # Cashier process - Ticket sales (spawned via fork/exec)
 add_executable(cashier_process processes/CashierProcess.cpp ${ALL_HEADERS})

@@ -33,10 +33,6 @@ namespace Config {
         constexpr uint32_t MAX_CHILDREN_PER_ADULT{2};
     }
 
-    namespace Worker {
-        constexpr uint32_t NUM_WORKERS{2};
-    }
-
     namespace Age {
         constexpr uint32_t SUPERVISION_AGE_LIMIT{8};
         constexpr uint32_t ADULT_AGE_FROM{18};
@@ -59,11 +55,11 @@ namespace Config {
         constexpr uint32_t SHUTDOWN_DELAY_S{3};
     }
 
-    namespace Trail {
-        constexpr uint32_t TRAIL_TIME_EASY_S{180}; // T1 - 3 minutes
-        constexpr uint32_t TRAIL_TIME_MEDIUM_S{300}; // T2 - 5 minutes
-        constexpr uint32_t TRAIL_TIME_HARD_S{420}; // T3 - 7 minutes
-    }
+    // namespace Trail {
+    //     constexpr uint32_t TRAIL_TIME_EASY_S{180}; // T1 - 3 minutes
+    //     constexpr uint32_t TRAIL_TIME_MEDIUM_S{300}; // T2 - 5 minutes
+    //     constexpr uint32_t TRAIL_TIME_HARD_S{420}; // T3 - 7 minutes
+    // }
 
     namespace Ipc {
         constexpr key_t SHM_KEY_BASE{0x1000};
@@ -79,11 +75,6 @@ namespace Config {
     namespace Timing {
         // Polling intervals for main loops (non-synchronization)
         constexpr uint32_t MAIN_LOOP_POLL_US{500000};         // 500ms - orchestrator main loop
-        constexpr uint32_t WORKER_LOOP_POLL_US{50000};        // 50ms - worker main loop
-        constexpr uint32_t CASHIER_LOOP_POLL_US{10000};       // 10ms - cashier main loop
-        constexpr uint32_t TOURIST_LOOP_POLL_US{100000};      // 100ms - tourist main loop
-        constexpr uint32_t TICKET_RESPONSE_POLL_US{50000};    // 50ms - ticket response polling
-        constexpr uint32_t STOPPED_STATE_IDLE_US{500000};     // 500ms - idle when stopped
 
         // Simulation delays (simulating real-world time)
         constexpr uint32_t ARRIVAL_DELAY_BASE_US{5000};       // 5ms base arrival delay
