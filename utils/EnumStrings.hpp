@@ -158,19 +158,4 @@ namespace EnumStrings {
         }
     }
 
-    // ==================== Utility functions ====================
-
-    /**
-     * Get trail descent time in seconds based on difficulty.
-     * T1 (EASY) = 180s, T2 (MEDIUM) = 300s, T3 (HARD) = 420s
-     */
-    constexpr uint32_t getTrailTimeSeconds(TrailDifficulty trail) {
-        switch (trail) {
-            case TrailDifficulty::EASY:   return 180;  // T1 - 3 minutes
-            case TrailDifficulty::MEDIUM: return 300;  // T2 - 5 minutes
-            case TrailDifficulty::HARD:   return 420;  // T3 - 7 minutes
-            default:                      return 180;
-        }
-    }
-
 } // namespace EnumStrings

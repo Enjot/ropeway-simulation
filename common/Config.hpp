@@ -1,12 +1,14 @@
 #pragma once
 
+#include <cstdint>
+#include <stdexcept>
 #include <sys/types.h>
+#include "TrailDifficulty.hpp"
 
 /**
  * System configuration constants
  */
 namespace Config {
-
     namespace Simulation {
         constexpr uint32_t NUM_TOURISTS{500};
         constexpr uint32_t STATION_CAPACITY{50};
@@ -55,11 +57,20 @@ namespace Config {
         constexpr uint32_t SHUTDOWN_DELAY_S{3};
     }
 
-    // namespace Trail {
-    //     constexpr uint32_t TRAIL_TIME_EASY_S{180}; // T1 - 3 minutes
-    //     constexpr uint32_t TRAIL_TIME_MEDIUM_S{300}; // T2 - 5 minutes
-    //     constexpr uint32_t TRAIL_TIME_HARD_S{420}; // T3 - 7 minutes
-    // }
+    namespace Trail {
+        constexpr uint32_t TRAIL_TIME_EASY_S{180}; // T1 - 3 minutes
+        constexpr uint32_t TRAIL_TIME_MEDIUM_S{300}; // T2 - 5 minutes
+        constexpr uint32_t TRAIL_TIME_HARD_S{420}; // T3 - 7 minutes
+
+        inline uint32_t getTimeSeconds(TrailDifficulty difficulty) {
+            switch (difficulty) {
+                case TrailDifficulty::EASY: return TRAIL_TIME_EASY_S;
+                case TrailDifficulty::MEDIUM: return TRAIL_TIME_MEDIUM_S;
+                case TrailDifficulty::HARD: return TRAIL_TIME_HARD_S;
+                default: throw std::invalid_argument("Invalid TrailDifficulty value");
+            }
+        }
+    }
 
     namespace Ipc {
         constexpr key_t SHM_KEY_BASE{0x1000};
@@ -74,16 +85,15 @@ namespace Config {
      */
     namespace Timing {
         // Polling intervals for main loops (non-synchronization)
-        constexpr uint32_t MAIN_LOOP_POLL_US{500000};         // 500ms - orchestrator main loop
+        constexpr uint32_t MAIN_LOOP_POLL_US{500000}; // 500ms - orchestrator main loop
 
         // Simulation delays (simulating real-world time)
-        constexpr uint32_t ARRIVAL_DELAY_BASE_US{5000};       // 5ms base arrival delay
-        constexpr uint32_t ARRIVAL_DELAY_RANDOM_US{10000};    // 10ms random component
-        constexpr uint32_t EXIT_ROUTE_DELAY_BASE_US{100000};  // 100ms base exit delay
-        constexpr uint32_t EXIT_ROUTE_DELAY_RANDOM_US{200000};// 200ms random component
+        constexpr uint32_t ARRIVAL_DELAY_BASE_US{5000}; // 5ms base arrival delay
+        constexpr uint32_t ARRIVAL_DELAY_RANDOM_US{10000}; // 10ms random component
+        constexpr uint32_t EXIT_ROUTE_DELAY_BASE_US{100000}; // 100ms base exit delay
+        constexpr uint32_t EXIT_ROUTE_DELAY_RANDOM_US{200000}; // 200ms random component
 
         // Ride time scaling (divide real time for simulation)
-        constexpr uint32_t RIDE_TIME_SCALE{100};              // Divide ride time by this
+        constexpr uint32_t RIDE_TIME_SCALE{100}; // Divide ride time by this
     }
-
 }

@@ -437,7 +437,7 @@ private:
     }
 
     void handleOnTrail() {
-        uint32_t trailTime = EnumStrings::getTrailTimeSeconds(tourist_.preferredTrail);
+        uint32_t trailTime = Config::Trail::getTimeSeconds(tourist_.preferredTrail);
         Logger::info(tag_, "Cycling down trail (difficulty: ", static_cast<int>(tourist_.preferredTrail), ")");
 
         usleep((trailTime / Config::Timing::RIDE_TIME_SCALE) * 1000000);
