@@ -1,9 +1,9 @@
 #pragma once
 
-#include "common/TouristType.hpp"
-#include "common/TrailDifficulty.hpp"
-#include "common/Config.hpp"
-#include "common/TouristState.hpp"
+#include "enums/TouristType.hpp"
+#include "enums/TrailDifficulty.hpp"
+#include "../Config.hpp"
+#include "enums/TouristState.hpp"
 
 
 /**

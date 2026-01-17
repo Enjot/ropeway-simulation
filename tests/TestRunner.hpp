@@ -2,7 +2,6 @@
 
 #include <iostream>
 #include <iomanip>
-#include <fstream>
 #include <sstream>
 #include <vector>
 #include <sys/wait.h>
@@ -64,7 +63,7 @@ public:
 
             pid_t cashierPid = ProcessSpawner::spawnWithKeys("cashier_process",
                 ipc.shmKey(), ipc.semKey(), ipc.cashierMsgKey());
-            ipc.semaphores().wait(SemaphoreIndex::CASHIER_READY);
+            ipc.semaphores().wait(Semaphore::Index::CASHIER_READY);
 
             pid_t worker1Pid = ProcessSpawner::spawnWithKeys("worker1_process",
                 ipc.shmKey(), ipc.semKey(), ipc.msgKey());
@@ -72,12 +71,12 @@ public:
                 ipc.shmKey(), ipc.semKey(), ipc.msgKey());
 
             {
-                SemaphoreLock lock(ipc.semaphores(), SemaphoreIndex::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(ipc.semaphores(), Semaphore::Index::SHARED_MEMORY);
                 ipc.state()->core.worker1Pid = worker1Pid;
                 ipc.state()->core.worker2Pid = worker2Pid;
             }
-            ipc.semaphores().wait(SemaphoreIndex::WORKER1_READY);
-            ipc.semaphores().wait(SemaphoreIndex::WORKER2_READY);
+            ipc.semaphores().wait(Semaphore::Index::LOWER_WORKER_READY);
+            ipc.semaphores().wait(Semaphore::Index::UPPER_WORKER_READY);
 
             std::cout << "[Test] Spawning " << scenario.tourists.size() << " tourists...\n";
 
@@ -158,7 +157,7 @@ private:
             time_t elapsed = time(nullptr) - startTime;
 
             {
-                SemaphoreLock lock(ipc.semaphores(), SemaphoreIndex::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(ipc.semaphores(), Semaphore::Index::SHARED_MEMORY);
                 uint32_t currentCapacity = ipc.state()->core.touristsInLowerStation;
                 if (currentCapacity > maxObservedCapacity) {
                     maxObservedCapacity = currentCapacity;
@@ -200,11 +199,11 @@ private:
                 break;
             }
 
-            usleep(Config::Timing::MAIN_LOOP_POLL_US);
+            usleep(Config::Time::MAIN_LOOP_POLL_US);
         }
 
         {
-            SemaphoreLock lock(ipc.semaphores(), SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(ipc.semaphores(), Semaphore::Index::SHARED_MEMORY);
             ipc.state()->stats.dailyStats.simulationEndTime = time(nullptr);
             result = TestValidator::validate(scenario, *ipc.state(), maxObservedCapacity);
         }

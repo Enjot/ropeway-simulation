@@ -2,8 +2,8 @@
 
 #include <cstdint>
 #include <ctime>
-#include "common/TouristType.hpp"
-#include "common/GateType.hpp"
+#include "enums/TouristType.hpp"
+#include "enums/GateType.hpp"
 #include "structures/GatePassage.hpp"
 
 /**

@@ -1,10 +1,9 @@
 #pragma once
 
-#include <cstdint>
 #include <string>
 #include <vector>
-#include "common/TouristType.hpp"
-#include "common/TrailDifficulty.hpp"
+#include "enums/TouristType.hpp"
+#include "enums/TrailDifficulty.hpp"
 
 namespace Test {
 

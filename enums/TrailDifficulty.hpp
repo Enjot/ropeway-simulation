@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Config.hpp"
+
 /**
  * Cyclist trail difficulty levels
  * T1 < T2 < T3 (ascending time)
@@ -32,6 +34,15 @@ constexpr const char *toTrailCode(const TrailDifficulty trail) {
         case TrailDifficulty::EASY: return "T1";
         case TrailDifficulty::MEDIUM: return "T2";
         case TrailDifficulty::HARD: return "T3";
+        default: throw std::invalid_argument("Invalid TrailDifficulty value");
+    }
+}
+
+constexpr uint32_t getDurationUs(const TrailDifficulty difficulty) {
+    switch (difficulty) {
+        case TrailDifficulty::EASY: return Config::Trail::DURATION_EASY_US;
+        case TrailDifficulty::MEDIUM: return Config::Trail::DURATION_MEDIUM_US;
+        case TrailDifficulty::HARD: return Config::Trail::DURATION_HARD_US;
         default: throw std::invalid_argument("Invalid TrailDifficulty value");
     }
 }

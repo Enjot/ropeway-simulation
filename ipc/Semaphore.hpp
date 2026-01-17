@@ -1,295 +1,205 @@
 #pragma once
-
+#include <cerrno>
+#include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
-#include <cerrno>
-#include <cstdio>
-#include <cstring>
-#include <stdexcept>
-#include <string>
-#include <cstdint>
 
+#include "IpcException.hpp"
+#include "utils/Logger.hpp"
+
+#ifdef _SEM_SEMUN_UNDEFINED
 /**
- * Union for semctl operations
- * Required by System V semaphore API
- * Note: macOS/BSD already defines this in sys/sem.h
+ * @brief Union used for semaphore control operations.
+ * This is required on Linux systems for certain `semctl` operations.
  */
-#if defined(__linux__) && !defined(_SEM_SEMUN_UNDEFINED)
 union semun {
-    int val;
-    struct semid_ds* buf;
-    unsigned short* array;
+    int val; /* Value for SETVAL */
+    struct semid_ds *buf; /* Buffer for IPC_STAT, IPC_SET */
+    unsigned short *array; /* Array for GETALL, SETALL */
+    struct seminfo *__buf; /* Buffer for IPC_INFO (Linux-specific) */
 };
 #endif
 
 /**
- * RAII wrapper for System V semaphore set
- * Supports multiple semaphores in a single set
+ * @class Semaphore
+ * @brief A wrapper class for System V semaphores.
+ * Provides functionality to create, initialize, and manage semaphores.
  */
 class Semaphore {
 public:
     /**
-     * Create or attach to semaphore set
-     * @param key IPC key for semaphore set
-     * @param numSemaphores Number of semaphores in the set
-     * @param create If true, creates new set; if false, attaches to existing
+     * @struct Index
+     * @brief Enum-like structure to define indices for semaphores.
      */
-    explicit Semaphore(key_t key, uint32_t numSemaphores, bool create = true)
-        : key_{key}, semId_{-1}, numSemaphores_{numSemaphores}, isOwner_{create} {
+    struct Index {
+        enum : uint8_t {
+            ENTRY_GATES = 0,
+            RIDE_GATES,
+            STATION_CAPACITY,
+            CHAIR_ALLOCATION,
+            SHARED_MEMORY,
+            WORKER_SYNC,
+            CASHIER_READY,
+            LOWER_WORKER_READY,
+            UPPER_WORKER_READY,
+            CHAIR_ASSIGNED,
+            BOARDING_QUEUE_WORK,
+            TOTAL_SEMAPHORES
+        };
+    };
 
-        if (create) {
-            semId_ = semget(key_, static_cast<int>(numSemaphores_), IPC_CREAT | IPC_EXCL | 0600);
-            if (semId_ == -1) {
-                perror("semget (create)");
-                throw std::runtime_error("Failed to create semaphore set: " +
-                    std::string(strerror(errno)));
+    /**
+     * @brief Constructs a Semaphore object.
+     * Creates a new semaphore set or connects to an existing one.
+     * @param key The key used to identify the semaphore set.
+     * @throws ipc_exception If the semaphore set cannot be created or connected.
+     */
+    explicit Semaphore(const key_t key) {
+        semId_ = semget(key, Index::TOTAL_SEMAPHORES, IPC_CREAT | IPC_EXCL | permissions);
+        if (semId_ == -1) {
+            if (errno == EEXIST) {
+                semId_ = semget(key, Index::TOTAL_SEMAPHORES, permissions);
+                if (semId_ == -1) {
+                    throw ipc_exception("Failed to connect to existing semaphore");
+                }
+                Logger::debug("Semaphore set connected");
+            } else {
+                throw ipc_exception("Failed to create semaphore");
             }
         } else {
-            semId_ = semget(key_, static_cast<int>(numSemaphores_), 0600);
-            if (semId_ == -1) {
-                perror("semget (attach)");
-                throw std::runtime_error("Failed to get semaphore set: " +
-                    std::string(strerror(errno)));
-            }
+            initializeAllToLockedState();
+            Logger::debug("Semaphore set created");
         }
     }
 
-    ~Semaphore() {
-        if (isOwner_ && semId_ != -1) {
-            if (semctl(semId_, 0, IPC_RMID) == -1) {
-                perror("semctl IPC_RMID");
-            }
-        }
-    }
+    Semaphore(const Semaphore &) = delete;
 
-    Semaphore(const Semaphore&) = delete;
-    Semaphore& operator=(const Semaphore&) = delete;
+    Semaphore &operator=(const Semaphore &) = delete;
 
-    Semaphore(Semaphore&& other) noexcept
-        : key_{other.key_}, semId_{other.semId_},
-          numSemaphores_{other.numSemaphores_}, isOwner_{other.isOwner_} {
-        other.semId_ = -1;
-        other.isOwner_ = false;
-    }
-
-    Semaphore& operator=(Semaphore&& other) noexcept {
-        if (this != &other) {
-            if (isOwner_ && semId_ != -1) {
-                semctl(semId_, 0, IPC_RMID);
-            }
-
-            key_ = other.key_;
-            semId_ = other.semId_;
-            numSemaphores_ = other.numSemaphores_;
-            isOwner_ = other.isOwner_;
-
-            other.semId_ = -1;
-            other.isOwner_ = false;
-        }
-        return *this;
-    }
+    ~Semaphore() = default;
 
     /**
-     * Initialize a semaphore to a specific value
-     * @param semNum Semaphore index in the set
-     * @param value Initial value
+     * @brief Initializes specific semaphore in the set.
+     * @param semIndex The index of the semaphore to initialize.
+     * @param value The value to set for the semaphore.
+     * @throws ipc_exception If the initialization fails.
      */
-    bool setValue(uint32_t semNum, int value) {
-        if (semNum >= numSemaphores_) {
-            return false;
-        }
+    void initialize(const uint8_t semIndex, const int32_t value) const {
         semun arg{};
         arg.val = value;
-        if (semctl(semId_, static_cast<int>(semNum), SETVAL, arg) == -1) {
-            perror("semctl SETVAL");
-            return false;
+        if (semctl(semId_, semIndex, SETVAL, arg) == -1) {
+            throw ipc_exception("Failed to initialize semaphore");
         }
-        return true;
     }
 
     /**
-     * Get current value of a semaphore
+     * @brief Waits (decrements) on a semaphore.
+     * Blocks until the semaphore value is greater than zero.
+     * @param semIndex The index of the semaphore to wait on.
+     * @param useUndo Whether to use SEM_UNDO for automatic cleanup.
+     * @throws ipc_exception If the wait operation fails.
      */
-    [[nodiscard]] int getValue(uint32_t semNum) const {
-        if (semNum >= numSemaphores_) {
-            return -1;
+    void wait(const uint8_t semIndex, const bool useUndo = true) const {
+        sembuf operation{};
+        operation.sem_num = semIndex;
+        operation.sem_op = -1;
+        operation.sem_flg = useUndo ? SEM_UNDO : 0;
+
+        while (semop(semId_, &operation, 1) == -1) {
+            if (errno == EINTR) continue;
+            throw ipc_exception("Semaphore wait failed");
         }
-        int val = semctl(semId_, static_cast<int>(semNum), GETVAL);
-        if (val == -1) {
-            perror("semctl GETVAL");
+    }
+
+    /**
+     * @brief Posts (increments) semaphore.
+     * Increments the semaphore value, potentially unblocking other processes.
+     * @param semIndex The index of the semaphore to post to.
+     * @param useUndo Whether to use SEM_UNDO for automatic cleanup.
+     * @throws ipc_exception If the post-operation fails.
+     */
+    void post(const uint8_t semIndex, const bool useUndo = true) const {
+        sembuf operation{};
+        operation.sem_num = semIndex;
+        operation.sem_op = 1;
+        operation.sem_flg = useUndo ? SEM_UNDO : 0;
+
+        while (semop(semId_, &operation, 1) == -1) {
+            if (errno == EINTR) continue;
+            throw ipc_exception("Semaphore post failed");
         }
+    }
+
+    /**
+    * @brief Gets the current value of semaphore.
+    * @param semIndex The index of the semaphore.
+    * @return The current semaphore value.
+    * @throws ipc_exception If getting the value fails.
+    */
+    [[nodiscard]] int32_t getAvailableSpace(const uint8_t semIndex) const {
+        const int32_t val = semctl(semId_, semIndex, GETVAL);
+        if (val == -1) throw ipc_exception("Failed to get semaphore value");
         return val;
     }
 
     /**
-     * Wait (P operation) - decrements semaphore, blocks if zero
-     * @param semNum Semaphore index
-     * @return true on success, false on error
+     * @brief Removes a semaphore set identified by a key.
+     * @param key The key of the semaphore set to remove.
      */
-    bool wait(uint32_t semNum) {
-        return operate(semNum, -1, 0);
-    }
-
-    /**
-     * Wait with decrement by specific amount
-     */
-    bool wait(uint32_t semNum, int amount) {
-        return operate(semNum, -amount, 0);
-    }
-
-    /**
-     * Signal (V operation) - increments semaphore
-     * @param semNum Semaphore index
-     * @return true on success, false on error
-     */
-    bool signal(uint32_t semNum) {
-        return operate(semNum, 1, 0);
-    }
-
-    /**
-     * Signal with increment by specific amount
-     */
-    bool signal(uint32_t semNum, int amount) {
-        return operate(semNum, amount, 0);
-    }
-
-    /**
-     * Try wait (non-blocking P operation)
-     * @param semNum Semaphore index
-     * @return true if acquired, false if would block or error
-     */
-    bool tryWait(uint32_t semNum) {
-        return operate(semNum, -1, IPC_NOWAIT);
-    }
-
-    /**
-     * Wait for semaphore to become zero
-     */
-    bool waitZero(uint32_t semNum) {
-        return operate(semNum, 0, 0);
-    }
-
-    [[nodiscard]] int getId() const noexcept { return semId_; }
-    [[nodiscard]] key_t getKey() const noexcept { return key_; }
-    [[nodiscard]] uint32_t getNumSemaphores() const noexcept { return numSemaphores_; }
-    [[nodiscard]] bool isOwner() const noexcept { return isOwner_; }
-
-    /**
-     * Release ownership (segment won't be removed on destruction)
-     */
-    void releaseOwnership() noexcept {
-        isOwner_ = false;
-    }
-
-    /**
-     * Remove the semaphore set
-     */
-    bool remove() {
-        if (semId_ != -1) {
-            if (semctl(semId_, 0, IPC_RMID) == -1) {
-                perror("semctl IPC_RMID (remove)");
-                return false;
-            }
-            isOwner_ = false;
-            return true;
+    static void destroy(const key_t key) {
+        if (const int32_t semId = semget(key, Index::TOTAL_SEMAPHORES, permissions); semId != -1) {
+            semctl(semId, 0, IPC_RMID);
+            Logger::debug("Semaphore set destroyed");
         }
-        return false;
     }
 
     /**
-     * Check if semaphore set exists for given key
+     * @class ScopedLock
+     * @brief A RAII-style lock for semaphore.
+     * Acquires the semaphore on construction and releases it on destruction.
      */
-    static bool exists(key_t key) {
-        int id = semget(key, 0, 0);
-        return id != -1;
-    }
+    class ScopedLock {
+    public:
+        /**
+         * @brief Constructs a ScopedLock and acquires the semaphore.
+         * @param sem The Semaphore object to lock.
+         * @param semIndex The index of the semaphore to lock.
+         */
+        explicit ScopedLock(const Semaphore &sem, const uint8_t semIndex)
+            : sem_(sem), semIndex_(semIndex) {
+            sem_.wait(semIndex_);
+        }
 
-    /**
-     * Remove existing semaphore set by key (cleanup utility)
-     */
-    static bool removeByKey(key_t key) {
-        int id = semget(key, 0, 0);
-        if (id == -1) {
-            return false;
+        ScopedLock(const ScopedLock &) = delete;
+
+        ScopedLock &operator=(const ScopedLock &) = delete;
+
+        /**
+         * @brief Destructor that releases the semaphore.
+         */
+        ~ScopedLock() {
+            sem_.post(semIndex_);
         }
-        if (semctl(id, 0, IPC_RMID) == -1) {
-            perror("semctl IPC_RMID (removeByKey)");
-            return false;
-        }
-        return true;
-    }
+
+    private:
+        const Semaphore &sem_;
+        uint8_t semIndex_;
+    };
 
 private:
+    int32_t semId_;
     /**
-     * Perform semaphore operation
+     * @brief The default permissions used for creating or accessing semaphore sets.
+     * Specifies the access permissions for the semaphore set as a bitmask.
      */
-    bool operate(uint32_t semNum, short op, short flags) {
-        if (semNum >= numSemaphores_) {
-            return false;
-        }
+    static constexpr int32_t permissions = 0600;
 
-        struct sembuf operation{};
-        operation.sem_num = static_cast<unsigned short>(semNum);
-        operation.sem_op = op;
-        operation.sem_flg = static_cast<short>(flags | SEM_UNDO);
-
-        if (semop(semId_, &operation, 1) == -1) {
-            if (errno == EINTR) {
-                // Signal interrupted - return false to let caller check signals
-                return false;
-            }
-            if (errno == EAGAIN && (flags & IPC_NOWAIT)) {
-                return false;
-            }
-            // EIDRM: semaphore was removed during shutdown
-            if (errno == EIDRM) {
-                return false;
-            }
-            perror("semop");
-            return false;
-        }
-        return true;
-    }
-
-    key_t key_;
-    int semId_;
-    uint32_t numSemaphores_;
-    bool isOwner_;
-};
-
-/**
- * RAII lock guard for semaphore
- * Automatically waits on construction and signals on destruction
- */
-class SemaphoreLock {
-public:
-    SemaphoreLock(Semaphore& sem, uint32_t semNum)
-        : sem_{sem}, semNum_{semNum}, locked_{false} {
-        if (sem_.wait(semNum_)) {
-            locked_ = true;
+    /**
+     * @brief Initializes all semaphores in the set to a locked state (value = 0).
+     */
+    void initializeAllToLockedState() const {
+        for (int i = 0; i < Index::TOTAL_SEMAPHORES; ++i) {
+            initialize(i, 0);
         }
     }
-
-    ~SemaphoreLock() {
-        if (locked_) {
-            sem_.signal(semNum_);
-        }
-    }
-
-    SemaphoreLock(const SemaphoreLock&) = delete;
-    SemaphoreLock& operator=(const SemaphoreLock&) = delete;
-
-    [[nodiscard]] bool isLocked() const noexcept { return locked_; }
-
-    void unlock() {
-        if (locked_) {
-            sem_.signal(semNum_);
-            locked_ = false;
-        }
-    }
-
-private:
-    Semaphore& sem_;
-    uint32_t semNum_;
-    bool locked_;
 };

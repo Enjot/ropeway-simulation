@@ -2,13 +2,12 @@
 
 #include <cstdint>
 #include <ctime>
-#include <cstring>
 #include <fstream>
 #include <mutex>
 #include <string>
 #include <sstream>
-#include "common/gate_type.hpp"
-#include "structures/gate_passage.hpp"
+#include "enums/GateType.hpp"
+#include "structures/GatePassage.hpp"
 
 /**
  * Logger for gate passages

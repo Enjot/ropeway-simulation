@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <ctime>
 #include <cstring>
-#include "common/WorkerSignal.hpp"
+#include "enums/WorkerSignal.hpp"
 
 /**
  * Structure for worker-to-worker communication

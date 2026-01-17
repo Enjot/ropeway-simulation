@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <ctime>
-#include "common/TicketName.hpp"
+#include "enums/TicketName.hpp"
 
 /**
  * Structure representing a ticket

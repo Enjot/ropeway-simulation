@@ -8,36 +8,28 @@
 #include <stdexcept>
 #include <string>
 
-/**
- * RAII wrapper for System V shared memory
- * Template class to support different structure types
- */
+#include "IpcException.hpp"
+#include "utils/Logger.hpp"
+
 template<typename T>
 class SharedMemory {
 public:
-    /**
-     * Create or attach to shared memory segment
-     * @param key IPC key for shared memory
-     * @param create If true, creates new segment; if false, attaches to existing
-     */
-    explicit SharedMemory(key_t key, bool create = true)
-        : key_{key}, shmId_{-1}, data_{nullptr}, isOwner_{create} {
+    explicit SharedMemory(const key_t key) {
 
-        if (create) {
-            shmId_ = shmget(key_, sizeof(T), IPC_CREAT | IPC_EXCL | 0600);
-            if (shmId_ == -1) {
-                perror("shmget (create)");
-                throw std::runtime_error("Failed to create shared memory segment: " +
-                    std::string(strerror(errno)));
-            }
-        } else {
-            shmId_ = shmget(key_, sizeof(T), 0600);
-            if (shmId_ == -1) {
-                perror("shmget (attach)");
-                throw std::runtime_error("Failed to get shared memory segment: " +
-                    std::string(strerror(errno)));
+        shmId_ = shmget(key, sizeof(T) | IPC_CREAT | IPC_EXCL, permissions);
+        if (shmId_ == -1) {
+            if (errno == EEXIST) {
+                shmId_ = shmget(key, 0, 0);
+                if (shmId_ == -1) {
+                    throw ipc_exception("Failed to get shared memory segment");
+                }
+                Logger::debug("Successfully attached to existing shared memory segment");
+            } else {
+                throw ipc_exception("Failed to create shared memory segment");
             }
         }
+
+        Logger::debug("Successfully created shared memory segment");
 
         void* ptr = shmat(shmId_, nullptr, 0);
         if (ptr == reinterpret_cast<void*>(-1)) {
@@ -167,8 +159,7 @@ public:
     }
 
 private:
-    key_t key_;
     int shmId_;
+    static constexpr int32_t permissions = 0600;
     T* data_;
-    bool isOwner_;
 };

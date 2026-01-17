@@ -2,9 +2,9 @@
 
 #include <sys/types.h>
 #include <ctime>
-#include "common/RopewayState.hpp"
-#include "common/Config.hpp"
-#include "common/GateType.hpp"
+#include "enums/RopewayState.hpp"
+#include "../Config.hpp"
+#include "enums/GateType.hpp"
 #include "structures/Chair.hpp"
 #include "structures/DailyStatistic.hpp"
 #include "ipc/BoardingQueue.hpp"
@@ -36,8 +36,8 @@ struct RopewayCoreState {
     RopewayCoreState()
         : state{RopewayState::STOPPED},
           acceptingNewTourists{false},
-          openingTime{Config::Ropeway::DEFAULT_OPENING_TIME},
-          closingTime{Config::Ropeway::DEFAULT_CLOSING_TIME},
+          openingTime{0},  // Set by initializeState()
+          closingTime{0},  // Set by initializeState()
           touristsInLowerStation{0},
           touristsOnPlatform{0},
           totalRidesToday{0},
