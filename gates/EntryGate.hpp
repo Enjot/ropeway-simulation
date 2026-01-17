@@ -7,7 +7,7 @@
 #include "ipc/SharedMemory.hpp"
 #include "ipc/RopewaySystemState.hpp"
 #include "ipc/SemaphoreIndex.hpp"
-#include "structures/ticket.hpp"
+#include "structures/Ticket.hpp"
 #include "common/Config.hpp"
 
 /**

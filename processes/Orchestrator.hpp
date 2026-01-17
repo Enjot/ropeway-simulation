@@ -15,7 +15,7 @@
 #include "../utils/ProcessSpawner.hpp"
 #include "../utils/EnumStrings.hpp"
 #include "../utils/Logger.hpp"
-#include "../structures/tourist.hpp"
+#include "../structures/Tourist.hpp"
 
 /**
  * Main orchestrator for the ropeway simulation.

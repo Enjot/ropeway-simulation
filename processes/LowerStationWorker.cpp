@@ -367,7 +367,7 @@ private:    void handleEmergencyStopTrigger() {
                 shm_->chairPool.chairs[chairId].numPassengers = static_cast<uint32_t>(groupIndices.size());
                 shm_->chairPool.chairs[chairId].slotsUsed = slotsUsed;
                 shm_->chairPool.chairs[chairId].departureTime = time(nullptr);
-                shm_->chairPool.chairs[chairId].arrivalTime = shm_->chairPool.chairs[chairId].departureTime + Config::Chair::RIDE_TIME_S;
+                shm_->chairPool.chairs[chairId].arrivalTime = shm_->chairPool.chairs[chairId].departureTime + Config::Chair::RIDE_DURATION_US / 1'000'000;
                 shm_->chairPool.chairsInUse++;
 
                 for (size_t i = 0; i < groupIndices.size(); ++i) {

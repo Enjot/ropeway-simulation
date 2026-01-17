@@ -6,7 +6,7 @@
 #include "common/TrailDifficulty.hpp"
 #include "common/GateType.hpp"
 #include "common/WorkerSignal.hpp"
-#include "structures/tourist.hpp"
+#include "structures/Tourist.hpp"
 
 /**
  * Centralized enum-to-string conversion utilities.

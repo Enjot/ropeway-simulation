@@ -7,8 +7,8 @@
 #include "ipc/SharedMemory.hpp"
 #include "ipc/RopewaySystemState.hpp"
 #include "ipc/SemaphoreIndex.hpp"
-#include "structures/tourist.hpp"
-#include "structures/chair.hpp"
+#include "structures/Tourist.hpp"
+#include "structures/Chair.hpp"
 #include "common/Config.hpp"
 
 /**
@@ -203,7 +203,7 @@ public:
         chair.numPassengers = static_cast<uint32_t>(group.touristIds.size());
         chair.slotsUsed = group.slotsUsed;
         chair.departureTime = time(nullptr);
-        chair.arrivalTime = chair.departureTime + Config::Chair::RIDE_TIME_S;
+        chair.arrivalTime = chair.departureTime + Config::Chair::RIDE_DURATION_S;
 
         for (size_t i = 0; i < group.touristIds.size() && i < 4; ++i) {
             chair.passengerIds[i] = static_cast<int32_t>(group.touristIds[i]);

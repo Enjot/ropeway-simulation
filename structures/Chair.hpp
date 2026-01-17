@@ -11,7 +11,7 @@ struct Chair {
     uint32_t id; // Unique chair identifier (0-71)
     bool isOccupied; // Whether a chair is currently occupied
     uint32_t numPassengers; // Number of passengers on chair
-    int32_t passengerIds[4]; // Tourist IDs of passengers (max 4)
+    int32_t passengerIds[Config::Chair::SLOTS_PER_CHAIR]; // Tourist IDs of passengers (max 4)
     uint32_t slotsUsed; // Number of slots used (0-4)
     time_t departureTime; // When a chair left the lower station
     time_t arrivalTime; // When a chair will arrive at the upper station

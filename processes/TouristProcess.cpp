@@ -9,7 +9,7 @@
 #include "ipc/RopewaySystemState.hpp"
 #include "ipc/SemaphoreIndex.hpp"
 #include "ipc/CashierMessage.hpp"
-#include "structures/tourist.hpp"
+#include "structures/Tourist.hpp"
 #include "gates/EntryGate.hpp"
 #include "gates/RideGate.hpp"
 #include "common/Config.hpp"
@@ -376,8 +376,7 @@ private:
     void handleOnChair() {
         Logger::info(tag_, "On chair ", assignedChairId_, ", riding up...");
 
-        uint32_t rideTime = Config::Chair::RIDE_TIME_S;
-        usleep((rideTime / Config::Timing::RIDE_TIME_SCALE) * 1000000);
+        usleep(Config::Chair::RIDE_DURATION_US);
 
         {
             SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
@@ -437,10 +436,9 @@ private:
     }
 
     void handleOnTrail() {
-        uint32_t trailTime = Config::Trail::getTimeSeconds(tourist_.preferredTrail);
         Logger::info(tag_, "Cycling down trail (difficulty: ", static_cast<int>(tourist_.preferredTrail), ")");
 
-        usleep((trailTime / Config::Timing::RIDE_TIME_SCALE) * 1000000);
+        usleep(Config::Trail::getDurationUs(tourist_.preferredTrail));
 
         Logger::info(tag_, "Finished trail descent");
 

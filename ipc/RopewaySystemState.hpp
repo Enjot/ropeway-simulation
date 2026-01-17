@@ -5,7 +5,7 @@
 #include "common/RopewayState.hpp"
 #include "common/Config.hpp"
 #include "common/GateType.hpp"
-#include "structures/chair.hpp"
+#include "structures/Chair.hpp"
 #include "structures/DailyStatistic.hpp"
 #include "ipc/BoardingQueue.hpp"
 #include "ipc/ReportingData.hpp"

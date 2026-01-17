@@ -1,8 +1,6 @@
 #pragma once
 
-#include <cstdint>
 #include <stdexcept>
-#include <sys/types.h>
 #include "TrailDifficulty.hpp"
 
 /**
@@ -22,9 +20,7 @@ namespace Config {
         constexpr uint32_t CYCLIST_SLOT_COST{2};
         constexpr uint32_t PEDESTRIAN_SLOT_COST{1};
         constexpr uint32_t MAX_CYCLISTS_PER_CHAIR{2};
-        constexpr uint32_t MAX_PEDESTRIANS_PER_CHAIR{4};
-        constexpr uint32_t RIDE_TIME_S{300};
-        constexpr uint32_t LOADING_TIME_S{30};
+        constexpr uint32_t RIDE_DURATION_US{3'000'000}; // 3 seconds
     }
 
     namespace Gate {
@@ -58,15 +54,15 @@ namespace Config {
     }
 
     namespace Trail {
-        constexpr uint32_t TRAIL_TIME_EASY_S{180}; // T1 - 3 minutes
-        constexpr uint32_t TRAIL_TIME_MEDIUM_S{300}; // T2 - 5 minutes
-        constexpr uint32_t TRAIL_TIME_HARD_S{420}; // T3 - 7 minutes
+        constexpr uint32_t DURATION_EASY_US{1'800'000};   // T1 - 1.8 seconds
+        constexpr uint32_t DURATION_MEDIUM_US{3'000'000}; // T2 - 3 seconds
+        constexpr uint32_t DURATION_HARD_US{4'200'000};   // T3 - 4.2 seconds
 
-        inline uint32_t getTimeSeconds(TrailDifficulty difficulty) {
+        inline uint32_t getDurationUs(TrailDifficulty difficulty) {
             switch (difficulty) {
-                case TrailDifficulty::EASY: return TRAIL_TIME_EASY_S;
-                case TrailDifficulty::MEDIUM: return TRAIL_TIME_MEDIUM_S;
-                case TrailDifficulty::HARD: return TRAIL_TIME_HARD_S;
+                case TrailDifficulty::EASY: return DURATION_EASY_US;
+                case TrailDifficulty::MEDIUM: return DURATION_MEDIUM_US;
+                case TrailDifficulty::HARD: return DURATION_HARD_US;
                 default: throw std::invalid_argument("Invalid TrailDifficulty value");
             }
         }
@@ -84,16 +80,10 @@ namespace Config {
      * These are only for simulation delays and non-critical polling
      */
     namespace Timing {
-        // Polling intervals for main loops (non-synchronization)
         constexpr uint32_t MAIN_LOOP_POLL_US{500000}; // 500ms - orchestrator main loop
-
-        // Simulation delays (simulating real-world time)
         constexpr uint32_t ARRIVAL_DELAY_BASE_US{5000}; // 5ms base arrival delay
         constexpr uint32_t ARRIVAL_DELAY_RANDOM_US{10000}; // 10ms random component
         constexpr uint32_t EXIT_ROUTE_DELAY_BASE_US{100000}; // 100ms base exit delay
         constexpr uint32_t EXIT_ROUTE_DELAY_RANDOM_US{200000}; // 200ms random component
-
-        // Ride time scaling (divide real time for simulation)
-        constexpr uint32_t RIDE_TIME_SCALE{100}; // Divide ride time by this
     }
 }
