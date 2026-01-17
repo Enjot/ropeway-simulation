@@ -71,7 +71,7 @@ struct ChairPool {
 struct SimulationStatistics {
 
     DailyStatistics dailyStats;
-    TouristRideRecord touristRecords[Config::NUM_TOURISTS];
+    TouristRideRecord touristRecords[Config::Simulation::NUM_TOURISTS];
     uint32_t touristRecordCount;
     GatePassageLog gateLog;
 
@@ -124,7 +124,7 @@ struct RopewaySystemState {
      */
     int32_t registerTourist(uint32_t touristId, uint32_t ticketId, uint32_t age,
                             TouristType type, bool isVip) {
-        if (stats.touristRecordCount >= Config::NUM_TOURISTS) return -1;
+        if (stats.touristRecordCount >= Config::Simulation::NUM_TOURISTS) return -1;
 
         TouristRideRecord& record = stats.touristRecords[stats.touristRecordCount];
         record.touristId = touristId;

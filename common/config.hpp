@@ -7,8 +7,11 @@
  */
 namespace Config {
 
-    constexpr uint32_t NUM_TOURISTS{500};
-    constexpr uint32_t STATION_CAPACITY{50};
+    namespace Simulation {
+        constexpr uint32_t NUM_TOURISTS{500};
+        constexpr uint32_t STATION_CAPACITY{50};
+        constexpr uint32_t SIMULATION_TIME_S{60};
+    }
 
     namespace Chair {
         constexpr uint32_t QUANTITY{72};
@@ -87,10 +90,6 @@ namespace Config {
         constexpr uint32_t ARRIVAL_DELAY_RANDOM_US{10000};    // 10ms random component
         constexpr uint32_t EXIT_ROUTE_DELAY_BASE_US{100000};  // 100ms base exit delay
         constexpr uint32_t EXIT_ROUTE_DELAY_RANDOM_US{200000};// 200ms random component
-
-        // Process management delays (for cleanup, not sync)
-        constexpr uint32_t PROCESS_CLEANUP_WAIT_US{300000};   // 300ms wait for cleanup
-        constexpr uint32_t SIGNAL_HANDLER_REAP_US{100000};    // 100ms child reaping interval
 
         // Ride time scaling (divide real time for simulation)
         constexpr uint32_t RIDE_TIME_SCALE{100};              // Divide ride time by this

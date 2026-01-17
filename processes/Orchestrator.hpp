@@ -66,9 +66,9 @@ private:
         Logger::info(TAG, "Creating IPC structures...");
 
         ipc_ = std::make_unique<IpcManager>(Config::Ipc::SHM_KEY_BASE, true);
-        Logger::info(TAG, "Station capacity set to ", Config::STATION_CAPACITY);
+        Logger::info(TAG, "Station capacity set to ", Config::Simulation::STATION_CAPACITY);
 
-        ipc_->initializeSemaphores(Config::STATION_CAPACITY);
+        ipc_->initializeSemaphores(Config::Simulation::STATION_CAPACITY);
 
         simulationStartTime_ = time(nullptr);
         ipc_->initializeState(simulationStartTime_, simulationStartTime_ + 25);
@@ -117,7 +117,7 @@ private:
         std::uniform_real_distribution<> rideDist(0.0, 1.0);
         std::uniform_int_distribution<> trailDist(0, 2);
 
-        constexpr uint32_t NUM_TOURISTS = Config::NUM_TOURISTS;
+        constexpr uint32_t NUM_TOURISTS = Config::Simulation::NUM_TOURISTS;
         std::vector<TouristConfig> tourists;
         tourists.reserve(NUM_TOURISTS);
 
@@ -199,7 +199,7 @@ private:
                 resumeTriggered = true;
             }
 
-            if (elapsed >= 30) {
+            if (elapsed >= Config::Simulation::SIMULATION_TIME_S) {
                 Logger::info(TAG, "Timeout reached.");
                 break;
             }
