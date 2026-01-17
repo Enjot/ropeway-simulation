@@ -11,32 +11,32 @@ include_directories(${CMAKE_SOURCE_DIR})
 # Header files list (for IDE integration)
 set(COMMON_HEADERS
         common/config.hpp
-        common/gate_type.hpp
-        common/ropeway_state.hpp
-        common/station_type.hpp
-        common/ticket_type.hpp
-        common/tourist_type.hpp
-        common/trail_difficulty.hpp
-        common/worker_signal.hpp
+        common/GateType.hpp
+        common/RopewayState.hpp
+        common/StationType.hpp
+        common/TicketName.hpp
+        common/TouristType.hpp
+        common/TrailDifficulty.hpp
+        common/WorkerSignal.hpp
 )
 
 set(IPC_HEADERS
-        ipc/boarding_queue.hpp
-        ipc/cashier_message.hpp
+        ipc/BoardingQueue.hpp
+        ipc/CashierMessage.hpp
         ipc/MessageQueue.hpp
-        ipc/reporting_data.hpp
-        ipc/ropeway_system_state.hpp
-        ipc/semaphore_index.hpp
+        ipc/ReportingData.hpp
+        ipc/RopewaySystemState.hpp
+        ipc/SemaphoreIndex.hpp
         ipc/Semaphore.hpp
         ipc/SharedMemory.hpp
-        ipc/worker_message.hpp
+        ipc/WorkerMessage.hpp
         ipc/IpcManager.hpp
 )
 
 set(STRUCTURE_HEADERS
         structures/chair.hpp
-        structures/daily_statistic.hpp
-        structures/gate_passage.hpp
+        structures/DailyStatistic.hpp
+        structures/GatePassage.hpp
         structures/ticket.hpp
         structures/tourist.hpp
 )
@@ -72,7 +72,7 @@ set(ALL_HEADERS
 )
 
 # Tourist process (spawned via fork/exec)
-add_executable(tourist_process processes/tourist_process.cpp ${ALL_HEADERS})
+add_executable(tourist_process processes/Touristprocess.cpp ${ALL_HEADERS})
 
 # Worker1 process - Lower Station Controller (spawned via fork/exec)
 add_executable(worker1_process processes/worker1_process.cpp ${ALL_HEADERS})
@@ -81,10 +81,10 @@ add_executable(worker1_process processes/worker1_process.cpp ${ALL_HEADERS})
 add_executable(worker2_process processes/worker2_process.cpp ${ALL_HEADERS})
 
 # Cashier process - Ticket sales (spawned via fork/exec)
-add_executable(cashier_process processes/cashier_process.cpp ${ALL_HEADERS})
+add_executable(cashier_process processes/CashierProcess.cpp ${ALL_HEADERS})
 
 # Test runner - Automated test suite (Phase 10)
-add_executable(test_runner tests/test_runner.cpp ${ALL_HEADERS})
+add_executable(test_runner tests/testRunner.cpp ${ALL_HEADERS})
 
 # Main executable - Manual simulation control
 add_executable(main main.cpp ${ALL_HEADERS})

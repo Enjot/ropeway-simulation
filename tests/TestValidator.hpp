@@ -6,10 +6,10 @@
 #include <unistd.h>
 #include <csignal>
 #include "tests/TestConfig.hpp"
-#include "ipc/ropeway_system_state.hpp"
+#include "ipc/RopewaySystemState.hpp"
 #include "ipc/Semaphore.hpp"
-#include "ipc/semaphore_index.hpp"
-#include "common/config.hpp"
+#include "ipc/SemaphoreIndex.hpp"
+#include "common/Config.hpp"
 
 namespace Test {
 

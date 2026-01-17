@@ -3,11 +3,11 @@
 #include "ipc/SharedMemory.hpp"
 #include "ipc/Semaphore.hpp"
 #include "ipc/MessageQueue.hpp"
-#include "ipc/ropeway_system_state.hpp"
-#include "ipc/worker_message.hpp"
-#include "ipc/cashier_message.hpp"
-#include "ipc/semaphore_index.hpp"
-#include "common/config.hpp"
+#include "ipc/RopewaySystemState.hpp"
+#include "ipc/WorkerMessage.hpp"
+#include "ipc/CashierMessage.hpp"
+#include "ipc/SemaphoreIndex.hpp"
+#include "common/Config.hpp"
 
 /**
  * Unified IPC resource manager for the ropeway simulation.

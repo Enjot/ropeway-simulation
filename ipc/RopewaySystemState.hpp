@@ -2,13 +2,13 @@
 
 #include <sys/types.h>
 #include <ctime>
-#include "common/ropeway_state.hpp"
-#include "common/config.hpp"
-#include "common/gate_type.hpp"
+#include "common/RopewayState.hpp"
+#include "common/Config.hpp"
+#include "common/GateType.hpp"
 #include "structures/chair.hpp"
-#include "structures/daily_statistic.hpp"
-#include "ipc/boarding_queue.hpp"
-#include "ipc/reporting_data.hpp"
+#include "structures/DailyStatistic.hpp"
+#include "ipc/BoardingQueue.hpp"
+#include "ipc/ReportingData.hpp"
 
 // ============================================================================
 // SUB-STRUCTURES FOR LOGICAL ORGANIZATION

@@ -5,11 +5,11 @@
 #include <iostream>
 #include "ipc/Semaphore.hpp"
 #include "ipc/SharedMemory.hpp"
-#include "ipc/ropeway_system_state.hpp"
-#include "ipc/semaphore_index.hpp"
+#include "ipc/RopewaySystemState.hpp"
+#include "ipc/SemaphoreIndex.hpp"
 #include "structures/tourist.hpp"
 #include "structures/chair.hpp"
-#include "common/config.hpp"
+#include "common/Config.hpp"
 
 /**
  * Ride gate validation result

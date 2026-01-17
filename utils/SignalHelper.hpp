@@ -3,7 +3,7 @@
 #include <csignal>
 #include <unistd.h>
 #include <iostream>
-#include "../common/config.hpp"
+#include "../common/Config.hpp"
 
 /**
  * Centralized signal handling utilities for multi-process simulation.

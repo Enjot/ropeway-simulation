@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <ctime>
-#include "common/gate_type.hpp"
+#include "common/GateType.hpp"
 
 /**
  * Structure for logging gate passages

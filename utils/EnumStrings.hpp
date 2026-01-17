@@ -1,11 +1,11 @@
 #pragma once
 
-#include "common/ropeway_state.hpp"
-#include "common/tourist_type.hpp"
-#include "common/ticket_type.hpp"
-#include "common/trail_difficulty.hpp"
-#include "common/gate_type.hpp"
-#include "common/worker_signal.hpp"
+#include "common/RopewayState.hpp"
+#include "common/TouristType.hpp"
+#include "common/TicketName.hpp"
+#include "common/TrailDifficulty.hpp"
+#include "common/GateType.hpp"
+#include "common/WorkerSignal.hpp"
 #include "structures/tourist.hpp"
 
 /**

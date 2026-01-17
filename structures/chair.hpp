@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <ctime>
-#include "common/config.hpp"
+#include "common/Config.hpp"
 
 /**
  * Structure representing a chair

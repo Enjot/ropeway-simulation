@@ -2,9 +2,9 @@
 
 #include <cstdint>
 #include <sys/types.h>
-#include "common/tourist_type.hpp"
-#include "common/trail_difficulty.hpp"
-#include "common/config.hpp"
+#include "common/TouristType.hpp"
+#include "common/TrailDifficulty.hpp"
+#include "common/Config.hpp"
 
 /**
  * Tourist state in the simulation.

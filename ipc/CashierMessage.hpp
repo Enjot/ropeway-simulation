@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <ctime>
-#include "common/ticket_type.hpp"
+#include "common/TicketName.hpp"
 
 /**
  * Message types for cashier communication

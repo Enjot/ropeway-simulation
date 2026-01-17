@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-#include "common/tourist_type.hpp"
-#include "common/trail_difficulty.hpp"
+#include "common/TouristType.hpp"
+#include "common/TrailDifficulty.hpp"
 
 namespace Test {
 

@@ -5,10 +5,10 @@
 #include <iostream>
 #include "ipc/Semaphore.hpp"
 #include "ipc/SharedMemory.hpp"
-#include "ipc/ropeway_system_state.hpp"
-#include "ipc/semaphore_index.hpp"
+#include "ipc/RopewaySystemState.hpp"
+#include "ipc/SemaphoreIndex.hpp"
 #include "structures/ticket.hpp"
-#include "common/config.hpp"
+#include "common/Config.hpp"
 
 /**
  * Entry gate validation result

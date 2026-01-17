@@ -2,9 +2,9 @@
 
 #include <cstdint>
 #include <ctime>
-#include "common/tourist_type.hpp"
-#include "common/gate_type.hpp"
-#include "structures/gate_passage.hpp"
+#include "common/TouristType.hpp"
+#include "common/GateType.hpp"
+#include "structures/GatePassage.hpp"
 
 /**
  * Reporting and tracking structures for daily statistics.

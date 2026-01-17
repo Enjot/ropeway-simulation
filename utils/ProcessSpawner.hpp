@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <csignal>
 #include <sys/wait.h>
-#include "../common/config.hpp"
+#include "../common/Config.hpp"
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
