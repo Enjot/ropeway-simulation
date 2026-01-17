@@ -1,44 +1,30 @@
 #pragma once
 
-#include <cstdint>
-#include <sys/types.h>
 #include "common/TouristType.hpp"
 #include "common/TrailDifficulty.hpp"
 #include "common/Config.hpp"
+#include "common/TouristState.hpp"
 
-/**
- * Tourist state in the simulation.
- * Simplified 7-state machine representing the tourist lifecycle.
- */
-enum class TouristState {
-    BUYING_TICKET,      // Arriving and purchasing ticket at cashier
-    WAITING_ENTRY,      // Waiting in queue for entry gate
-    WAITING_BOARDING,   // On lower station, waiting for chair assignment
-    ON_CHAIR,           // Riding on the chairlift
-    AT_TOP,             // At the upper station
-    ON_TRAIL,           // Cyclist on downhill trail
-    FINISHED            // Left the area / simulation complete
-};
 
 /**
  * Structure representing a tourist
  */
 struct Tourist {
     uint32_t id;
-    pid_t pid;                      // Process ID when spawned
+    pid_t pid; // Process ID when spawned
     uint32_t age;
     TouristType type;
     TouristState state;
     bool isVip;
-    bool wantsToRide;               // Some tourists just walk around
+    bool wantsToRide; // Some tourists just walk around
 
     // Ticket information
     uint32_t ticketId;
     bool hasTicket;
 
     // Supervision (for children under 8)
-    int32_t guardianId;             // ID of adult guardian (-1 if none/not needed)
-    uint32_t dependentCount;        // Number of children this adult is supervising
+    int32_t guardianId; // ID of adult guardian (-1 if none/not needed)
+    uint32_t dependentCount; // Number of children this adult is supervising
     int32_t dependentIds[Config::Gate::MAX_CHILDREN_PER_ADULT]; // IDs of supervised children
 
     // Cyclist specific
@@ -123,8 +109,8 @@ struct Tourist {
      */
     [[nodiscard]] constexpr uint32_t getSlotCost() const noexcept {
         return (type == TouristType::CYCLIST)
-            ? Config::Chair::CYCLIST_SLOT_COST
-            : Config::Chair::PEDESTRIAN_SLOT_COST;
+                   ? Config::Chair::CYCLIST_SLOT_COST
+                   : Config::Chair::PEDESTRIAN_SLOT_COST;
     }
 
     /**
@@ -168,7 +154,7 @@ struct TouristSpawnData {
     bool wantsToRide;
     int32_t guardianId;
     TrailDifficulty preferredTrail;
-    key_t shmKey;       // Shared memory key for system state
-    key_t semKey;       // Semaphore key
-    key_t msgKey;       // Message queue key
+    key_t shmKey; // Shared memory key for system state
+    key_t semKey; // Semaphore key
+    key_t msgKey; // Message queue key
 };

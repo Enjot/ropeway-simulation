@@ -18,6 +18,7 @@ set(COMMON_HEADERS
         common/TouristType.hpp
         common/TrailDifficulty.hpp
         common/WorkerSignal.hpp
+        common/TouristState.hpp
 )
 
 set(IPC_HEADERS
@@ -50,7 +51,6 @@ set(UTILS_HEADERS
         utils/GatePassageLogger.hpp
         utils/Logger.hpp
         utils/SignalHelper.hpp
-        utils/EnumStrings.hpp
         utils/ArgumentParser.hpp
         utils/ProcessSpawner.hpp
 )

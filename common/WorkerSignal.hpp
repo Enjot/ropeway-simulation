@@ -1,11 +1,25 @@
 #pragma once
 
 /**
- * Worker signal types
+ * @brief Worker signal types
  */
 enum class WorkerSignal {
-    EMERGENCY_STOP, // Signal 1 - emergency stop
-    READY_TO_START, // Signal 2 - ready-to-resume operation
-    STATION_CLEAR, // Station is clear and safe
-    DANGER_DETECTED // Danger detected
+    EMERGENCY_STOP,
+    READY_TO_START,
+    STATION_CLEAR,
+    DANGER_DETECTED
 };
+
+/**
+ * @brief Convert WorkerSignal enum to string representation.
+ * @param signal WorkerSignal to convert
+ */
+constexpr const char *toString(const WorkerSignal signal) {
+    switch (signal) {
+        case WorkerSignal::EMERGENCY_STOP: return "EMERGENCY_STOP";
+        case WorkerSignal::READY_TO_START: return "READY_TO_START";
+        case WorkerSignal::STATION_CLEAR: return "STATION_CLEAR";
+        case WorkerSignal::DANGER_DETECTED: return "DANGER_DETECTED";
+        default: throw std::invalid_argument("Invalid WorkerSignal value");
+    }
+}
