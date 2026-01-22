@@ -4,17 +4,15 @@
 #include <cstring>
 
 #include "ipc/SharedMemory.hpp"
-#include "ipc/Semaphore.hpp"
-#include "ipc/MessageQueue.hpp"
+#include "../ipc/core/Semaphore.hpp"
+#include "../ipc/core/MessageQueue.hpp"
 #include "ipc/RopewaySystemState.hpp"
-#include "ipc/SemaphoreIndex.hpp"
-#include "ipc/CashierMessage.hpp"
+#include "../ipc/message/CashierMessage.hpp"
 #include "structures/Tourist.hpp"
 #include "gates/EntryGate.hpp"
 #include "gates/RideGate.hpp"
-#include "common/Config.hpp"
+#include "../Config.hpp"
 #include "utils/SignalHelper.hpp"
-#include "utils/EnumStrings.hpp"
 #include "utils/ArgumentParser.hpp"
 #include "utils/Logger.hpp"
 
@@ -24,17 +22,16 @@ namespace {
 
 class TouristProcess {
 public:
-    TouristProcess(const ArgumentParser::TouristArgs& args)
+    TouristProcess(const ArgumentParser::TouristArgs &args)
         : tourist_{},
           shm_{args.shmKey, false},
-          sem_{args.semKey, SemaphoreIndex::TOTAL_SEMAPHORES, false},
+          sem_{args.semKey},
           cashierRequestQueue_{args.cashierMsgKey, false},
           cashierResponseQueue_{args.cashierMsgKey, false},
           entryGate_{sem_, shm_.get()},
           rideGate_{sem_, shm_.get()},
           requestVip_{args.isVip},
           assignedChairId_{-1} {
-
         tourist_.id = args.id;
         tourist_.pid = getpid();
         tourist_.age = args.age;
@@ -49,14 +46,18 @@ public:
         // Build tag using async-signal-safe method
         strcpy(tag_, "Tourist ");
         char idBuf[16];
-        char* ptr = idBuf + sizeof(idBuf) - 1;
+        char *ptr = idBuf + sizeof(idBuf) - 1;
         *ptr = '\0';
         unsigned int id = tourist_.id;
-        do { --ptr; *ptr = '0' + (id % 10); id /= 10; } while (id > 0);
+        do {
+            --ptr;
+            *ptr = '0' + (id % 10);
+            id /= 10;
+        } while (id > 0);
         strcat(tag_, ptr);
 
-        Logger::info(tag_, "Started: ", EnumStrings::toString(tourist_.type),
-                    requestVip_ ? ", VIP" : ", regular");
+        Logger::info(tag_, "Started: ", toString(tourist_.type),
+                     requestVip_ ? ", VIP" : ", regular");
     }
 
     void run() {
@@ -93,9 +94,8 @@ public:
     }
 
 private:
-    void changeState(TouristState newState) {
-        Logger::stateChange(tag_, EnumStrings::toString(tourist_.state),
-                           EnumStrings::toString(newState));
+    void changeState(const TouristState newState) {
+        Logger::stateChange(tag_, toString(tourist_.state), toString(newState));
         tourist_.state = newState;
     }
 
@@ -110,10 +110,10 @@ private:
 
     void handleBuyingTicket() {
         // Simulate arrival time
-        usleep(Config::Timing::ARRIVAL_DELAY_BASE_US + (rand() % Config::Timing::ARRIVAL_DELAY_RANDOM_US));
+        usleep(Config::Time::ARRIVAL_DELAY_BASE_US + (rand() % Config::Time::ARRIVAL_DELAY_RANDOM_US));
 
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             if (!shm_->core.acceptingNewTourists) {
                 Logger::info(tag_, "Ropeway not accepting tourists, leaving");
                 changeState(TouristState::FINISHED);
@@ -127,8 +127,8 @@ private:
         request.touristId = tourist_.id;
         request.touristAge = tourist_.age;
         request.requestedType = (tourist_.type == TouristType::CYCLIST)
-            ? TicketType::DAILY
-            : TicketType::SINGLE_USE;
+                                    ? TicketType::DAILY
+                                    : TicketType::SINGLE_USE;
         request.requestVip = requestVip_;
 
         Logger::info(tag_, "Requesting ticket from cashier...");
@@ -166,7 +166,7 @@ private:
             }
 
             {
-                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
                 shm_->registerTourist(tourist_.id, tourist_.ticketId,
                                       tourist_.age, tourist_.type, tourist_.isVip);
                 shm_->stats.dailyStats.totalTourists++;
@@ -210,7 +210,7 @@ private:
         if (!entryGate_.tryEnter(tourist_.id, tourist_.isVip, gateNumber)) {
             Logger::perr(tag_, "Failed to enter station");
             {
-                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
                 shm_->logGatePassage(tourist_.id, tourist_.ticketId, GateType::ENTRY, gateNumber, false);
             }
             changeState(TouristState::FINISHED);
@@ -218,7 +218,7 @@ private:
         }
 
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             shm_->core.touristsInLowerStation++;
             shm_->logGatePassage(tourist_.id, tourist_.ticketId, GateType::ENTRY, gateNumber, true);
         }
@@ -246,7 +246,7 @@ private:
         entry.readyToBoard = false;
 
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             if (!shm_->chairPool.boardingQueue.addTourist(entry)) {
                 Logger::perr(tag_, "Boarding queue full!");
                 changeState(TouristState::FINISHED);
@@ -255,7 +255,7 @@ private:
         }
 
         // Signal Worker1 that there's work in the boarding queue
-        sem_.signal(SemaphoreIndex::BOARDING_QUEUE_WORK);
+        sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false);
 
         // Handle child-guardian pairing for children under 8
         if (tourist_.needsSupervision() && tourist_.guardianId == -1) {
@@ -264,13 +264,14 @@ private:
             // Wait for guardian assignment using semaphore
             while (!SignalHelper::shouldExit(g_signals)) {
                 // Wait on CHAIR_ASSIGNED semaphore - will be signaled when Worker1 processes queue
-                if (!sem_.wait(SemaphoreIndex::CHAIR_ASSIGNED)) {
-                    // Semaphore removed or error
+                try {
+                    sem_.wait(Semaphore::Index::CHAIR_ASSIGNED);
+                } catch (std::runtime_error &_) {
                     break;
                 }
 
                 {
-                    SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                    Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
                     int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
                     if (idx >= 0 && shm_->chairPool.boardingQueue.entries[idx].guardianId != -1) {
                         tourist_.guardianId = shm_->chairPool.boardingQueue.entries[idx].guardianId;
@@ -292,7 +293,7 @@ private:
 
             if (SignalHelper::shouldExit(g_signals)) {
                 {
-                    SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                    Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
                     int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
                     if (idx >= 0) {
                         shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
@@ -308,13 +309,15 @@ private:
 
         while (!SignalHelper::shouldExit(g_signals)) {
             // Wait on CHAIR_ASSIGNED semaphore - will be signaled when Worker1 assigns chairs
-            if (!sem_.wait(SemaphoreIndex::CHAIR_ASSIGNED)) {
+            try {
+                sem_.wait(Semaphore::Index::CHAIR_ASSIGNED);
+            } catch (std::runtime_error &_) {
                 // Semaphore removed or error - likely shutdown
                 break;
             }
 
             {
-                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
 
                 if (shm_->core.state == RopewayState::EMERGENCY_STOP) {
                     Logger::info(tag_, "Ropeway emergency stop, waiting...");
@@ -336,7 +339,7 @@ private:
 
                 int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
                 if (idx >= 0) {
-                    BoardingQueueEntry& entry = shm_->chairPool.boardingQueue.entries[idx];
+                    BoardingQueueEntry &entry = shm_->chairPool.boardingQueue.entries[idx];
                     if (entry.readyToBoard && entry.assignedChairId >= 0) {
                         assignedChairId_ = entry.assignedChairId;
                         Logger::info(tag_, "Assigned to chair ", assignedChairId_);
@@ -361,7 +364,7 @@ private:
 
         // Exit requested
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
             if (idx >= 0) {
                 shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
@@ -379,7 +382,7 @@ private:
         usleep(Config::Chair::RIDE_DURATION_US);
 
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             if (shm_->core.touristsOnPlatform > 0) {
                 shm_->core.touristsOnPlatform--;
             }
@@ -397,7 +400,7 @@ private:
             shm_->logGatePassage(tourist_.id, tourist_.ticketId, GateType::RIDE, rideGateNumber, true);
 
             if (assignedChairId_ >= 0 && static_cast<uint32_t>(assignedChairId_) < Config::Chair::QUANTITY) {
-                Chair& chair = shm_->chairPool.chairs[assignedChairId_];
+                Chair &chair = shm_->chairPool.chairs[assignedChairId_];
                 if (chair.passengerIds[0] == static_cast<int32_t>(tourist_.id)) {
                     chair.isOccupied = false;
                     chair.numPassengers = 0;
@@ -417,7 +420,7 @@ private:
         tourist_.lastRideTime = time(nullptr);
         assignedChairId_ = -1;
 
-        sem_.signal(SemaphoreIndex::STATION_CAPACITY);
+        sem_.post(Semaphore::Index::STATION_CAPACITY, false);
 
         changeState(TouristState::AT_TOP);
     }
@@ -425,7 +428,7 @@ private:
     void handleAtTop() {
         Logger::info(tag_, "Arrived at top station");
 
-        usleep(Config::Timing::EXIT_ROUTE_DELAY_BASE_US + (rand() % Config::Timing::EXIT_ROUTE_DELAY_RANDOM_US));
+        usleep(Config::Time::EXIT_ROUTE_DELAY_BASE_US + (rand() % Config::Time::EXIT_ROUTE_DELAY_RANDOM_US));
 
         if (tourist_.type == TouristType::CYCLIST) {
             changeState(TouristState::ON_TRAIL);
@@ -438,12 +441,12 @@ private:
     void handleOnTrail() {
         Logger::info(tag_, "Cycling down trail (difficulty: ", static_cast<int>(tourist_.preferredTrail), ")");
 
-        usleep(Config::Trail::getDurationUs(tourist_.preferredTrail));
+        usleep(getDurationUs(tourist_.preferredTrail));
 
         Logger::info(tag_, "Finished trail descent");
 
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             if (shm_->core.acceptingNewTourists && shm_->core.state == RopewayState::RUNNING) {
                 changeState(TouristState::WAITING_ENTRY);
                 return;
@@ -466,7 +469,7 @@ private:
     char tag_[32];
 };
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     ArgumentParser::TouristArgs args{};
     if (!ArgumentParser::parseTouristArgs(argc, argv, args)) {
         return 1;
@@ -478,16 +481,20 @@ int main(int argc, char* argv[]) {
     char tag[32];
     strcpy(tag, "Tourist ");
     char idBuf[16];
-    char* ptr = idBuf + sizeof(idBuf) - 1;
+    char *ptr = idBuf + sizeof(idBuf) - 1;
     *ptr = '\0';
     unsigned int id = args.id;
-    do { --ptr; *ptr = '0' + (id % 10); id /= 10; } while (id > 0);
+    do {
+        --ptr;
+        *ptr = '0' + (id % 10);
+        id /= 10;
+    } while (id > 0);
     strcat(tag, ptr);
 
     try {
         TouristProcess process(args);
         process.run();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         Logger::perr(tag, e.what());
         return 1;
     }

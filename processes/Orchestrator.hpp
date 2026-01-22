@@ -13,9 +13,9 @@
 #include "../ipc/IpcManager.hpp"
 #include "../utils/SignalHelper.hpp"
 #include "../utils/ProcessSpawner.hpp"
-#include "../utils/EnumStrings.hpp"
 #include "../utils/Logger.hpp"
 #include "../structures/Tourist.hpp"
+#include "../ipc/core/IpcException.hpp"
 
 /**
  * Main orchestrator for the ropeway simulation.
@@ -43,11 +43,22 @@ public:
     }
 
     void run() {
-        initializeIpc();
-        spawnProcesses();
-        spawnTourists();
-        runSimulationLoop();
-        generateReport();
+        try {
+            initializeIpc();
+            spawnProcesses();
+            spawnTourists();
+            runSimulationLoop();
+            generateReport();
+        } catch (const ipc_exception& e) {
+            perror(e.what());
+            // FIXME cleanup
+            exit(1);
+        } catch (const std::exception& e) {
+            perror(e.what());
+            // FIXME cleanup
+            exit(1);
+        }
+
     }
 
 private:
@@ -71,7 +82,8 @@ private:
         ipc_->initializeSemaphores(Config::Simulation::STATION_CAPACITY);
 
         simulationStartTime_ = time(nullptr);
-        ipc_->initializeState(simulationStartTime_, simulationStartTime_ + 25);
+        ipc_->initializeState(simulationStartTime_,
+            simulationStartTime_ + Config::Simulation::DURATION_US / Config::Time::ONE_SECOND_US);
 
         Logger::info(TAG, "IPC structures initialized");
     }
@@ -83,7 +95,7 @@ private:
         if (cashierPid_ > 0) {
             Logger::info(TAG, "Cashier spawned with PID ", cashierPid_);
         }
-        ipc_->semaphores().wait(SemaphoreIndex::CASHIER_READY);
+        ipc_->semaphores().wait(Semaphore::Index::CASHIER_READY);
         Logger::info(TAG, "Cashier ready");
 
         Logger::info(TAG, "Spawning workers...");
@@ -100,9 +112,9 @@ private:
             Logger::info(TAG, "Worker2 spawned with PID ", worker2Pid_);
         }
 
-        ipc_->semaphores().wait(SemaphoreIndex::WORKER1_READY);
+        ipc_->semaphores().wait(Semaphore::Index::LOWER_WORKER_READY, /* useUndo = */ false);
         Logger::info(TAG, "Worker1 ready");
-        ipc_->semaphores().wait(SemaphoreIndex::WORKER2_READY);
+        ipc_->semaphores().wait(Semaphore::Index::UPPER_WORKER_READY);
         Logger::info(TAG, "Worker2 ready");
     }
 
@@ -137,7 +149,7 @@ private:
             if (pid > 0) {
                 touristPids_.push_back(pid);
             }
-            usleep(Config::Timing::ARRIVAL_DELAY_BASE_US + (gen() % Config::Timing::ARRIVAL_DELAY_RANDOM_US));
+            usleep(Config::Time::ARRIVAL_DELAY_BASE_US + (gen() % Config::Time::ARRIVAL_DELAY_RANDOM_US));
         }
         Logger::info(TAG, "All tourists spawned");
     }
@@ -172,7 +184,7 @@ private:
 
             RopewayState currentState;
             {
-                SemaphoreLock lock(ipc_->semaphores(), SemaphoreIndex::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(ipc_->semaphores(), Semaphore::Index::SHARED_MEMORY);
                 currentState = ipc_->state()->core.state;
             }
 
@@ -199,12 +211,12 @@ private:
                 resumeTriggered = true;
             }
 
-            if (elapsed >= Config::Simulation::SIMULATION_TIME_S) {
+            if (elapsed >= Config::Simulation::DURATION_US / Config::Time::ONE_SECOND_US) {
                 Logger::info(TAG, "Timeout reached.");
                 break;
             }
 
-            usleep(Config::Timing::MAIN_LOOP_POLL_US);
+            usleep(Config::Time::MAIN_LOOP_POLL_US);
         }
     }
 
@@ -213,7 +225,7 @@ private:
 
         std::stringstream report;
         {
-            SemaphoreLock lock(ipc_->semaphores(), SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(ipc_->semaphores(), Semaphore::Index::SHARED_MEMORY);
             ipc_->state()->stats.dailyStats.simulationEndTime = simulationEndTime;
 
             char startTimeStr[64], endTimeStr[64];
@@ -232,7 +244,7 @@ private:
             report << "Duration:   " << (simulationEndTime - ipc_->state()->stats.dailyStats.simulationStartTime) << " seconds\n";
 
             report << "\n--- OVERALL STATISTICS ---\n";
-            report << "Final State: " << EnumStrings::toString(ipc_->state()->core.state) << "\n";
+            report << "Final State: " << toString(ipc_->state()->core.state) << "\n";
 
             const DailyStatistics& dailyStats = ipc_->state()->stats.dailyStats;
             report << "Total Tourists Served: " << dailyStats.totalTourists << "\n";
@@ -259,7 +271,7 @@ private:
                 report << std::left << std::setw(10) << rec.touristId
                        << std::setw(10) << rec.ticketId
                        << std::setw(8) << rec.age
-                       << std::setw(12) << EnumStrings::toString(rec.type)
+                       << std::setw(12) << toString(rec.type)
                        << std::setw(6) << (rec.isVip ? "Yes" : "No")
                        << std::setw(8) << rec.ridesCompleted << "\n";
             }

@@ -7,9 +7,8 @@
 #include <csignal>
 #include "tests/TestConfig.hpp"
 #include "ipc/RopewaySystemState.hpp"
-#include "ipc/Semaphore.hpp"
-#include "ipc/SemaphoreIndex.hpp"
-#include "common/Config.hpp"
+#include "../ipc/core/Semaphore.hpp"
+#include "../Config.hpp"
 
 namespace Test {
 

@@ -1,13 +1,12 @@
 #pragma once
 
 #include "ipc/SharedMemory.hpp"
-#include "ipc/Semaphore.hpp"
-#include "ipc/MessageQueue.hpp"
+#include "core/Semaphore.hpp"
+#include "core/MessageQueue.hpp"
 #include "ipc/RopewaySystemState.hpp"
-#include "ipc/WorkerMessage.hpp"
-#include "ipc/CashierMessage.hpp"
-#include "ipc/SemaphoreIndex.hpp"
-#include "common/Config.hpp"
+#include "message/WorkerMessage.hpp"
+#include "message/CashierMessage.hpp"
+#include "../Config.hpp"
 
 /**
  * Unified IPC resource manager for the ropeway simulation.
@@ -45,39 +44,40 @@ public:
           msgKey_{static_cast<key_t>(Config::Ipc::MSG_KEY_BASE) + keyOffset},
           cashierMsgKey_{static_cast<key_t>(Config::Ipc::MSG_KEY_BASE) + 1 + keyOffset},
           shm_{shmKey_, create},
-          sem_{semKey_, SemaphoreIndex::TOTAL_SEMAPHORES, create},
-          workerMsgQueue_{msgKey_, create},
-          cashierMsgQueue_{cashierMsgKey_, create} {
+          sem_{semKey_},
+          workerMsgQueue_{msgKey_},
+          cashierMsgQueue_{cashierMsgKey_} {
     }
 
     ~IpcManager() = default;
 
     // Non-copyable (IPC resources should not be duplicated)
-    IpcManager(const IpcManager&) = delete;
-    IpcManager& operator=(const IpcManager&) = delete;
+    IpcManager(const IpcManager &) = delete;
+
+    IpcManager &operator=(const IpcManager &) = delete;
 
     // ==================== State Access ====================
 
     /** Get pointer to shared ropeway system state. */
-    RopewaySystemState* state() { return shm_.get(); }
-    const RopewaySystemState* state() const { return shm_.get(); }
+    RopewaySystemState *state() { return shm_.get(); }
+    const RopewaySystemState *state() const { return shm_.get(); }
 
     /** Arrow operator for convenient state access: ipc->touristsInLowerStation */
-    RopewaySystemState* operator->() { return shm_.get(); }
+    RopewaySystemState *operator->() { return shm_.get(); }
 
     // ==================== Semaphore Access ====================
 
     /** Get reference to semaphore set for synchronization operations. */
-    Semaphore& semaphores() { return sem_; }
-    const Semaphore& semaphores() const { return sem_; }
+    Semaphore &semaphores() { return sem_; }
+    const Semaphore &semaphores() const { return sem_; }
 
     // ==================== Message Queue Access ====================
 
     /** Get worker message queue (worker-to-worker communication). */
-    MessageQueue<WorkerMessage>& workerQueue() { return workerMsgQueue_; }
+    MessageQueue<WorkerMessage> &workerQueue() { return workerMsgQueue_; }
 
     /** Get cashier message queue (tourist ticket requests/responses). */
-    MessageQueue<TicketRequest>& cashierRequestQueue() { return cashierMsgQueue_; }
+    MessageQueue<TicketRequest> &cashierRequestQueue() { return cashierMsgQueue_; }
 
     // ==================== Initialization ====================
 
@@ -87,17 +87,17 @@ public:
      *
      * @param stationCapacity Maximum tourists allowed on lower station (N)
      */
-    void initializeSemaphores(int stationCapacity = Config::Gate::MAX_TOURISTS_ON_STATION) {
-        sem_.setValue(SemaphoreIndex::STATION_CAPACITY, stationCapacity);
-        sem_.setValue(SemaphoreIndex::SHARED_MEMORY, 1);
-        sem_.setValue(SemaphoreIndex::ENTRY_GATES, Config::Gate::NUM_ENTRY_GATES);
-        sem_.setValue(SemaphoreIndex::RIDE_GATES, Config::Gate::NUM_RIDE_GATES);
-        sem_.setValue(SemaphoreIndex::CHAIR_ALLOCATION, 1);
-        sem_.setValue(SemaphoreIndex::WORKER_SYNC, 0);
+    void initializeSemaphores(const uint16_t stationCapacity = Config::Gate::MAX_TOURISTS_ON_STATION) const {
+        sem_.initialize(Semaphore::Index::STATION_CAPACITY, stationCapacity);
+        sem_.initialize(Semaphore::Index::SHARED_MEMORY, 1);
+        sem_.initialize(Semaphore::Index::ENTRY_GATES, Config::Gate::NUM_ENTRY_GATES);
+        sem_.initialize(Semaphore::Index::RIDE_GATES, Config::Gate::NUM_RIDE_GATES);
+        sem_.initialize(Semaphore::Index::CHAIR_ALLOCATION, 1);
+        sem_.initialize(Semaphore::Index::WORKER_SYNC, 0);
         // Process readiness semaphores - initialized to 0, processes signal when ready
-        sem_.setValue(SemaphoreIndex::CASHIER_READY, 0);
-        sem_.setValue(SemaphoreIndex::WORKER1_READY, 0);
-        sem_.setValue(SemaphoreIndex::WORKER2_READY, 0);
+        sem_.initialize(Semaphore::Index::CASHIER_READY, 0);
+        sem_.initialize(Semaphore::Index::LOWER_WORKER_READY, 0);
+        sem_.initialize(Semaphore::Index::UPPER_WORKER_READY, 0);
     }
 
     /**
@@ -133,27 +133,27 @@ public:
      * @param keyOffset Offset that was used when creating resources
      */
     static void cleanup(key_t baseKey, int keyOffset = 0) {
-        key_t shmKey = baseKey + keyOffset;
-        key_t semKey = static_cast<key_t>(Config::Ipc::SEM_KEY_BASE) + keyOffset;
-        key_t msgKey = static_cast<key_t>(Config::Ipc::MSG_KEY_BASE) + keyOffset;
-        key_t cashierMsgKey = static_cast<key_t>(Config::Ipc::MSG_KEY_BASE) + 1 + keyOffset;
+        const key_t shmKey = baseKey + keyOffset;
+        const key_t semKey = static_cast<key_t>(Config::Ipc::SEM_KEY_BASE) + keyOffset;
+        const key_t msgKey = static_cast<key_t>(Config::Ipc::MSG_KEY_BASE) + keyOffset;
+        const key_t cashierMsgKey = static_cast<key_t>(Config::Ipc::MSG_KEY_BASE) + 1 + keyOffset;
 
         SharedMemory<RopewaySystemState>::removeByKey(shmKey);
-        Semaphore::removeByKey(semKey);
+        Semaphore::destroy(semKey);
         MessageQueue<WorkerMessage>::removeByKey(msgKey);
         MessageQueue<TicketRequest>::removeByKey(cashierMsgKey);
     }
 
 private:
     // IPC keys (stored for child process spawning)
-    key_t shmKey_;          // Shared memory key
-    key_t semKey_;          // Semaphore set key
-    key_t msgKey_;          // Worker message queue key
-    key_t cashierMsgKey_;   // Cashier message queue key
+    key_t shmKey_; // Shared memory key
+    key_t semKey_; // Semaphore set key
+    key_t msgKey_; // Worker message queue key
+    key_t cashierMsgKey_; // Cashier message queue key
 
     // IPC resource wrappers (RAII - cleaned up on destruction)
     SharedMemory<RopewaySystemState> shm_;       // Ropeway state shared across all processes
     Semaphore sem_;                              // Semaphore set for synchronization
     MessageQueue<WorkerMessage> workerMsgQueue_; // Worker-to-worker signals
-    MessageQueue<TicketRequest> cashierMsgQueue_;// Tourist ticket requests
+    MessageQueue<TicketRequest> cashierMsgQueue_; // Tourist ticket requests
 };

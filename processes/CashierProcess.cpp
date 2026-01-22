@@ -4,14 +4,13 @@
 #include <cstdlib>
 
 #include "ipc/SharedMemory.hpp"
-#include "ipc/Semaphore.hpp"
-#include "ipc/MessageQueue.hpp"
+#include "../ipc/core/Semaphore.hpp"
+#include "../ipc/core/MessageQueue.hpp"
 #include "ipc/RopewaySystemState.hpp"
-#include "ipc/SemaphoreIndex.hpp"
-#include "ipc/CashierMessage.hpp"
-#include "common/Config.hpp"
+#include "../ipc/core/Semaphore.hpp"
+#include "../ipc/message/CashierMessage.hpp"
+#include "../Config.hpp"
 #include "utils/SignalHelper.hpp"
-#include "utils/EnumStrings.hpp"
 #include "utils/ArgumentParser.hpp"
 #include "utils/Logger.hpp"
 
@@ -24,7 +23,7 @@ class CashierProcess {
 public:
     CashierProcess(const ArgumentParser::CashierArgs& args)
         : shm_{args.shmKey, false},
-          sem_{args.semKey, SemaphoreIndex::TOTAL_SEMAPHORES, false},
+          sem_{args.semKey},
           requestQueue_{args.cashierMsgKey, false},
           responseQueue_{args.cashierMsgKey, false},
           nextTicketId_{1},
@@ -36,7 +35,7 @@ public:
         Logger::info(TAG, "Started (PID: ", getpid(), ")");
 
         // Signal readiness to parent process
-        sem_.signal(SemaphoreIndex::CASHIER_READY);
+        sem_.post(Semaphore::Index::CASHIER_READY, false);
     }
 
     void run() {
@@ -53,7 +52,7 @@ public:
 
             bool accepting;
             {
-                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
                 accepting = shm_->core.acceptingNewTourists;
             }
 
@@ -124,7 +123,7 @@ private:
                 break;
             case TicketType::DAILY:
                 {
-                    SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                    Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
                     validUntil = shm_->core.closingTime;
                 }
                 break;
@@ -170,7 +169,7 @@ private:
         Logger::info(TAG, "Total revenue: ", static_cast<unsigned int>(totalRevenue_));
 
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             shm_->stats.dailyStats.totalRevenueWithDiscounts = totalRevenue_;
         }
     }

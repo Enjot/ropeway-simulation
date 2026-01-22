@@ -10,27 +10,25 @@ include_directories(${CMAKE_SOURCE_DIR})
 
 # Header files list (for IDE integration)
 set(COMMON_HEADERS
-        common/config.hpp
-        common/GateType.hpp
-        common/RopewayState.hpp
-        common/StationType.hpp
-        common/TicketName.hpp
-        common/TouristType.hpp
-        common/TrailDifficulty.hpp
-        common/WorkerSignal.hpp
-        common/TouristState.hpp
+        Config.hpp
+        enums/GateType.hpp
+        enums/RopewayState.hpp
+        enums/StationType.hpp
+        enums/TicketName.hpp
+        enums/TouristType.hpp
+        enums/TrailDifficulty.hpp
+        enums/WorkerSignal.hpp
+        enums/TouristState.hpp
 )
 
 set(IPC_HEADERS
         ipc/BoardingQueue.hpp
-        ipc/CashierMessage.hpp
-        ipc/MessageQueue.hpp
+        ipc/message/CashierMessage.hpp
+        ipc/core/MessageQueue.hpp
         ipc/ReportingData.hpp
         ipc/RopewaySystemState.hpp
-        ipc/SemaphoreIndex.hpp
-        ipc/Semaphore.hpp
-        ipc/SharedMemory.hpp
-        ipc/WorkerMessage.hpp
+        ipc/core/SharedMemory.hpp
+        ipc/message/WorkerMessage.hpp
         ipc/IpcManager.hpp
 )
 
@@ -81,7 +79,8 @@ add_executable(worker1_process processes/LowerStationWorker.cpp ${ALL_HEADERS})
 add_executable(worker2_process processes/UpperStationWorker.cpp ${ALL_HEADERS})
 
 # Cashier process - Ticket sales (spawned via fork/exec)
-add_executable(cashier_process processes/CashierProcess.cpp ${ALL_HEADERS})
+add_executable(cashier_process processes/CashierProcess.cpp ${ALL_HEADERS}
+        ipc/core/IpcException.hpp)
 
 # Test runner - Automated test suite (Phase 10)
 add_executable(test_runner tests/testRunner.cpp ${ALL_HEADERS})

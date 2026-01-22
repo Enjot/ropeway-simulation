@@ -4,46 +4,43 @@
 #include <csignal>
 
 #include "ipc/SharedMemory.hpp"
-#include "ipc/Semaphore.hpp"
-#include "ipc/MessageQueue.hpp"
+#include "../ipc/core/Semaphore.hpp"
+#include "../ipc/core/MessageQueue.hpp"
 #include "ipc/RopewaySystemState.hpp"
-#include "ipc/WorkerMessage.hpp"
-#include "ipc/SemaphoreIndex.hpp"
-#include "common/Config.hpp"
+#include "../ipc/message/WorkerMessage.hpp"
+#include "../Config.hpp"
 #include "utils/SignalHelper.hpp"
-#include "utils/EnumStrings.hpp"
 #include "utils/ArgumentParser.hpp"
 #include "utils/Logger.hpp"
 
 namespace {
     SignalHelper::SignalFlags g_signals;
-    constexpr const char* TAG = "Worker2";
+    constexpr const char *TAG = "Worker2";
 }
 
-class Worker2Process {
+class UpperWorkerProcess {
 public:
     static constexpr uint32_t WORKER_ID = 2;
     static constexpr long MSG_TYPE_TO_WORKER1 = 1;
     static constexpr long MSG_TYPE_FROM_WORKER1 = 2;
 
-    Worker2Process(const ArgumentParser::WorkerArgs& args)
+    UpperWorkerProcess(const ArgumentParser::WorkerArgs &args)
         : shm_{args.shmKey, false},
-          sem_{args.semKey, SemaphoreIndex::TOTAL_SEMAPHORES, false},
+          sem_{args.semKey},
           msgQueue_{args.msgKey, false},
           isEmergencyStopped_{false},
           exitRoute1Active_{true},
           exitRoute2Active_{true},
           currentEmergencyRecordIndex_{-1} {
-
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             shm_->core.worker2Pid = getpid();
         }
 
         Logger::info(TAG, "Started (PID: ", getpid(), ") - Upper Station Controller");
 
         // Signal readiness to parent process
-        sem_.signal(SemaphoreIndex::WORKER2_READY);
+        sem_.post(Semaphore::Index::UPPER_WORKER_READY, false);
     }
 
     void run() {
@@ -67,12 +64,10 @@ public:
                 handleMessage(*msg);
             }
 
-            RopewayState currentState = RopewayState::RUNNING;  // Default if lock fails
+            RopewayState currentState = RopewayState::RUNNING; // Default if lock fails
             {
-                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                if (lock.isLocked()) {
-                    currentState = shm_->core.state;
-                }
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+                currentState = shm_->core.state;
             }
 
             switch (currentState) {
@@ -108,11 +103,12 @@ private:
         }
         // If no message (interrupted), just continue loop
     }
+
     void handleEmergencyReceived() {
         Logger::info(TAG, "!!! EMERGENCY STOP RECEIVED FROM WORKER1 !!!");
 
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             shm_->core.state = RopewayState::EMERGENCY_STOP;
         }
 
@@ -124,7 +120,7 @@ private:
         Logger::info(TAG, "!!! LOCAL EMERGENCY TRIGGERED !!!");
 
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             shm_->core.state = RopewayState::EMERGENCY_STOP;
             currentEmergencyRecordIndex_ = shm_->stats.dailyStats.recordEmergencyStart(WORKER_ID);
         }
@@ -134,7 +130,7 @@ private:
 
         pid_t worker1Pid;
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             worker1Pid = shm_->core.worker1Pid;
         }
         if (worker1Pid > 0) {
@@ -144,14 +140,14 @@ private:
         Logger::info(TAG, "Emergency stop signal sent to Worker1");
     }
 
-    void handleMessage(const WorkerMessage& msg) {
+    void handleMessage(const WorkerMessage &msg) {
         Logger::info(TAG, "Received message from Worker1");
 
         switch (msg.signal) {
             case WorkerSignal::EMERGENCY_STOP:
                 Logger::info(TAG, "Worker1 triggered emergency stop");
                 {
-                    SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                    Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
                     shm_->core.state = RopewayState::EMERGENCY_STOP;
                 }
                 isEmergencyStopped_ = true;
@@ -187,7 +183,7 @@ private:
         uint32_t chairsInUse;
         uint32_t totalRides;
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             chairsInUse = shm_->chairPool.chairsInUse;
             totalRides = shm_->core.totalRidesToday;
         }
@@ -196,7 +192,7 @@ private:
         time_t now = time(nullptr);
         if (now - lastStatusLog >= 5) {
             Logger::info(TAG, "Status: ChairsInUse=", chairsInUse,
-                        ", TotalRidesToday=", totalRides);
+                         ", TotalRidesToday=", totalRides);
             lastStatusLog = now;
         }
     }
@@ -231,7 +227,7 @@ private:
         pause();
     }
 
-    void sendMessage(WorkerSignal signal, const char* text) {
+    void sendMessage(WorkerSignal signal, const char *text) {
         WorkerMessage msg;
         msg.mtype = MSG_TYPE_TO_WORKER1;
         msg.senderId = WORKER_ID;
@@ -255,7 +251,7 @@ private:
     int32_t currentEmergencyRecordIndex_;
 };
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     ArgumentParser::WorkerArgs args{};
     if (!ArgumentParser::parseWorkerArgs(argc, argv, args)) {
         return 1;
@@ -264,9 +260,9 @@ int main(int argc, char* argv[]) {
     SignalHelper::setup(g_signals, SignalHelper::Mode::WORKER);
 
     try {
-        Worker2Process worker(args);
+        UpperWorkerProcess worker(args);
         worker.run();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         Logger::perr(TAG, e.what());
         return 1;
     }

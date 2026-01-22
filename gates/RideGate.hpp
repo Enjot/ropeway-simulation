@@ -3,13 +3,13 @@
 #include <cstdint>
 #include <vector>
 #include <iostream>
-#include "ipc/Semaphore.hpp"
+#include "../ipc/core/Semaphore.hpp"
 #include "ipc/SharedMemory.hpp"
 #include "ipc/RopewaySystemState.hpp"
-#include "ipc/SemaphoreIndex.hpp"
+#include "../ipc/core/Semaphore.hpp"
 #include "structures/Tourist.hpp"
 #include "structures/Chair.hpp"
-#include "common/Config.hpp"
+#include "../Config.hpp"
 
 /**
  * Ride gate validation result
@@ -114,7 +114,7 @@ public:
 
         // Check ropeway state
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             if (state_->core.state == RopewayState::EMERGENCY_STOP) {
                 result.reason = "Emergency stop active";
                 return result;
@@ -166,7 +166,7 @@ public:
      * @return Chair ID, or -1 if no chairs available
      */
     int32_t allocateChair() {
-        SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+        Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
 
         // Check if we have chairs available
         if (state_->chairPool.chairsInUse >= Config::Chair::MAX_CONCURRENT_IN_USE) {
@@ -197,13 +197,13 @@ public:
             return false;
         }
 
-        SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+        Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
 
         Chair& chair = state_->chairPool.chairs[chairId];
         chair.numPassengers = static_cast<uint32_t>(group.touristIds.size());
         chair.slotsUsed = group.slotsUsed;
         chair.departureTime = time(nullptr);
-        chair.arrivalTime = chair.departureTime + Config::Chair::RIDE_DURATION_S;
+        chair.arrivalTime = chair.departureTime + Config::Chair::RIDE_DURATION_US / Config::Time::ONE_SECOND_US;
 
         for (size_t i = 0; i < group.touristIds.size() && i < 4; ++i) {
             chair.passengerIds[i] = static_cast<int32_t>(group.touristIds[i]);
@@ -224,7 +224,7 @@ public:
             return;
         }
 
-        SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+        Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
 
         Chair& chair = state_->chairPool.chairs[chairId];
         chair.isOccupied = false;
@@ -250,7 +250,7 @@ public:
      * Check if boarding is currently allowed
      */
     bool isBoardingAllowed() {
-        SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+        Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
         return state_->core.state == RopewayState::RUNNING;
     }
 

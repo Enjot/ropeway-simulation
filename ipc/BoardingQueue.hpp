@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <sys/types.h>
-#include "common/TouristType.hpp"
+#include "enums/TouristType.hpp"
 
 /**
  * Boarding queue structures for chair assignment.

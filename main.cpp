@@ -1,3 +1,4 @@
+#include "ipc/core/Semaphore.hpp"
 #include "processes/Orchestrator.hpp"
 
 int main() {

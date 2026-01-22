@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <ctime>
 #include <cstring>
-#include "common/WorkerSignal.hpp"
+#include "enums/WorkerSignal.hpp"
 
 /**
  * Structure for worker-to-worker communication
@@ -11,15 +11,13 @@
  * Note: mtype must be the first member (long type) for msgsnd/msgrcv
  */
 struct WorkerMessage {
-    long mtype;
     uint32_t senderId;
     uint32_t receiverId;
     WorkerSignal signal;
     time_t timestamp;
     char messageText[256];
 
-    WorkerMessage() : mtype{1},
-                      senderId{0},
+    WorkerMessage() : senderId{0},
                       receiverId{0},
                       signal{WorkerSignal::STATION_CLEAR},
                       timestamp{0},

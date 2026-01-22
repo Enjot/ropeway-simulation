@@ -3,12 +3,10 @@
 #include <cstdint>
 #include <ctime>
 #include <iostream>
-#include "ipc/Semaphore.hpp"
-#include "ipc/SharedMemory.hpp"
+#include "../ipc/core/Semaphore.hpp"
 #include "ipc/RopewaySystemState.hpp"
-#include "ipc/SemaphoreIndex.hpp"
 #include "structures/Ticket.hpp"
-#include "common/Config.hpp"
+#include "../Config.hpp"
 
 /**
  * Entry gate validation result
@@ -45,7 +43,7 @@ public:
 
         // Check if ropeway is accepting tourists
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             if (!state_->core.acceptingNewTourists) {
                 result.reason = "Ropeway not accepting new tourists";
                 return result;
@@ -82,7 +80,7 @@ public:
 
         if (isVip) {
             // VIP: try non-blocking first (priority)
-            if (sem_.tryWait(SemaphoreIndex::STATION_CAPACITY)) {
+            if (sem_.tryWait(Semaphore::Index::STATION_CAPACITY)) {
                 std::cout << "[EntryGate " << gateNumber << "] VIP Tourist " << touristId
                           << " entered (priority)" << std::endl;
                 return true;
@@ -93,7 +91,7 @@ public:
         }
 
         // Regular tourists (or VIP if non-blocking failed): wait for capacity
-        if (!sem_.wait(SemaphoreIndex::STATION_CAPACITY)) {
+        if (!sem_.wait(Semaphore::Index::STATION_CAPACITY)) {
             std::cerr << "[EntryGate " << gateNumber << "] Tourist " << touristId
                       << " failed to acquire station capacity" << std::endl;
             return false;
@@ -108,14 +106,14 @@ public:
      * Release station capacity (when tourist leaves station area)
      */
     void exitStation() {
-        sem_.signal(SemaphoreIndex::STATION_CAPACITY);
+        sem_.post(Semaphore::Index::STATION_CAPACITY, false);
     }
 
     /**
      * Get current station capacity
      */
     int getCurrentCapacity() {
-        return sem_.getValue(SemaphoreIndex::STATION_CAPACITY);
+        return sem_.getAvailableSpace(Semaphore::Index::STATION_CAPACITY);
     }
 
     /**

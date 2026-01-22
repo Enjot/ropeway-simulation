@@ -5,14 +5,12 @@
 #include <csignal>
 
 #include "ipc/SharedMemory.hpp"
-#include "ipc/Semaphore.hpp"
-#include "ipc/MessageQueue.hpp"
+#include "../ipc/core/Semaphore.hpp"
+#include "../ipc/core/MessageQueue.hpp"
 #include "ipc/RopewaySystemState.hpp"
-#include "ipc/WorkerMessage.hpp"
-#include "ipc/SemaphoreIndex.hpp"
-#include "common/Config.hpp"
+#include "../ipc/message/WorkerMessage.hpp"
+#include "../Config.hpp"
 #include "utils/SignalHelper.hpp"
-#include "utils/EnumStrings.hpp"
 #include "utils/ArgumentParser.hpp"
 #include "utils/Logger.hpp"
 
@@ -29,21 +27,21 @@ public:
 
     Worker1Process(const ArgumentParser::WorkerArgs& args)
         : shm_{args.shmKey, false},
-          sem_{args.semKey, SemaphoreIndex::TOTAL_SEMAPHORES, false},
+          sem_{args.semKey},
           msgQueue_{args.msgKey, false},
           isEmergencyStopped_{false},
           currentEmergencyRecordIndex_{-1},
           touristsToNotify_{0} {
 
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             shm_->core.worker1Pid = getpid();
         }
 
         Logger::info(TAG, "Started (PID: ", getpid(), ") - Lower Station Controller");
 
         // Signal readiness to parent process
-        sem_.signal(SemaphoreIndex::WORKER1_READY);
+        sem_.post(Semaphore::Index::LOWER_WORKER_READY, false);
     }
 
     void run() {
@@ -68,17 +66,15 @@ public:
 
             RopewayState currentState = RopewayState::RUNNING;  // Default if lock fails
             {
-                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
-                if (lock.isLocked()) {
-                    currentState = shm_->core.state;
-                }
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+                currentState = shm_->core.state;
             }
 
             switch (currentState) {
                 case RopewayState::RUNNING:
                     handleRunningState();
                     // Wait for work notification (tourist joining queue) - will be interrupted by signals
-                    sem_.wait(SemaphoreIndex::BOARDING_QUEUE_WORK);
+                    sem_.wait(Semaphore::Index::BOARDING_QUEUE_WORK);
                     break;
                 case RopewayState::EMERGENCY_STOP:
                     handleEmergencyState();
@@ -88,7 +84,7 @@ public:
                 case RopewayState::CLOSING:
                     handleClosingState();
                     // Wait for work or signal
-                    sem_.wait(SemaphoreIndex::BOARDING_QUEUE_WORK);
+                    sem_.wait(Semaphore::Index::BOARDING_QUEUE_WORK);
                     break;
                 case RopewayState::STOPPED:
                     handleStoppedState();
@@ -103,7 +99,7 @@ private:    void handleEmergencyStopTrigger() {
         Logger::info(TAG, "!!! EMERGENCY STOP TRIGGERED !!!");
 
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             shm_->core.state = RopewayState::EMERGENCY_STOP;
             currentEmergencyRecordIndex_ = shm_->stats.dailyStats.recordEmergencyStart(WORKER_ID);
         }
@@ -113,7 +109,7 @@ private:    void handleEmergencyStopTrigger() {
 
         pid_t worker2Pid;
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             worker2Pid = shm_->core.worker2Pid;
         }
         if (worker2Pid > 0) {
@@ -136,7 +132,7 @@ private:    void handleEmergencyStopTrigger() {
         // Send signal to wake up Worker2 (in case it's in pause())
         pid_t worker2Pid;
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             worker2Pid = shm_->core.worker2Pid;
         }
         if (worker2Pid > 0) {
@@ -149,7 +145,7 @@ private:    void handleEmergencyStopTrigger() {
             Logger::info(TAG, "Worker2 confirmed ready. Resuming operations.");
 
             {
-                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
                 shm_->core.state = RopewayState::RUNNING;
                 if (currentEmergencyRecordIndex_ >= 0) {
                     shm_->stats.dailyStats.recordEmergencyEnd(currentEmergencyRecordIndex_);
@@ -173,7 +169,7 @@ private:    void handleEmergencyStopTrigger() {
             case WorkerSignal::EMERGENCY_STOP:
                 Logger::info(TAG, "Worker2 triggered emergency stop");
                 {
-                    SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                    Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
                     shm_->core.state = RopewayState::EMERGENCY_STOP;
                 }
                 isEmergencyStopped_ = true;
@@ -201,7 +197,7 @@ private:    void handleEmergencyStopTrigger() {
         uint32_t chairsInUse;
         uint32_t queueCount;
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             touristsOnPlatform = shm_->core.touristsOnPlatform;
             chairsInUse = shm_->chairPool.chairsInUse;
             queueCount = shm_->chairPool.boardingQueue.count;
@@ -218,14 +214,14 @@ private:    void handleEmergencyStopTrigger() {
 
         time_t closingTime;
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             closingTime = shm_->core.closingTime;
         }
 
         if (now >= closingTime) {
             Logger::info(TAG, "Closing time reached, initiating closing sequence");
             {
-                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
                 shm_->core.state = RopewayState::CLOSING;
                 shm_->core.acceptingNewTourists = false;
             }
@@ -237,7 +233,7 @@ private:    void handleEmergencyStopTrigger() {
         touristsToNotify_ = 0;
 
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
 
             BoardingQueue& queue = shm_->chairPool.boardingQueue;
             if (queue.count == 0) return;
@@ -248,7 +244,7 @@ private:    void handleEmergencyStopTrigger() {
 
         // Signal waiting tourists outside the lock
         for (uint32_t i = 0; i < touristsToNotify_; ++i) {
-            sem_.signal(SemaphoreIndex::CHAIR_ASSIGNED);
+            sem_.post(Semaphore::Index::CHAIR_ASSIGNED, false);
         }
     }
 
@@ -367,7 +363,7 @@ private:    void handleEmergencyStopTrigger() {
                 shm_->chairPool.chairs[chairId].numPassengers = static_cast<uint32_t>(groupIndices.size());
                 shm_->chairPool.chairs[chairId].slotsUsed = slotsUsed;
                 shm_->chairPool.chairs[chairId].departureTime = time(nullptr);
-                shm_->chairPool.chairs[chairId].arrivalTime = shm_->chairPool.chairs[chairId].departureTime + Config::Chair::RIDE_DURATION_US / 1'000'000;
+                shm_->chairPool.chairs[chairId].arrivalTime = shm_->chairPool.chairs[chairId].departureTime + Config::Chair::RIDE_DURATION_US / Config::Time::ONE_SECOND_US;
                 shm_->chairPool.chairsInUse++;
 
                 for (size_t i = 0; i < groupIndices.size(); ++i) {
@@ -404,17 +400,18 @@ private:    void handleEmergencyStopTrigger() {
         uint32_t touristsOnPlatform;
         uint32_t touristsInStation;
         {
-            SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             touristsOnPlatform = shm_->core.touristsOnPlatform;
             touristsInStation = shm_->core.touristsInLowerStation;
         }
 
         if (touristsOnPlatform == 0 && touristsInStation == 0) {
-            Logger::info(TAG, "All tourists cleared. Stopping ropeway in ", Config::Ropeway::SHUTDOWN_DELAY_S, " seconds...");
-            sleep(Config::Ropeway::SHUTDOWN_DELAY_S);
+            Logger::info(TAG, "All tourists cleared. Stopping ropeway in ",
+                Config::Ropeway::SHUTDOWN_DELAY_US / Config::Time::ONE_SECOND_US, " seconds...");
+            usleep(Config::Ropeway::SHUTDOWN_DELAY_US);
 
             {
-                SemaphoreLock lock(sem_, SemaphoreIndex::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
                 shm_->core.state = RopewayState::STOPPED;
             }
 
