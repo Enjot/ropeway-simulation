@@ -62,13 +62,13 @@ public:
                 if (semId_ == -1) {
                     throw ipc_exception("Failed to connect to existing semaphore");
                 }
-                Logger::debug("Semaphore set connected");
+                Logger::debug(tag_, "connected");
             } else {
                 throw ipc_exception("Failed to create semaphore");
             }
         } else {
             initializeAllToLockedState();
-            Logger::debug("Semaphore set created");
+            Logger::debug(tag_, "created");
         }
     }
 
@@ -138,7 +138,9 @@ public:
     */
     [[nodiscard]] int32_t getAvailableSpace(const uint8_t semIndex) const {
         const int32_t val = semctl(semId_, semIndex, GETVAL);
-        if (val == -1) throw ipc_exception("Failed to get semaphore value");
+        if (val == -1) {
+            throw ipc_exception("Failed to get semaphore value");
+        }
         return val;
     }
 
@@ -149,7 +151,7 @@ public:
     static void destroy(const key_t key) {
         if (const int32_t semId = semget(key, Index::TOTAL_SEMAPHORES, permissions); semId != -1) {
             semctl(semId, 0, IPC_RMID);
-            Logger::debug("Semaphore set destroyed");
+            Logger::debug(tag_, "destroyed");
         }
     }
 
@@ -187,6 +189,7 @@ public:
     };
 
 private:
+    static constexpr auto tag_{"SEM"};
     int32_t semId_;
     /**
      * @brief The default permissions used for creating or accessing semaphore sets.

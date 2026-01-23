@@ -18,12 +18,12 @@ public:
                 if (msgId_ == -1) {
                     throw ipc_exception("Failed to connect to existing message queue");
                 }
-                Logger::debug("Message queue connected");
+                Logger::debug(tag_, "Message queue connected");
             } else {
                 throw ipc_exception("Failed to create message queue");
             }
         } else {
-            Logger::debug("Message queue created");
+            Logger::debug(tag_, "Message queue created");
         }
     }
 
@@ -38,6 +38,7 @@ public:
         wrapper.mtype = type;
         wrapper.message = message;
         if (msgsnd(msgId_, &wrapper, sizeof(T), flags) == -1) {
+            Logger::pError("Failed to send message to queue");
             throw ipc_exception("Failed to send message");
         }
     }
@@ -54,10 +55,11 @@ public:
         if (msgctl(msgId_, IPC_RMID, nullptr) == -1) {
             throw ipc_exception("Failed to destroy message queue");
         }
-        Logger::debug("Message queue destroyed");
+        Logger::debug(tag_, "Message queue destroyed");
     }
 
 private:
+    static constexpr auto tag_{"[MessageQueue] "};
     int msgId_;
     static constexpr int32_t permissions = 0600;
 

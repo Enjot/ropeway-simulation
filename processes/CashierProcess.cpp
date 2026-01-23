@@ -157,7 +157,7 @@ private:
 
     void sendResponse(const TicketResponse& response) {
         if (!responseQueue_.send(response)) {
-            Logger::perr(TAG, "msgsnd response");
+            Logger::perror(TAG, "msgsnd response");
         }
     }
 
@@ -199,7 +199,7 @@ int main(int argc, char* argv[]) {
         CashierProcess cashier(args);
         cashier.run();
     } catch (const std::exception& e) {
-        Logger::perr(TAG, e.what());
+        Logger::perror(TAG, e.what());
         return 1;
     }
 

@@ -448,7 +448,7 @@ private:    void handleEmergencyStopTrigger() {
         msg.messageText[sizeof(msg.messageText) - 1] = '\0';
 
         if (!msgQueue_.send(msg)) {
-            Logger::perr(TAG, "msgsnd to Worker2");
+            Logger::perror(TAG, "msgsnd to Worker2");
         }
     }
 
@@ -472,7 +472,7 @@ int main(int argc, char* argv[]) {
         Worker1Process worker(args);
         worker.run();
     } catch (const std::exception& e) {
-        Logger::perr(TAG, e.what());
+        Logger::perror(TAG, e.what());
         return 1;
     }
 

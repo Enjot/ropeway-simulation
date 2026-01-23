@@ -238,7 +238,7 @@ private:
         msg.messageText[sizeof(msg.messageText) - 1] = '\0';
 
         if (!msgQueue_.send(msg)) {
-            Logger::perr(TAG, "msgsnd to Worker1");
+            Logger::perror(TAG, "msgsnd to Worker1");
         }
     }
 
@@ -263,7 +263,7 @@ int main(int argc, char *argv[]) {
         UpperWorkerProcess worker(args);
         worker.run();
     } catch (const std::exception &e) {
-        Logger::perr(TAG, e.what());
+        Logger::perror(TAG, e.what());
         return 1;
     }
 

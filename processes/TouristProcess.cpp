@@ -134,7 +134,7 @@ private:
         Logger::info(tag_, "Requesting ticket from cashier...");
 
         if (!cashierRequestQueue_.send(request)) {
-            Logger::perr(tag_, "Failed to send ticket request");
+            Logger::perror(tag_, "Failed to send ticket request");
             changeState(TouristState::FINISHED);
             return;
         }
@@ -149,7 +149,7 @@ private:
                 changeState(TouristState::FINISHED);
                 return;
             }
-            Logger::perr(tag_, "Failed to receive ticket response");
+            Logger::perror(tag_, "Failed to receive ticket response");
             changeState(TouristState::FINISHED);
             return;
         }
@@ -208,7 +208,7 @@ private:
         }
 
         if (!entryGate_.tryEnter(tourist_.id, tourist_.isVip, gateNumber)) {
-            Logger::perr(tag_, "Failed to enter station");
+            Logger::perror(tag_, "Failed to enter station");
             {
                 Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
                 shm_->logGatePassage(tourist_.id, tourist_.ticketId, GateType::ENTRY, gateNumber, false);
@@ -248,7 +248,7 @@ private:
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             if (!shm_->chairPool.boardingQueue.addTourist(entry)) {
-                Logger::perr(tag_, "Boarding queue full!");
+                Logger::perror(tag_, "Boarding queue full!");
                 changeState(TouristState::FINISHED);
                 return;
             }
@@ -355,7 +355,7 @@ private:
                         return;
                     }
                 } else {
-                    Logger::perr(tag_, "Lost from boarding queue!");
+                    Logger::perror(tag_, "Lost from boarding queue!");
                     changeState(TouristState::FINISHED);
                     return;
                 }
@@ -495,7 +495,7 @@ int main(int argc, char *argv[]) {
         TouristProcess process(args);
         process.run();
     } catch (const std::exception &e) {
-        Logger::perr(tag, e.what());
+        Logger::perror(tag, e.what());
         return 1;
     }
 

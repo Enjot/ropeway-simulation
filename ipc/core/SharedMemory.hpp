@@ -17,7 +17,6 @@ public:
             id = shmget(key, sizeof(T), IPC_CREAT | IPC_EXCL | kPermissions);
         }
         if (id == -1) {
-            perror("shmget create");
             throw ipc_exception("shmget create failed");
         }
         return SharedMemory(key, id, true);
@@ -26,7 +25,6 @@ public:
     static SharedMemory attach(const key_t key) {
         const int id = shmget(key, 0, 0);
         if (id == -1) {
-            perror("shmget attach");
             throw ipc_exception("shmget attach failed");
         }
         return SharedMemory(key, id, false);
@@ -76,9 +74,9 @@ public:
     T& operator*() noexcept { return *data_; }
     const T& operator*() const noexcept { return *data_; }
 
-    [[nodiscard]] int getId() const noexcept { return shmId_; }
-    [[nodiscard]] key_t getKey() const noexcept { return key_; }
-    [[nodiscard]] bool isOwner() const noexcept { return isOwner_; }
+    int getId() const noexcept { return shmId_; }
+    key_t getKey() const noexcept { return key_; }
+    bool isOwner() const noexcept { return isOwner_; }
 
     static bool exists(const key_t key) {
         return shmget(key, 0, 0) != -1;
@@ -98,7 +96,6 @@ private:
 
         void* ptr = shmat(shmId_, nullptr, 0);
         if (ptr == reinterpret_cast<void*>(-1)) {
-            perror("shmat");
             throw ipc_exception("shmat failed");
         }
         data_ = static_cast<T*>(ptr);

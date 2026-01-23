@@ -6,7 +6,7 @@ int main() {
         Orchestrator orchestrator;
         orchestrator.run();
     } catch (const std::exception& e) {
-        Logger::perr("Main", e.what());
+        Logger::perror("Main", e.what());
         return 1;
     }
 
