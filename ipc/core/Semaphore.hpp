@@ -46,6 +46,23 @@ public:
             BOARDING_QUEUE_WORK,
             TOTAL_SEMAPHORES
         };
+
+        static auto toString(const uint8_t index) {
+            switch (index) {
+                case ENTRY_GATES: return "ENTRY_GATES";
+                case RIDE_GATES: return "RIDE_GATES";
+                case STATION_CAPACITY: return "STATION_CAPACITY";
+                case CHAIR_ALLOCATION: return "CHAIR_ALLOCATION";
+                case SHARED_MEMORY: return "SHARED_MEMORY";
+                case WORKER_SYNC: return "WORKER_SYNC";
+                case CASHIER_READY: return "CASHIER_READY";
+                case LOWER_WORKER_READY: return "LOWER_WORKER_READY";
+                case UPPER_WORKER_READY: return "UPPER_WORKER_READY";
+                case CHAIR_ASSIGNED: return "CHAIR_ASSIGNED";
+                case BOARDING_QUEUE_WORK: return "BOARDING_QUEUE_WORK";
+                default: return "UNKNOWN_SEMAPHORE";
+            }
+        }
     };
 
     /**
@@ -67,7 +84,6 @@ public:
                 throw ipc_exception("Failed to create semaphore");
             }
         } else {
-            initializeAllToLockedState();
             Logger::debug(tag_, "created");
         }
     }
@@ -90,6 +106,7 @@ public:
         if (semctl(semId_, semIndex, SETVAL, arg) == -1) {
             throw ipc_exception("Failed to initialize semaphore");
         }
+        Logger::debug(tag_, "initialized: %s with value: %d", Index::toString(semIndex), value);
     }
 
     /**
@@ -146,13 +163,12 @@ public:
 
     /**
      * @brief Removes a semaphore set identified by a key.
-     * @param key The key of the semaphore set to remove.
      */
-    static void destroy(const key_t key) {
-        if (const int32_t semId = semget(key, Index::TOTAL_SEMAPHORES, permissions); semId != -1) {
-            semctl(semId, 0, IPC_RMID);
-            Logger::debug(tag_, "destroyed");
+    void destroy() const {
+        if (semctl(semId_, 0, IPC_RMID) == -1) {
+            throw ipc_exception("Failed to destroy semaphore");
         }
+        Logger::debug(tag_, "destroyed");
     }
 
     /**
@@ -189,7 +205,7 @@ public:
     };
 
 private:
-    static constexpr auto tag_{"SEM"};
+    static constexpr auto tag_{"Semaphore"};
     int32_t semId_;
     /**
      * @brief The default permissions used for creating or accessing semaphore sets.

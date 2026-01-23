@@ -10,8 +10,8 @@
 template<typename T>
 class MessageQueue {
 public:
-    explicit MessageQueue(const key_t key) {
-        msgId_ = msgget(key | IPC_CREAT | IPC_EXCL, permissions);
+    explicit MessageQueue(const key_t key, const char *tag) : tag_{tag} {
+        msgId_ = msgget(key, IPC_CREAT | IPC_EXCL | permissions);
         if (msgId_ == -1) {
             if (errno == EEXIST) {
                 msgId_ = msgget(key, permissions);
@@ -55,11 +55,11 @@ public:
         if (msgctl(msgId_, IPC_RMID, nullptr) == -1) {
             throw ipc_exception("Failed to destroy message queue");
         }
-        Logger::debug(tag_, "Message queue destroyed");
+        Logger::debug(tag_, "destroyed");
     }
 
 private:
-    static constexpr auto tag_{"[MessageQueue] "};
+    const char *tag_;
     int msgId_;
     static constexpr int32_t permissions = 0600;
 

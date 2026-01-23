@@ -76,7 +76,7 @@ namespace SignalHelper {
          * @param signum Signal number to register
          * @return true on success, false on failure
          */
-        inline bool registerSignal(int signum) {
+        inline bool registerSignal(const int signum) {
             struct sigaction sa{};
             sa.sa_handler = signalHandler;
             sigemptyset(&sa.sa_mask);
@@ -98,7 +98,7 @@ namespace SignalHelper {
      * @param mode  Signal handling mode (determines which signals to register)
      * @return true if all handlers registered successfully
      */
-    inline bool setup(SignalFlags& flags, Mode mode) {
+    inline bool setup(SignalFlags& flags, const Mode mode) {
         detail::g_flags = &flags;
         bool success = true;
 

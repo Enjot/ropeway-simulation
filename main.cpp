@@ -1,4 +1,3 @@
-#include "ipc/core/Semaphore.hpp"
 #include "Simulation.hpp"
 
 int main() {

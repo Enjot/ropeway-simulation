@@ -76,12 +76,6 @@ namespace Config {
         constexpr uint32_t DURATION_HARD_US{35 * Time::ONE_MINUTE_US / Simulation::TIME_SCALE};
     }
 
-    namespace Ipc {
-        constexpr key_t SHM_KEY_BASE{0x1000};
-        constexpr key_t SEM_KEY_BASE{0x2000};
-        constexpr key_t MSG_KEY_BASE{0x3000};
-    }
-
     namespace Logging {
         constexpr bool IS_DEBUG_ENABLED{true};
         constexpr bool IS_INFO_ENABLED{true};

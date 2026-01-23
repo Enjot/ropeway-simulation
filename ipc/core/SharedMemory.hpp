@@ -6,6 +6,8 @@
 #include <cstdio>
 
 #include "IpcException.hpp"
+#include "Simulation.hpp"
+#include "utils/Logger.hpp"
 
 template<typename T>
 class SharedMemory {
@@ -82,13 +84,19 @@ public:
         return shmget(key, 0, 0) != -1;
     }
 
-    static bool removeByKey(const key_t key) {
-        const int id = shmget(key, 0, 0);
-        if (id == -1) return false;
-        return shmctl(id, IPC_RMID, nullptr) != -1;
+     void destroy() const {
+        if (shmctl(shmId_, IPC_RMID, nullptr) == -1) {
+            throw ipc_exception("failed to destroy shared memory");
+        }
+        Logger::debug(tag_, "destroyed");
     }
 
 private:
+    static constexpr auto tag_ = "SharedMemory";
+    key_t key_;
+    int shmId_;
+    T* data_ = nullptr;
+    bool isOwner_;
     static constexpr int kPermissions = 0600;
 
     SharedMemory(const key_t key, const int id, const bool owner)
@@ -105,8 +113,5 @@ private:
         }
     }
 
-    key_t key_;
-    int shmId_;
-    T* data_ = nullptr;
-    bool isOwner_;
+
 };

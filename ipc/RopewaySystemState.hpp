@@ -110,10 +110,7 @@ struct RopewaySystemState {
     ChairPool chairPool;
     SimulationStatistics stats;
 
-    RopewaySystemState()
-        : core{},
-          chairPool{},
-          stats{} {}
+    RopewaySystemState() = default;
 
     // ==================== TOURIST TRACKING METHODS ====================
 
