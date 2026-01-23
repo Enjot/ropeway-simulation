@@ -54,15 +54,15 @@ private:
         ipc_->initState(startTime_, endTime);
 
         Logger::debug(tag_, "Spawning processes...");
-        // spawnWorkers();
+        spawnWorkers();
         // spawnCashier();
         // waitForReady();
     }
 
     void spawnWorkers() {
-        lowerWorkerPid_ = ProcessSpawner::spawnWithKeys("worker1_process",
-            ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey());
-        upperWorkerPid_ = ProcessSpawner::spawnWithKeys("worker2_process",
+        lowerWorkerPid_ = ProcessSpawner::spawnWithKeys("lower_worker_process",
+        ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey());
+        upperWorkerPid_ = ProcessSpawner::spawnWithKeys("upper_worker_process",
             ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey());
         Logger::debug(tag_, "Workers spawned: %d, %d", lowerWorkerPid_, upperWorkerPid_);
     }

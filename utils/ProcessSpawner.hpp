@@ -13,20 +13,9 @@
 #include <mach-o/dyld.h>
 #endif
 
-/**
- * Process spawning utilities for fork/exec operations.
- * Handles executable path resolution and child process management.
- */
 namespace ProcessSpawner {
 
-    /**
-     * Get the path to a sibling executable.
-     * Resolves the path relative to the current executable's directory.
-     *
-     * @param processName Name of the executable (e.g., "worker1_process")
-     * @return Full path to the executable
-     */
-    inline std::string getExecutablePath(const char* processName) {
+    inline std::string getExecutablePath(const char *processName) {
         char path[1024];
         uint32_t size = sizeof(path);
 
@@ -45,8 +34,7 @@ namespace ProcessSpawner {
 #endif
 
         // Replace executable name with target process name
-        char* lastSlash = strrchr(path, '/');
-        if (lastSlash != nullptr) {
+        if (char *lastSlash = strrchr(path, '/'); lastSlash != nullptr) {
             strcpy(lastSlash + 1, processName);
             return path;
         }
@@ -61,8 +49,8 @@ namespace ProcessSpawner {
      * @param args Vector of command-line arguments (excluding program name)
      * @return Child PID on success, -1 on failure
      */
-    inline pid_t spawn(const char* processName, const std::vector<std::string>& args) {
-        pid_t pid = fork();
+    inline pid_t spawn(const char *processName, const std::vector<std::string> &args) {
+        const pid_t pid = fork();
         if (pid == -1) {
             perror("fork");
             return -1;
@@ -70,34 +58,34 @@ namespace ProcessSpawner {
 
         if (pid == 0) {
             // Child process - execute target program
-            std::string processPath = getExecutablePath(processName);
+            const std::string processPath = getExecutablePath(processName);
 
             // Build argv array (program name + args + nullptr)
-            std::vector<char*> argv;
-            argv.push_back(const_cast<char*>(processName));
-            for (const auto& arg : args) {
-                argv.push_back(const_cast<char*>(arg.c_str()));
+            std::vector<char *> argv;
+            argv.push_back(const_cast<char *>(processName));
+            for (const auto &arg: args) {
+                argv.push_back(const_cast<char *>(arg.c_str()));
             }
             argv.push_back(nullptr);
 
             execv(processPath.c_str(), argv.data());
             perror("execv");
-            _exit(1);  // Use _exit in child after fork
+            _exit(1); // Use _exit in child after fork
         }
 
-        return pid;  // Parent returns child PID
+        return pid; // Parent returns child PID
     }
 
     /**
      * Spawn a process with three IPC keys (common pattern for workers/cashier).
      * Convenience wrapper around spawn().
      */
-    inline pid_t spawnWithKeys(const char* processName, key_t key1, key_t key2, key_t key3) {
+    inline pid_t spawnWithKeys(const char *processName, const key_t key1, const key_t key2, const key_t key3) {
         return spawn(processName, {
-            std::to_string(key1),
-            std::to_string(key2),
-            std::to_string(key3)
-        });
+                         std::to_string(key1),
+                         std::to_string(key2),
+                         std::to_string(key3)
+                     });
     }
 
     /**
@@ -106,7 +94,7 @@ namespace ProcessSpawner {
      * @param pid Process ID to terminate
      * @param name Optional name for logging
      */
-    inline void terminate(pid_t pid, const char* name = nullptr) {
+    inline void terminate(const pid_t pid, const char *name = nullptr) {
         if (pid <= 0) return;
 
         if (name) {
@@ -122,8 +110,9 @@ namespace ProcessSpawner {
         // Poll with timeout for process to terminate
         // (SIGCHLD=SIG_IGN means blocking waitpid may hang on auto-reaped children)
         int status;
-        for (int i = 0; i < 50; ++i) {  // 5 second timeout
-            pid_t result = waitpid(pid, &status, WNOHANG);
+        for (int i = 0; i < 50; ++i) {
+            // 5 second timeout
+            const pid_t result = waitpid(pid, &status, WNOHANG);
             if (result == pid) {
                 // Process exited
                 return;
@@ -132,7 +121,7 @@ namespace ProcessSpawner {
                 // ECHILD means already reaped or doesn't exist
                 return;
             }
-            usleep(100000);  // 100ms
+            usleep(100000); // 100ms
         }
 
         // Process didn't terminate gracefully, force kill
@@ -143,8 +132,8 @@ namespace ProcessSpawner {
     /**
      * Send SIGTERM to multiple processes.
      */
-    inline void terminateAll(const std::vector<pid_t>& pids) {
-        for (pid_t pid : pids) {
+    inline void terminateAll(const std::vector<pid_t> &pids) {
+        for (const pid_t pid: pids) {
             if (pid > 0) {
                 kill(pid, SIGTERM);
             }
@@ -155,7 +144,7 @@ namespace ProcessSpawner {
      * Reap any zombie child processes (non-blocking).
      */
     inline void waitForAll() {
-        while (waitpid(-1, nullptr, WNOHANG) > 0) {}
+        while (waitpid(-1, nullptr, WNOHANG) > 0) {
+        }
     }
-
 } // namespace ProcessSpawner
