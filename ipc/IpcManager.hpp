@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ipc/SharedMemory.hpp"
+#include "ipc/core/SharedMemory.hpp"
 #include "core/Semaphore.hpp"
 #include "core/MessageQueue.hpp"
 #include "ipc/RopewaySystemState.hpp"

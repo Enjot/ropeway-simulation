@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "ipc/SharedMemory.hpp"
+#include "ipc/core/SharedMemory.hpp"
 #include "../ipc/core/Semaphore.hpp"
 #include "../ipc/core/MessageQueue.hpp"
 #include "ipc/RopewaySystemState.hpp"
@@ -495,7 +495,7 @@ int main(int argc, char *argv[]) {
         TouristProcess process(args);
         process.run();
     } catch (const std::exception &e) {
-        Logger::perror(tag, e.what());
+        Logger::error(tag, e.what());
         return 1;
     }
 

@@ -1,14 +1,8 @@
 #include "ipc/core/Semaphore.hpp"
-#include "processes/Orchestrator.hpp"
+#include "Simulation.hpp"
 
 int main() {
-    try {
-        Orchestrator orchestrator;
-        orchestrator.run();
-    } catch (const std::exception& e) {
-        Logger::perror("Main", e.what());
-        return 1;
-    }
-
+    Simulation simulation;
+    simulation.run();
     return 0;
 }

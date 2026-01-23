@@ -55,4 +55,12 @@ namespace Logger {
     }
 
     inline void pError(const char *message) { perror(message); }
+
+    inline void separator(char ch = '-', int count = 60) {
+        char buf[128];
+        int n = (count < 127) ? count : 127;
+        memset(buf, ch, n);
+        buf[n++] = '\n';
+        write(STDOUT_FILENO, buf, n);
+    }
 }

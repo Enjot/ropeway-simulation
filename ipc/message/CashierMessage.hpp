@@ -14,14 +14,12 @@ namespace CashierMsgType {
  * Ticket request from Tourist to Cashier
  */
 struct TicketRequest {
-    long mtype; // Must be CashierMsgType::REQUEST
     uint32_t touristId;
     uint32_t touristAge;
     TicketType requestedType;
     bool requestVip; // Request VIP status if eligible
 
-    TicketRequest() : mtype{CashierMsgType::REQUEST},
-                      touristId{0},
+    TicketRequest() : touristId{0},
                       touristAge{0},
                       requestedType{TicketType::SINGLE_USE},
                       requestVip{false} {
@@ -43,8 +41,7 @@ struct TicketResponse {
     time_t validUntil;
     char message[128];
 
-    TicketResponse() :
-                       touristId{0},
+    TicketResponse() : touristId{0},
                        success{false},
                        ticketId{0},
                        ticketType{TicketType::SINGLE_USE},
