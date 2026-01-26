@@ -5,12 +5,21 @@
 #include "ProcessSpawner.hpp"
 
 namespace SignalHelper {
-    inline constexpr auto tag = "IpcManager";
+    inline constexpr auto tag = "SignalHelper";
 
+    // Alias for backward compatibility
     struct Flags {
         volatile sig_atomic_t emergency{0};
         volatile sig_atomic_t resume{0};
         volatile sig_atomic_t exit{0};
+    };
+    using SignalFlags = Flags;
+
+    // Mode enum for different process types
+    enum class Mode {
+        BASIC,      // Only SIGTERM/SIGINT
+        WORKER,     // All signals including SIGUSR1/SIGUSR2
+        TOURIST     // All signals including SIGUSR1/SIGUSR2
     };
 
     namespace detail {
@@ -31,7 +40,8 @@ namespace SignalHelper {
         }
     }
 
-    inline void setup(Flags &flags, const bool handleUserSignals = false) {
+    // Original setup function (bool version)
+    inline void setup(Flags &flags, const bool handleUserSignals) {
         detail::g_flags = &flags;
 
         struct sigaction sa{};
@@ -49,7 +59,30 @@ namespace SignalHelper {
         Logger::debug(tag, "setup done, userSignals=%d", handleUserSignals);
     }
 
+    // Mode-based setup function
+    inline void setup(Flags &flags, Mode mode) {
+        bool handleUserSignals = (mode == Mode::WORKER || mode == Mode::TOURIST);
+        setup(flags, handleUserSignals);
+    }
+
     inline void ignoreChildren() {
         signal(SIGCHLD, SIG_IGN);
+    }
+
+    // Helper functions for checking signal states
+    inline bool shouldExit(const Flags &flags) {
+        return flags.exit != 0;
+    }
+
+    inline bool isEmergency(const Flags &flags) {
+        return flags.emergency != 0;
+    }
+
+    inline bool isResumeRequested(const Flags &flags) {
+        return flags.resume != 0;
+    }
+
+    inline void clearFlag(volatile sig_atomic_t &flag) {
+        flag = 0;
     }
 }

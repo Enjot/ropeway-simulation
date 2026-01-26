@@ -3,10 +3,9 @@
 #include <cstdint>
 #include <vector>
 #include <iostream>
-#include "../ipc/core/Semaphore.hpp"
-#include "ipc/SharedMemory.hpp"
+#include "ipc/core/Semaphore.hpp"
+#include "ipc/core/SharedMemory.hpp"
 #include "ipc/RopewaySystemState.hpp"
-#include "../ipc/core/Semaphore.hpp"
 #include "structures/Tourist.hpp"
 #include "structures/Chair.hpp"
 #include "../Config.hpp"
@@ -94,7 +93,7 @@ struct PassengerGroup {
 
 /**
  * Ride gate logic - handles boarding onto chairs
- * - 3 ride gates controlled by Worker1
+ * - 3 ride gates controlled by LowerWorker
  * - Child supervision enforcement
  * - Chair slot allocation
  */

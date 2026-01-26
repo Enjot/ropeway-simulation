@@ -17,7 +17,7 @@ struct TicketRequest {
     uint32_t touristId;
     uint32_t touristAge;
     TicketType requestedType;
-    bool requestVip; // Request VIP status if eligible
+    bool requestVip;
 
     TicketRequest() : touristId{0},
                       touristAge{0},

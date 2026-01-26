@@ -6,6 +6,7 @@
 #include <optional>
 
 #include "utils/Logger.hpp"
+#include "IpcException.hpp"
 
 template<typename T>
 class MessageQueue {
@@ -27,12 +28,15 @@ public:
         }
     }
 
+    // Convenience constructor for child processes
+    MessageQueue(const key_t key, bool /*unused*/) : MessageQueue(key, "MessageQueue") {}
+
     ~MessageQueue() = default;
 
     MessageQueue(const MessageQueue &) = delete;
-
     MessageQueue &operator=(const MessageQueue &) = delete;
 
+    // Send with explicit type
     void send(const T &message, const long type, const int32_t flags = 0) const {
         Wrapper wrapper{};
         wrapper.mtype = type;
@@ -43,12 +47,26 @@ public:
         }
     }
 
+    // Convenience send that returns bool (for process code compatibility)
+    bool send(const T &message, const long type) {
+        Wrapper wrapper{};
+        wrapper.mtype = type;
+        wrapper.message = message;
+        return msgsnd(msgId_, &wrapper, sizeof(T), 0) != -1;
+    }
+
+    // Blocking receive
     std::optional<T> receive(const long type, const int32_t flags = 0) {
         Wrapper wrapper{};
         if (msgrcv(msgId_, &wrapper, sizeof(T), type, flags) == -1) {
             return std::nullopt;
         }
         return wrapper.message;
+    }
+
+    // Non-blocking receive
+    std::optional<T> tryReceive(const long type) {
+        return receive(type, IPC_NOWAIT);
     }
 
     void destroy() const {

@@ -129,6 +129,27 @@ public:
     }
 
     /**
+     * @brief Non-blocking wait (decrement) on a semaphore.
+     * Returns immediately if semaphore is not available.
+     * @param semIndex The index of the semaphore.
+     * @param useUndo Whether to use SEM_UNDO for automatic cleanup.
+     * @return true if semaphore was acquired, false otherwise.
+     */
+    bool tryWait(const uint8_t semIndex, const bool useUndo = true) const {
+        sembuf operation{};
+        operation.sem_num = semIndex;
+        operation.sem_op = -1;
+        operation.sem_flg = IPC_NOWAIT | (useUndo ? SEM_UNDO : 0);
+
+        if (semop(semId_, &operation, 1) == -1) {
+            if (errno == EAGAIN) return false;  // Would block
+            if (errno == EINTR) return false;   // Interrupted
+            throw ipc_exception("Semaphore tryWait failed");
+        }
+        return true;
+    }
+
+    /**
      * @brief Posts (increments) semaphore.
      * Increments the semaphore value, potentially unblocking other processes.
      * @param semIndex The index of the semaphore to post to.

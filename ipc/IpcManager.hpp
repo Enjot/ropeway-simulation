@@ -89,11 +89,12 @@ private:
     MessageQueue<WorkerMessage> workerQueue_;
     MessageQueue<TicketRequest> cashierQueue_;
 
-    void cleanup() const {
-        shm_.destroy();
-        sem_.destroy();
-        workerQueue_.destroy();
-        cashierQueue_.destroy();
+    void cleanup() const noexcept {
+        // SharedMemory destructor handles its own cleanup (isOwner_)
+        // Semaphore and MessageQueue destructors are default, so we must destroy manually
+        try { sem_.destroy(); } catch (...) { Logger::debug(tag_, "sem destroy failed"); }
+        try { workerQueue_.destroy(); } catch (...) { Logger::debug(tag_, "workerQueue destroy failed"); }
+        try { cashierQueue_.destroy(); } catch (...) { Logger::debug(tag_, "cashierQueue destroy failed"); }
         Logger::debug(tag_, "cleanup done");
     }
 };

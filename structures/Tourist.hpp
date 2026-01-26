@@ -3,6 +3,7 @@
 #include "enums/TouristType.hpp"
 #include "enums/TrailDifficulty.hpp"
 #include "../Config.hpp"
+#include <ctime>
 #include "enums/TouristState.hpp"
 
 
@@ -11,27 +12,27 @@
  */
 struct Tourist {
     uint32_t id;
-    pid_t pid; // Process ID when spawned
+    pid_t pid;
     uint32_t age;
     TouristType type;
     TouristState state;
     bool isVip;
-    bool wantsToRide; // Some tourists just walk around
+    bool wantsToRide;
 
     // Ticket information
     uint32_t ticketId;
     bool hasTicket;
 
-    // Supervision (for children under 8)
-    int32_t guardianId; // ID of adult guardian (-1 if none/not needed)
-    uint32_t dependentCount; // Number of children this adult is supervising
-    int32_t dependentIds[Config::Gate::MAX_CHILDREN_PER_ADULT]; // IDs of supervised children
+    // Supervision
+    int32_t guardianId;
+    uint32_t dependentCount;
+    int32_t dependentIds[Config::Gate::MAX_CHILDREN_PER_ADULT];
 
-    // Cyclist specific
+    // Cyclist trails
     TrailDifficulty preferredTrail;
     uint32_t ridesCompleted;
 
-    // Timing
+    // Reporting
     time_t arrivalTime;
     time_t lastRideTime;
 
@@ -68,43 +69,6 @@ struct Tourist {
     }
 
     /**
-     * Check if tourist is a senior (65+)
-     */
-    [[nodiscard]] constexpr bool isSenior() const noexcept {
-        return age >= Config::Age::SENIOR_AGE_FROM;
-    }
-
-    /**
-     * Check if tourist qualifies for child discount (under 10)
-     */
-    [[nodiscard]] constexpr bool hasChildDiscount() const noexcept {
-        return age < Config::Discount::CHILD_DISCOUNT_AGE;
-    }
-
-    /**
-     * Check if tourist qualifies for any discount
-     */
-    [[nodiscard]] constexpr bool hasDiscount() const noexcept {
-        return hasChildDiscount() || isSenior();
-    }
-
-    /**
-     * Get discount percentage (0.0 to 1.0)
-     */
-    [[nodiscard]] constexpr float getDiscountRate() const noexcept {
-        if (hasChildDiscount()) return Config::Discount::CHILD_DISCOUNT;
-        if (isSenior()) return Config::Discount::SENIOR_DISCOUNT;
-        return 0.0f;
-    }
-
-    /**
-     * Check if adult can take another dependent
-     */
-    [[nodiscard]] constexpr bool canTakeDependent() const noexcept {
-        return isAdult() && dependentCount < Config::Gate::MAX_CHILDREN_PER_ADULT;
-    }
-
-    /**
      * Get number of chair slots this tourist requires
      */
     [[nodiscard]] constexpr uint32_t getSlotCost() const noexcept {
@@ -113,9 +77,33 @@ struct Tourist {
                    : Config::Chair::PEDESTRIAN_SLOT_COST;
     }
 
-    /**
-     * Add a dependent child (returns true if successful)
-     */
+    // === PHASE 2: Discount calculations (uncomment when implementing cashier pricing) ===
+    /*
+    [[nodiscard]] constexpr bool isSenior() const noexcept {
+        return age >= Config::Age::SENIOR_AGE_FROM;
+    }
+
+    [[nodiscard]] constexpr bool hasChildDiscount() const noexcept {
+        return age < Config::Discount::CHILD_DISCOUNT_AGE;
+    }
+
+    [[nodiscard]] constexpr bool hasDiscount() const noexcept {
+        return hasChildDiscount() || isSenior();
+    }
+
+    [[nodiscard]] constexpr float getDiscountRate() const noexcept {
+        if (hasChildDiscount()) return Config::Discount::CHILD_DISCOUNT;
+        if (isSenior()) return Config::Discount::SENIOR_DISCOUNT;
+        return 0.0f;
+    }
+    */
+
+    // === PHASE 2: Guardian management (uncomment when implementing child supervision) ===
+    /*
+    [[nodiscard]] constexpr bool canTakeDependent() const noexcept {
+        return isAdult() && dependentCount < Config::Gate::MAX_CHILDREN_PER_ADULT;
+    }
+
     bool addDependent(int32_t childId) {
         if (!canTakeDependent()) return false;
         dependentIds[dependentCount] = childId;
@@ -123,13 +111,9 @@ struct Tourist {
         return true;
     }
 
-    /**
-     * Remove a dependent child
-     */
     bool removeDependent(int32_t childId) {
         for (uint32_t i = 0; i < dependentCount; ++i) {
             if (dependentIds[i] == childId) {
-                // Shift remaining dependents
                 for (uint32_t j = i; j < dependentCount - 1; ++j) {
                     dependentIds[j] = dependentIds[j + 1];
                 }
@@ -140,6 +124,7 @@ struct Tourist {
         }
         return false;
     }
+    */
 };
 
 /**
@@ -152,9 +137,9 @@ struct TouristSpawnData {
     TouristType type;
     bool isVip;
     bool wantsToRide;
-    int32_t guardianId;
-    TrailDifficulty preferredTrail;
-    key_t shmKey; // Shared memory key for system state
-    key_t semKey; // Semaphore key
-    key_t msgKey; // Message queue key
+    // int32_t guardianId;        // PHASE 2
+    // TrailDifficulty preferredTrail;  // PHASE 2
+    key_t shmKey;
+    key_t semKey;
+    key_t msgKey;
 };

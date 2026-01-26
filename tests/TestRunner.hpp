@@ -65,15 +65,15 @@ public:
                 ipc.shmKey(), ipc.semKey(), ipc.cashierMsgKey());
             ipc.semaphores().wait(Semaphore::Index::CASHIER_READY);
 
-            pid_t worker1Pid = ProcessSpawner::spawnWithKeys("worker1_process",
+            pid_t lowerWorkerPid = ProcessSpawner::spawnWithKeys("lower_worker_process",
                 ipc.shmKey(), ipc.semKey(), ipc.msgKey());
-            pid_t worker2Pid = ProcessSpawner::spawnWithKeys("worker2_process",
+            pid_t upperWorkerPid = ProcessSpawner::spawnWithKeys("upper_worker_process",
                 ipc.shmKey(), ipc.semKey(), ipc.msgKey());
 
             {
                 Semaphore::ScopedLock lock(ipc.semaphores(), Semaphore::Index::SHARED_MEMORY);
-                ipc.state()->core.worker1Pid = worker1Pid;
-                ipc.state()->core.worker2Pid = worker2Pid;
+                ipc.state()->core.lowerWorkerPid = lowerWorkerPid;
+                ipc.state()->core.upperWorkerPid = upperWorkerPid;
             }
             ipc.semaphores().wait(Semaphore::Index::LOWER_WORKER_READY);
             ipc.semaphores().wait(Semaphore::Index::UPPER_WORKER_READY);
@@ -89,11 +89,11 @@ public:
                 }
             }
 
-            result = runSimulationLoop(scenario, ipc, worker1Pid);
+            result = runSimulationLoop(scenario, ipc, lowerWorkerPid);
 
             ProcessSpawner::terminate(cashierPid, "Cashier");
-            ProcessSpawner::terminate(worker1Pid, "Worker1");
-            ProcessSpawner::terminate(worker2Pid, "Worker2");
+            ProcessSpawner::terminate(lowerWorkerPid, "LowerWorker");
+            ProcessSpawner::terminate(upperWorkerPid, "UpperWorker");
             ProcessSpawner::terminateAll(touristPids);
 
             // Wait for ALL child processes to terminate (blocking)
@@ -141,7 +141,7 @@ private:
         });
     }
 
-    TestResult runSimulationLoop(const TestScenario& scenario, IpcManager& ipc, pid_t worker1Pid) {
+    TestResult runSimulationLoop(const TestScenario& scenario, IpcManager& ipc, pid_t lowerWorkerPid) {
         TestResult result;
         result.testName = scenario.name;
 
@@ -179,8 +179,8 @@ private:
             if (scenario.emergencyStopAtSec > 0 &&
                 elapsed >= scenario.emergencyStopAtSec && !emergencyTriggered) {
                 std::cout << "[Test] >>> TRIGGERING EMERGENCY STOP <<<\n";
-                if (worker1Pid > 0) {
-                    kill(worker1Pid, SIGUSR1);
+                if (lowerWorkerPid > 0) {
+                    kill(lowerWorkerPid, SIGUSR1);
                 }
                 emergencyTriggered = true;
             }
@@ -188,8 +188,8 @@ private:
             if (scenario.resumeAtSec > 0 &&
                 elapsed >= scenario.resumeAtSec && emergencyTriggered && !resumeTriggered) {
                 std::cout << "[Test] >>> TRIGGERING RESUME <<<\n";
-                if (worker1Pid > 0) {
-                    kill(worker1Pid, SIGUSR2);
+                if (lowerWorkerPid > 0) {
+                    kill(lowerWorkerPid, SIGUSR2);
                 }
                 resumeTriggered = true;
             }

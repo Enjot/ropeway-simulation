@@ -77,6 +77,7 @@ namespace ArgumentParser {
         bool isVip;
         bool wantsToRide;
         int32_t guardianId;
+        uint32_t numChildren;  // Number of children this adult will spawn (0-2)
         int trail;
         key_t shmKey;
         key_t semKey;
@@ -109,8 +110,8 @@ namespace ArgumentParser {
     }
 
     inline bool parseTouristArgs(int argc, char* argv[], TouristArgs& args) {
-        if (argc != 12) {
-            detail::usage(argv[0], "<id> <age> <type> <isVip> <wantsToRide> <guardianId> <trail> <shmKey> <semKey> <msgKey> <cashierMsgKey>");
+        if (argc != 13) {
+            detail::usage(argv[0], "<id> <age> <type> <isVip> <wantsToRide> <guardianId> <numChildren> <trail> <shmKey> <semKey> <msgKey> <cashierMsgKey>");
             return false;
         }
         if (!parseUint32(argv[1], args.id))            { detail::err("Invalid id"); return false; }
@@ -119,11 +120,12 @@ namespace ArgumentParser {
         if (!parseBool(argv[4], args.isVip))           { detail::err("Invalid isVip (0-1)"); return false; }
         if (!parseBool(argv[5], args.wantsToRide))     { detail::err("Invalid wantsToRide (0-1)"); return false; }
         if (!parseInt32(argv[6], args.guardianId))     { detail::err("Invalid guardianId"); return false; }
-        if (!parseEnum(argv[7], 0, 2, args.trail))     { detail::err("Invalid trail (0-2)"); return false; }
-        if (!parseKeyT(argv[8], args.shmKey))          { detail::err("Invalid shmKey"); return false; }
-        if (!parseKeyT(argv[9], args.semKey))          { detail::err("Invalid semKey"); return false; }
-        if (!parseKeyT(argv[10], args.msgKey))         { detail::err("Invalid msgKey"); return false; }
-        if (!parseKeyT(argv[11], args.cashierMsgKey))  { detail::err("Invalid cashierMsgKey"); return false; }
+        if (!parseUint32(argv[7], args.numChildren))   { detail::err("Invalid numChildren"); return false; }
+        if (!parseEnum(argv[8], 0, 2, args.trail))     { detail::err("Invalid trail (0-2)"); return false; }
+        if (!parseKeyT(argv[9], args.shmKey))          { detail::err("Invalid shmKey"); return false; }
+        if (!parseKeyT(argv[10], args.semKey))         { detail::err("Invalid semKey"); return false; }
+        if (!parseKeyT(argv[11], args.msgKey))         { detail::err("Invalid msgKey"); return false; }
+        if (!parseKeyT(argv[12], args.cashierMsgKey))  { detail::err("Invalid cashierMsgKey"); return false; }
         return true;
     }
 

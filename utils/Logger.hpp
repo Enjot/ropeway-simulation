@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <cstdio>
 #include <cstring>
+#include <cerrno>
 
 #include "../Config.hpp"
 
@@ -55,6 +56,20 @@ namespace Logger {
     }
 
     inline void pError(const char *message) { perror(message); }
+
+    // perror with tag (prints errno message)
+    inline void perror(const char *tag, const char *message) {
+        if constexpr (Config::Logging::IS_ERROR_ENABLED) {
+            detail::log(Level::ERROR, tag, "%s: %s", message, strerror(errno));
+        }
+    }
+
+    // State change logging
+    inline void stateChange(const char *tag, const char *from, const char *to) {
+        if constexpr (Config::Logging::IS_INFO_ENABLED) {
+            detail::log(Level::INFO, tag, "%s -> %s", from, to);
+        }
+    }
 
     inline void separator(char ch = '-', int count = 60) {
         char buf[128];

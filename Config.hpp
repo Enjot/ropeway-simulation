@@ -19,7 +19,7 @@ namespace Config {
     }
 
     namespace Simulation {
-        constexpr uint32_t NUM_TOURISTS{100};
+        constexpr uint32_t NUM_TOURISTS{10};
         constexpr uint32_t STATION_CAPACITY{20};
 
         constexpr uint32_t OPENING_HOUR{8};
@@ -77,7 +77,8 @@ namespace Config {
     }
 
     namespace Logging {
-        constexpr bool IS_DEBUG_ENABLED{true};
+        // Set to false to hide technical/internal logs
+        constexpr bool IS_DEBUG_ENABLED{false};
         constexpr bool IS_INFO_ENABLED{true};
         constexpr bool IS_WARN_ENABLED{true};
         constexpr bool IS_ERROR_ENABLED{true};

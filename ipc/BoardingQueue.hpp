@@ -6,12 +6,12 @@
 
 /**
  * Boarding queue structures for chair assignment.
- * Owned and managed by Worker1 (lower station controller).
+ * Owned and managed by LowerWorker (lower station controller).
  *
  * Flow:
  * 1. Tourist enters station -> adds BoardingQueueEntry
- * 2. Worker1 pairs children with guardians
- * 3. Worker1 assigns tourists to chairs (sets assignedChairId, readyToBoard)
+ * 2. LowerWorker pairs children with guardians
+ * 3. LowerWorker assigns tourists to chairs (sets assignedChairId, readyToBoard)
  * 4. Tourist boards chair -> removed from queue
  */
 
@@ -31,7 +31,7 @@ struct BoardingQueueEntry {
     bool isAdult;               // True if can supervise children
     uint32_t dependentCount;    // Children currently assigned to this adult
 
-    // Chair assignment (set by Worker1)
+    // Chair assignment (set by LowerWorker)
     int32_t assignedChairId;    // Assigned chair ID (-1 if waiting)
     bool readyToBoard;          // True when group is ready to board
 

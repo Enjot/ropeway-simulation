@@ -3,15 +3,17 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <cerrno>
-#include <cstdio>
 
 #include "IpcException.hpp"
-#include "Simulation.hpp"
 #include "utils/Logger.hpp"
 
 template<typename T>
 class SharedMemory {
 public:
+    // Convenience constructor for child processes (always attaches, never creates)
+    SharedMemory(const key_t key, bool /*unused*/)
+        : SharedMemory(attach(key)) {}
+
     static SharedMemory create(const key_t key) {
         int id = shmget(key, sizeof(T), IPC_CREAT | IPC_EXCL | kPermissions);
         if (id == -1 && errno == EEXIST) {

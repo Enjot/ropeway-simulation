@@ -30,8 +30,8 @@ struct RopewayCoreState {
     uint32_t touristsOnPlatform;      // On chairs, in transit
     uint32_t totalRidesToday;         // Cumulative ride count
 
-    pid_t worker1Pid;  // Lower station controller
-    pid_t worker2Pid;  // Upper station controller
+    pid_t lowerWorkerPid;  // Lower station controller
+    pid_t upperWorkerPid;  // Upper station controller
 
     RopewayCoreState()
         : state{RopewayState::STOPPED},
@@ -41,15 +41,15 @@ struct RopewayCoreState {
           touristsInLowerStation{0},
           touristsOnPlatform{0},
           totalRidesToday{0},
-          worker1Pid{0},
-          worker2Pid{0} {}
+          lowerWorkerPid{0},
+          upperWorkerPid{0} {}
 };
 
 /**
  * Chair management pool.
  * Contains all chairs and the boarding queue.
  *
- * OWNERSHIP: Worker1 manages assignments; tourists update on board/disembark.
+ * OWNERSHIP: LowerWorker manages assignments; tourists update on board/disembark.
  */
 struct ChairPool {
     Chair chairs[Config::Chair::QUANTITY];  // All 72 chairs
@@ -71,14 +71,16 @@ struct ChairPool {
 struct SimulationStatistics {
 
     DailyStatistics dailyStats;
-    TouristRideRecord touristRecords[Config::Simulation::NUM_TOURISTS];
+    TouristRideRecord touristRecords[Config::Simulation::NUM_TOURISTS * 3];  // Extra space for children
     uint32_t touristRecordCount;
+    uint32_t nextTouristId;  // Counter for generating unique tourist IDs (for spawned children)
     GatePassageLog gateLog;
 
     SimulationStatistics()
         : dailyStats{},
           touristRecords{},
           touristRecordCount{0},
+          nextTouristId{0},
           gateLog{} {}
 };
 
@@ -99,8 +101,8 @@ struct SimulationStatistics {
  *
  * OWNERSHIP/RESPONSIBILITY:
  * - Main orchestrator: Creates and initializes, sets opening/closing times
- * - Worker1 (lower station): Manages chairPool.boardingQueue, assigns chairs
- * - Worker2 (upper station): Monitors arrivals at top
+ * - LowerWorker (lower station): Manages chairPool.boardingQueue, assigns chairs
+ * - UpperWorker (upper station): Monitors arrivals at top
  * - Cashier: Reads core.acceptingNewTourists flag
  * - Tourists: Update counters, register for tracking, log gate passages
  */
