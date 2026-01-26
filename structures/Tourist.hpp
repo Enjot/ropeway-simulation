@@ -2,6 +2,7 @@
 
 #include "enums/TouristType.hpp"
 #include "enums/TrailDifficulty.hpp"
+#include "enums/TicketName.hpp"
 #include "../Config.hpp"
 #include <ctime>
 #include "enums/TouristState.hpp"
@@ -22,6 +23,8 @@ struct Tourist {
     // Ticket information
     uint32_t ticketId;
     bool hasTicket;
+    TicketType ticketType;
+    time_t ticketValidUntil;
 
     // Supervision
     int32_t guardianId;
@@ -45,6 +48,8 @@ struct Tourist {
                 wantsToRide{true},
                 ticketId{0},
                 hasTicket{false},
+                ticketType{TicketType::SINGLE_USE},
+                ticketValidUntil{0},
                 guardianId{-1},
                 dependentCount{0},
                 dependentIds{-1, -1},
@@ -52,6 +57,22 @@ struct Tourist {
                 ridesCompleted{0},
                 arrivalTime{0},
                 lastRideTime{0} {
+    }
+
+    /**
+     * Check if ticket is still valid (for time-based tickets)
+     */
+    [[nodiscard]] bool isTicketValid() const noexcept {
+        if (!hasTicket) return false;
+        if (ticketType == TicketType::SINGLE_USE && ridesCompleted > 0) return false;
+        return time(nullptr) < ticketValidUntil;
+    }
+
+    /**
+     * Check if ticket allows multiple rides
+     */
+    [[nodiscard]] constexpr bool canRideAgain() const noexcept {
+        return ticketType != TicketType::SINGLE_USE;
     }
 
     /**

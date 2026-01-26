@@ -77,7 +77,7 @@ namespace ProcessSpawner {
     }
 
     /**
-     * Spawn a process with three IPC keys (common pattern for workers/cashier).
+     * Spawn a process with three IPC keys (common pattern for cashier).
      * Convenience wrapper around spawn().
      */
     inline pid_t spawnWithKeys(const char *processName, const key_t key1, const key_t key2, const key_t key3) {
@@ -85,6 +85,19 @@ namespace ProcessSpawner {
                          std::to_string(key1),
                          std::to_string(key2),
                          std::to_string(key3)
+                     });
+    }
+
+    /**
+     * Spawn a process with four IPC keys (common pattern for workers).
+     * Convenience wrapper around spawn().
+     */
+    inline pid_t spawnWithKeys(const char *processName, const key_t key1, const key_t key2, const key_t key3, const key_t key4) {
+        return spawn(processName, {
+                         std::to_string(key1),
+                         std::to_string(key2),
+                         std::to_string(key3),
+                         std::to_string(key4)
                      });
     }
 

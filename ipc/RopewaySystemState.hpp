@@ -153,15 +153,18 @@ struct RopewaySystemState {
 
     /**
      * Log a gate passage and update tourist statistics.
+     * @param simTimeSeconds Simulated time as seconds since midnight
      */
     void logGatePassage(uint32_t touristId, uint32_t ticketId,
-                        GateType gateType, uint32_t gateNumber, bool allowed) {
+                        GateType gateType, uint32_t gateNumber, bool allowed,
+                        uint32_t simTimeSeconds = 0) {
         GatePassage passage;
         passage.touristId = touristId;
         passage.ticketId = ticketId;
         passage.gateType = gateType;
         passage.gateNumber = gateNumber;
         passage.timestamp = time(nullptr);
+        passage.simTimeSeconds = simTimeSeconds;
         passage.wasAllowed = allowed;
         stats.gateLog.addEntry(passage);
 

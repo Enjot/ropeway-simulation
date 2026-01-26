@@ -44,6 +44,7 @@ public:
             UPPER_WORKER_READY,
             CHAIR_ASSIGNED,
             BOARDING_QUEUE_WORK,
+            ENTRY_QUEUE_WORK,
             TOTAL_SEMAPHORES
         };
 
@@ -60,6 +61,7 @@ public:
                 case UPPER_WORKER_READY: return "UPPER_WORKER_READY";
                 case CHAIR_ASSIGNED: return "CHAIR_ASSIGNED";
                 case BOARDING_QUEUE_WORK: return "BOARDING_QUEUE_WORK";
+                case ENTRY_QUEUE_WORK: return "ENTRY_QUEUE_WORK";
                 default: return "UNKNOWN_SEMAPHORE";
             }
         }

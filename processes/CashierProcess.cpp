@@ -27,6 +27,12 @@ public:
           responseQueue_{args.cashierMsgKey, "CashierResp"},
           nextTicketId_{1} {
 
+        // Set simulation start time for logger
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+            Logger::setSimulationStartTime(shm_->core.openingTime);
+        }
+
         Logger::info(TAG, "Started (PID: %d)", getpid());
 
         // Signal readiness
@@ -45,7 +51,7 @@ public:
             processRequest(*request);
         }
 
-        Logger::info(TAG, "Shutting down");
+        Logger::warn(TAG, "Shutting down");
     }
 
 private:
@@ -88,11 +94,30 @@ private:
         response.price = basePrice * (1.0 - discount);
         response.discount = discount;
         response.validFrom = time(nullptr);
-        response.validUntil = response.validFrom + 24 * 3600;
+
+        // Set validity based on ticket type
+        switch (request.requestedType) {
+            case TicketType::SINGLE_USE:
+                response.validUntil = response.validFrom + 24 * 3600; // Valid all day
+                break;
+            case TicketType::TIME_TK1:
+                response.validUntil = response.validFrom + Config::Ticket::TK1_DURATION_SEC;
+                break;
+            case TicketType::TIME_TK2:
+                response.validUntil = response.validFrom + Config::Ticket::TK2_DURATION_SEC;
+                break;
+            case TicketType::TIME_TK3:
+                response.validUntil = response.validFrom + Config::Ticket::TK3_DURATION_SEC;
+                break;
+            case TicketType::DAILY:
+                response.validUntil = response.validFrom + Config::Ticket::DAILY_DURATION_SEC;
+                break;
+        }
         strcpy(response.message, "Ticket issued");
 
         sendResponse(response, request.touristId);
-        Logger::info(TAG, "Sold ticket #%u to Tourist %u", response.ticketId, request.touristId);
+        Logger::info(TAG, "Sold %s ticket #%u to Tourist %u",
+                     toString(response.ticketType), response.ticketId, request.touristId);
     }
 
     void sendResponse(const TicketResponse& response, uint32_t touristId) {

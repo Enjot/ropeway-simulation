@@ -54,6 +54,9 @@ private:
         const time_t endTime = startTime_ + Config::Simulation::DURATION_US / Config::Time::ONE_SECOND_US;
         ipc_->initState(startTime_, endTime);
 
+        // Set simulation start time for logger
+        Logger::setSimulationStartTime(startTime_);
+
         Logger::debug(tag_, "Spawning processes...");
         spawnWorkers();
         spawnCashier();
@@ -62,9 +65,9 @@ private:
 
     void spawnWorkers() {
         lowerWorkerPid_ = ProcessSpawner::spawnWithKeys("lower_worker_process",
-            ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey());
+            ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey(), ipc_->entryGateMsgKey());
         upperWorkerPid_ = ProcessSpawner::spawnWithKeys("upper_worker_process",
-            ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey());
+            ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey(), ipc_->entryGateMsgKey());
         Logger::debug(tag_, "Workers spawned: %d, %d", lowerWorkerPid_, upperWorkerPid_);
     }
 
@@ -168,7 +171,8 @@ private:
                 std::to_string(ipc_->shmKey()),
                 std::to_string(ipc_->semKey()),
                 std::to_string(ipc_->workerMsgKey()),
-                std::to_string(ipc_->cashierMsgKey())
+                std::to_string(ipc_->cashierMsgKey()),
+                std::to_string(ipc_->entryGateMsgKey())
             });
 
             if (pid > 0) touristPids_.push_back(pid);

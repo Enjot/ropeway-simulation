@@ -19,12 +19,14 @@ struct TouristTestConfig {
     int32_t guardianId;
     TrailDifficulty trail;
     uint32_t spawnDelayMs;  // Delay before spawning this tourist
+    uint32_t numChildren;   // Number of children this adult will spawn (0-2)
 
     TouristTestConfig(uint32_t id_, uint32_t age_, TouristType type_ = TouristType::PEDESTRIAN,
                       bool vip_ = false, bool ride_ = true, int32_t guardian_ = -1,
-                      TrailDifficulty trail_ = TrailDifficulty::EASY, uint32_t delay_ = 100)
+                      TrailDifficulty trail_ = TrailDifficulty::EASY, uint32_t delay_ = 100,
+                      uint32_t numChildren_ = 0)
         : id{id_}, age{age_}, type{type_}, requestVip{vip_}, wantsToRide{ride_},
-          guardianId{guardian_}, trail{trail_}, spawnDelayMs{delay_} {}
+          guardianId{guardian_}, trail{trail_}, spawnDelayMs{delay_}, numChildren{numChildren_} {}
 };
 
 /**

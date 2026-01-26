@@ -32,6 +32,7 @@ public:
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             shm_->core.upperWorkerPid = getpid();
+            Logger::setSimulationStartTime(shm_->core.openingTime);
         }
 
         Logger::info(TAG, "Started (PID: %d)", getpid());
@@ -64,7 +65,7 @@ public:
             logStatus();
         }
 
-        Logger::info(TAG, "Shutting down");
+        Logger::warn(TAG, "Shutting down");
     }
 
 private:

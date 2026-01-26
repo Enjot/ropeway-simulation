@@ -8,6 +8,7 @@
 #include "ipc/core/MessageQueue.hpp"
 #include "ipc/RopewaySystemState.hpp"
 #include "ipc/message/WorkerMessage.hpp"
+#include "ipc/message/EntryGateMessage.hpp"
 #include "Config.hpp"
 #include "utils/SignalHelper.hpp"
 #include "utils/ArgumentParser.hpp"
@@ -27,11 +28,14 @@ public:
         : shm_{SharedMemory<RopewaySystemState>::attach(args.shmKey)},
           sem_{args.semKey},
           msgQueue_{args.msgKey, "WorkerMsg"},
+          entryRequestQueue_{args.entryGateMsgKey, "EntryReq"},
+          entryResponseQueue_{args.entryGateMsgKey, "EntryResp"},
           isEmergencyStopped_{false} {
 
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             shm_->core.lowerWorkerPid = getpid();
+            Logger::setSimulationStartTime(shm_->core.openingTime);
         }
 
         Logger::info(TAG, "Started (PID: %d)", getpid());
@@ -67,6 +71,13 @@ public:
                 continue;
             }
 
+            // Process entry queue (VIP priority via negative mtype)
+            if (sem_.tryWait(Semaphore::Index::ENTRY_QUEUE_WORK)) {
+                if (!g_signals.exit && !g_signals.emergency) {
+                    processEntryQueue();
+                }
+            }
+
             // Normal operation - wait for work
             // Use tryWait to periodically check for signals
             if (sem_.tryWait(Semaphore::Index::BOARDING_QUEUE_WORK)) {
@@ -78,7 +89,7 @@ public:
             logStatus();
         }
 
-        Logger::info(TAG, "Shutting down");
+        Logger::warn(TAG, "Shutting down");
     }
 
 private:
@@ -176,6 +187,59 @@ private:
             }
             lastLog = now;
         }
+    }
+
+    /**
+     * Process entry queue with VIP priority.
+     * Uses negative mtype to receive lowest type first (VIP = 1, Regular = 2).
+     */
+    void processEntryQueue() {
+        // Receive with negative mtype: gets lowest mtype first = VIP priority
+        auto request = entryRequestQueue_.tryReceive(EntryGateMsgType::PRIORITY_RECEIVE);
+        if (!request) {
+            return;
+        }
+
+        EntryGateResponse response;
+        response.touristId = request->touristId;
+
+        // Check if ropeway is accepting
+        bool accepting;
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+            accepting = shm_->core.acceptingNewTourists;
+        }
+
+        if (!accepting) {
+            response.allowed = false;
+            long responseType = EntryGateMsgType::RESPONSE_BASE + request->touristId;
+            entryResponseQueue_.send(response, responseType);
+            Logger::info(TAG, "Entry denied for Tourist %u: closed", request->touristId);
+            return;
+        }
+
+        // Try to acquire station capacity (non-blocking)
+        if (!sem_.tryWait(Semaphore::Index::STATION_CAPACITY)) {
+            // Station full, put request back in queue and try again later
+            // Preserve priority: VIP requests get lower mtype
+            long reqType = request->isVip ? EntryGateMsgType::VIP_REQUEST : EntryGateMsgType::REGULAR_REQUEST;
+            entryRequestQueue_.send(*request, reqType);
+            sem_.post(Semaphore::Index::ENTRY_QUEUE_WORK, false);
+            return;
+        }
+
+        // Station has capacity, allow entry
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+            shm_->core.touristsInLowerStation++;
+        }
+
+        response.allowed = true;
+        long responseType = EntryGateMsgType::RESPONSE_BASE + request->touristId;
+        entryResponseQueue_.send(response, responseType);
+
+        Logger::info(TAG, "Entry granted to Tourist %u%s",
+                     request->touristId, request->isVip ? " [VIP]" : "");
     }
 
     uint32_t getSlotCost(const BoardingQueueEntry& entry) {
@@ -313,7 +377,8 @@ private:
             }
         }
 
-        Logger::info(TAG, "Chair %d assigned to %u tourists", chairId, groupSize);
+        Logger::info(TAG, "Chair %d assigned to %u tourists (ChairsInUse: %u/%u)",
+                     chairId, groupSize, shm_->chairPool.chairsInUse, Config::Chair::MAX_CONCURRENT_IN_USE);
 
         for (uint32_t i = 0; i < groupSize; ++i) {
             sem_.post(Semaphore::Index::CHAIR_ASSIGNED, false);
@@ -323,6 +388,8 @@ private:
     SharedMemory<RopewaySystemState> shm_;
     Semaphore sem_;
     MessageQueue<WorkerMessage> msgQueue_;
+    MessageQueue<EntryGateRequest> entryRequestQueue_;
+    MessageQueue<EntryGateResponse> entryResponseQueue_;
     bool isEmergencyStopped_;
 };
 

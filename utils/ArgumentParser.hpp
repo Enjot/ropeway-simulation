@@ -62,6 +62,7 @@ namespace ArgumentParser {
         key_t shmKey;
         key_t semKey;
         key_t msgKey;
+        key_t entryGateMsgKey;
     };
 
     struct CashierArgs {
@@ -83,18 +84,20 @@ namespace ArgumentParser {
         key_t semKey;
         key_t msgKey;
         key_t cashierMsgKey;
+        key_t entryGateMsgKey;
     };
 
     // ==================== Parsers ====================
 
     inline bool parseWorkerArgs(int argc, char* argv[], WorkerArgs& args) {
-        if (argc != 4) {
-            detail::usage(argv[0], "<shmKey> <semKey> <msgKey>");
+        if (argc != 5) {
+            detail::usage(argv[0], "<shmKey> <semKey> <msgKey> <entryGateMsgKey>");
             return false;
         }
         if (!parseKeyT(argv[1], args.shmKey)) { detail::err("Invalid shmKey"); return false; }
         if (!parseKeyT(argv[2], args.semKey)) { detail::err("Invalid semKey"); return false; }
         if (!parseKeyT(argv[3], args.msgKey)) { detail::err("Invalid msgKey"); return false; }
+        if (!parseKeyT(argv[4], args.entryGateMsgKey)) { detail::err("Invalid entryGateMsgKey"); return false; }
         return true;
     }
 
@@ -110,8 +113,8 @@ namespace ArgumentParser {
     }
 
     inline bool parseTouristArgs(int argc, char* argv[], TouristArgs& args) {
-        if (argc != 13) {
-            detail::usage(argv[0], "<id> <age> <type> <isVip> <wantsToRide> <guardianId> <numChildren> <trail> <shmKey> <semKey> <msgKey> <cashierMsgKey>");
+        if (argc != 14) {
+            detail::usage(argv[0], "<id> <age> <type> <isVip> <wantsToRide> <guardianId> <numChildren> <trail> <shmKey> <semKey> <msgKey> <cashierMsgKey> <entryGateMsgKey>");
             return false;
         }
         if (!parseUint32(argv[1], args.id))            { detail::err("Invalid id"); return false; }
@@ -126,6 +129,7 @@ namespace ArgumentParser {
         if (!parseKeyT(argv[10], args.semKey))         { detail::err("Invalid semKey"); return false; }
         if (!parseKeyT(argv[11], args.msgKey))         { detail::err("Invalid msgKey"); return false; }
         if (!parseKeyT(argv[12], args.cashierMsgKey))  { detail::err("Invalid cashierMsgKey"); return false; }
+        if (!parseKeyT(argv[13], args.entryGateMsgKey)) { detail::err("Invalid entryGateMsgKey"); return false; }
         return true;
     }
 

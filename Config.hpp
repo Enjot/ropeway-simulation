@@ -63,7 +63,7 @@ namespace Config {
     }
 
     namespace Vip {
-        constexpr float VIP_CHANCE_PERCENTAGE{0.01};
+        constexpr float VIP_CHANCE_PERCENTAGE{0.01};  // 1% as per business requirements
     }
 
     namespace Ropeway {
@@ -82,5 +82,21 @@ namespace Config {
         constexpr bool IS_INFO_ENABLED{true};
         constexpr bool IS_WARN_ENABLED{true};
         constexpr bool IS_ERROR_ENABLED{true};
+    }
+
+    namespace Ticket {
+        // Time-based ticket durations (scaled for simulation)
+        // Real: Tk1=1h, Tk2=2h, Tk3=4h -> scaled to simulation time
+        constexpr uint32_t TK1_DURATION_SEC{1 * 3600 / Simulation::TIME_SCALE};  // ~6 sec in sim
+        constexpr uint32_t TK2_DURATION_SEC{2 * 3600 / Simulation::TIME_SCALE};  // ~12 sec in sim
+        constexpr uint32_t TK3_DURATION_SEC{4 * 3600 / Simulation::TIME_SCALE};  // ~24 sec in sim
+        constexpr uint32_t DAILY_DURATION_SEC{10 * 3600 / Simulation::TIME_SCALE}; // Full day
+
+        // Ticket type distribution (percentages)
+        constexpr float SINGLE_USE_CHANCE{0.40f};   // 40%
+        constexpr float TK1_CHANCE{0.20f};          // 20%
+        constexpr float TK2_CHANCE{0.15f};          // 15%
+        constexpr float TK3_CHANCE{0.15f};          // 15%
+        // Daily = remaining 10%
     }
 }

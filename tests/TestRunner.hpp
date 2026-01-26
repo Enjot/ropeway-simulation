@@ -17,10 +17,9 @@ namespace Test {
 
 class TestRunner {
 public:
-    static constexpr int KEY_OFFSET = 100;
-
-    TestRunner() : keyOffset_{KEY_OFFSET} {
-        SignalHelper::setup(signals_, SignalHelper::Mode::ORCHESTRATOR);
+    TestRunner() {
+        SignalHelper::setup(signals_, false);
+        SignalHelper::ignoreChildren();
     }
 
     std::vector<TestResult> runAllTests() {
@@ -49,13 +48,11 @@ public:
         result.testName = scenario.name;
 
         try {
-            IpcManager::cleanup(Config::Ipc::SHM_KEY_BASE, keyOffset_);
-
-            IpcManager ipc(Config::Ipc::SHM_KEY_BASE, true, keyOffset_);
-            ipc.initializeSemaphores(scenario.stationCapacity);
+            IpcManager ipc;
+            ipc.initSemaphores(scenario.stationCapacity);
 
             time_t startTime = time(nullptr);
-            ipc.initializeState(startTime, startTime + scenario.simulationDurationSec + 10);
+            ipc.initState(startTime, startTime + scenario.simulationDurationSec + 10);
 
             std::cout << "[Test] Station capacity N = " << scenario.stationCapacity << "\n";
             std::cout << "[Test] Simulation duration: " << scenario.simulationDurationSec << "s\n";
@@ -63,20 +60,20 @@ public:
 
             pid_t cashierPid = ProcessSpawner::spawnWithKeys("cashier_process",
                 ipc.shmKey(), ipc.semKey(), ipc.cashierMsgKey());
-            ipc.semaphores().wait(Semaphore::Index::CASHIER_READY);
+            ipc.sem().wait(Semaphore::Index::CASHIER_READY);
 
             pid_t lowerWorkerPid = ProcessSpawner::spawnWithKeys("lower_worker_process",
-                ipc.shmKey(), ipc.semKey(), ipc.msgKey());
+                ipc.shmKey(), ipc.semKey(), ipc.workerMsgKey());
             pid_t upperWorkerPid = ProcessSpawner::spawnWithKeys("upper_worker_process",
-                ipc.shmKey(), ipc.semKey(), ipc.msgKey());
+                ipc.shmKey(), ipc.semKey(), ipc.workerMsgKey());
 
             {
-                Semaphore::ScopedLock lock(ipc.semaphores(), Semaphore::Index::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(ipc.sem(), Semaphore::Index::SHARED_MEMORY);
                 ipc.state()->core.lowerWorkerPid = lowerWorkerPid;
                 ipc.state()->core.upperWorkerPid = upperWorkerPid;
             }
-            ipc.semaphores().wait(Semaphore::Index::LOWER_WORKER_READY);
-            ipc.semaphores().wait(Semaphore::Index::UPPER_WORKER_READY);
+            ipc.sem().wait(Semaphore::Index::LOWER_WORKER_READY);
+            ipc.sem().wait(Semaphore::Index::UPPER_WORKER_READY);
 
             std::cout << "[Test] Spawning " << scenario.tourists.size() << " tourists...\n";
 
@@ -97,10 +94,7 @@ public:
             ProcessSpawner::terminateAll(touristPids);
 
             // Wait for ALL child processes to terminate (blocking)
-            int status;
-            while (waitpid(-1, &status, 0) > 0) {
-                // Reap all children
-            }
+            while (waitpid(-1, nullptr, 0) > 0) {}
 
             result.zombieProcesses = TestValidator::checkForZombies();
             if (result.zombieProcesses > 0 && scenario.expectNoZombies) {
@@ -116,14 +110,12 @@ public:
             result.addFailure(std::string("EXCEPTION: ") + e.what());
         }
 
-        IpcManager::cleanup(Config::Ipc::SHM_KEY_BASE, keyOffset_);
         printTestResult(result);
         return result;
     }
 
 private:
-    int keyOffset_;
-    SignalHelper::SignalFlags signals_;
+    SignalHelper::Flags signals_;
 
     pid_t spawnTourist(const TouristTestConfig& t, IpcManager& ipc) {
         return ProcessSpawner::spawn("tourist_process", {
@@ -133,10 +125,11 @@ private:
             std::to_string(t.requestVip ? 1 : 0),
             std::to_string(t.wantsToRide ? 1 : 0),
             std::to_string(t.guardianId),
+            std::to_string(t.numChildren),
             std::to_string(static_cast<int>(t.trail)),
             std::to_string(ipc.shmKey()),
             std::to_string(ipc.semKey()),
-            std::to_string(ipc.msgKey()),
+            std::to_string(ipc.workerMsgKey()),
             std::to_string(ipc.cashierMsgKey())
         });
     }
@@ -157,7 +150,7 @@ private:
             time_t elapsed = time(nullptr) - startTime;
 
             {
-                Semaphore::ScopedLock lock(ipc.semaphores(), Semaphore::Index::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(ipc.sem(), Semaphore::Index::SHARED_MEMORY);
                 uint32_t currentCapacity = ipc.state()->core.touristsInLowerStation;
                 if (currentCapacity > maxObservedCapacity) {
                     maxObservedCapacity = currentCapacity;
@@ -203,7 +196,7 @@ private:
         }
 
         {
-            Semaphore::ScopedLock lock(ipc.semaphores(), Semaphore::Index::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(ipc.sem(), Semaphore::Index::SHARED_MEMORY);
             ipc.state()->stats.dailyStats.simulationEndTime = time(nullptr);
             result = TestValidator::validate(scenario, *ipc.state(), maxObservedCapacity);
         }
