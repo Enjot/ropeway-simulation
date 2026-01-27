@@ -22,11 +22,14 @@ set(COMMON_HEADERS
 )
 
 set(IPC_HEADERS
-        ipc/BoardingQueue.hpp
+        ipc/model/BoardingQueue.hpp
         ipc/message/CashierMessage.hpp
         ipc/core/MessageQueue.hpp
-        ipc/ReportingData.hpp
-        ipc/RopewaySystemState.hpp
+        ipc/model/ReportingData.hpp
+        ipc/model/SharedRopewayState.hpp
+        ipc/model/SharedOperationalState.hpp
+        ipc/model/SharedChairPoolState.hpp
+        ipc/model/SharedStatisticState.hpp
         ipc/core/SharedMemory.hpp
         ipc/message/WorkerMessage.hpp
         ipc/IpcManager.hpp
@@ -41,8 +44,7 @@ set(STRUCTURE_HEADERS
 )
 
 set(GATE_HEADERS
-        gates/EntryGate.hpp
-        gates/RideGate.hpp
+        ipc/message/EntryGateMessage.hpp
 )
 
 set(UTILS_HEADERS
@@ -70,7 +72,7 @@ set(ALL_HEADERS
 )
 
 # Tourist process (spawned via fork/exec)
-add_executable(tourist_process processes/Touristprocess.cpp ${ALL_HEADERS})
+add_executable(tourist_process processes/TouristProcess.cpp ${ALL_HEADERS})
 
 # LowerWorker process - Lower Station Controller (spawned via fork/exec)
 add_executable(lower_worker_process processes/LowerStationWorker.cpp ${ALL_HEADERS})
@@ -83,7 +85,7 @@ add_executable(cashier_process processes/CashierProcess.cpp ${ALL_HEADERS}
         ipc/core/IpcException.hpp)
 
 # Test runner - Automated test suite (Phase 10)
-add_executable(test_runner tests/testRunner.cpp ${ALL_HEADERS})
+add_executable(test_runner tests/TestRunner.cpp ${ALL_HEADERS})
 
 # Main executable - Manual simulation control
 add_executable(main main.cpp ${ALL_HEADERS})

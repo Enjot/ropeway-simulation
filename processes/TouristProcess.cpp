@@ -8,7 +8,7 @@
 #include "ipc/core/SharedMemory.hpp"
 #include "ipc/core/Semaphore.hpp"
 #include "ipc/core/MessageQueue.hpp"
-#include "ipc/RopewaySystemState.hpp"
+#include "../ipc/model/SharedRopewayState.hpp"
 #include "ipc/message/CashierMessage.hpp"
 #include "ipc/message/EntryGateMessage.hpp"
 #include "structures/Tourist.hpp"
@@ -30,7 +30,7 @@ namespace {
 class TouristProcess {
 public:
     TouristProcess(const ArgumentParser::TouristArgs &args)
-        : shm_{SharedMemory<RopewaySystemState>::attach(args.shmKey)},
+        : shm_{SharedMemory<SharedRopewayState>::attach(args.shmKey)},
           sem_{args.semKey},
           requestQueue_{args.cashierMsgKey, "CashierReq"},
           responseQueue_{args.cashierMsgKey, "CashierResp"},
@@ -52,8 +52,8 @@ public:
 
         // Set simulation start time for logger (read from shared memory)
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            simulationStartTime_ = shm_->core.openingTime;
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            simulationStartTime_ = shm_->operational.openingTime;
             Logger::setSimulationStartTime(simulationStartTime_);
         }
 
@@ -168,12 +168,10 @@ private:
     }
 
     void buyTicket() {
-        usleep(50000); // Small delay
-
         // Check if ropeway is accepting tourists
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            if (!shm_->core.acceptingNewTourists) {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            if (!shm_->operational.acceptingNewTourists) {
                 Logger::info(tag_, "Ropeway closed, leaving");
                 changeState(TouristState::FINISHED);
                 return;
@@ -215,7 +213,7 @@ private:
 
         // Register tourist for daily statistics tracking
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
             shm_->registerTourist(tourist_.id, tourist_.ticketId, tourist_.age,
                                   tourist_.type, tourist_.isVip, tourist_.guardianId);
 
@@ -266,7 +264,7 @@ private:
             // Get unique ID for child from shared memory
             uint32_t childId;
             {
-                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
                 childId = ++shm_->stats.nextTouristId;
             }
 
@@ -344,7 +342,7 @@ private:
             Logger::info(tag_, "Entry denied");
             // Log denied entry gate passage
             {
-                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
                 uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
                 shm_->logGatePassage(tourist_.id, tourist_.ticketId,
                                      GateType::ENTRY, 0, false, simTime);
@@ -355,7 +353,7 @@ private:
 
         // Log successful entry gate passage
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
             uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
             uint32_t gateNum = tourist_.id % Config::Gate::NUM_ENTRY_GATES;
             shm_->logGatePassage(tourist_.id, tourist_.ticketId,
@@ -369,7 +367,9 @@ private:
     void waitForChair() {
         // Add to boarding queue
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+            // Lock ordering: SHM_OPERATIONAL first, then SHM_CHAIRS (for touristsInLowerStation on error)
+            Semaphore::ScopedLock lockCore(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
             BoardingQueueEntry entry;
             entry.touristId = tourist_.id;
             entry.touristPid = tourist_.pid;
@@ -384,7 +384,7 @@ private:
 
             if (!shm_->chairPool.boardingQueue.addTourist(entry)) {
                 Logger::error(tag_, "Queue full");
-                shm_->core.touristsInLowerStation--;
+                shm_->operational.touristsInLowerStation--;
                 sem_.post(Semaphore::Index::STATION_CAPACITY, false);
                 changeState(TouristState::FINISHED);
                 return;
@@ -402,7 +402,10 @@ private:
 
             bool assigned = false;
             {
-                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+                // Lock ordering: SHM_OPERATIONAL, SHM_CHAIRS, SHM_STATS
+                Semaphore::ScopedLock lockCore(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
+                Semaphore::ScopedLock lockStats(sem_, Semaphore::Index::SHM_STATS);
 
                 int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
                 if (idx >= 0) {
@@ -410,7 +413,7 @@ private:
                     if (entry.readyToBoard && entry.assignedChairId >= 0) {
                         assignedChairId_ = entry.assignedChairId;
                         shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
-                        shm_->core.touristsInLowerStation--;
+                        shm_->operational.touristsInLowerStation--;
 
                         // Log ride gate passage
                         uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
@@ -446,8 +449,10 @@ private:
         usleep(Config::Chair::RIDE_DURATION_US);
 
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            shm_->core.totalRidesToday++;
+            // Lock ordering: SHM_OPERATIONAL first, then SHM_CHAIRS
+            Semaphore::ScopedLock lockCore(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
+            shm_->operational.totalRidesToday++;
 
             // Release chair
             if (assignedChairId_ >= 0 && static_cast<uint32_t>(assignedChairId_) < Config::Chair::QUANTITY) {
@@ -512,7 +517,7 @@ private:
 
         // Record completed ride in statistics
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
             shm_->recordRide(tourist_.id);
         }
 
@@ -534,7 +539,7 @@ private:
     }
 
     Tourist tourist_;
-    SharedMemory<RopewaySystemState> shm_;
+    SharedMemory<SharedRopewayState> shm_;
     Semaphore sem_;
     MessageQueue<TicketRequest> requestQueue_;
     MessageQueue<TicketResponse> responseQueue_;

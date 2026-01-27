@@ -6,7 +6,7 @@
 #include "ipc/core/SharedMemory.hpp"
 #include "ipc/core/Semaphore.hpp"
 #include "ipc/core/MessageQueue.hpp"
-#include "ipc/RopewaySystemState.hpp"
+#include "../ipc/model/SharedRopewayState.hpp"
 #include "ipc/message/CashierMessage.hpp"
 #include "Config.hpp"
 #include "utils/SignalHelper.hpp"
@@ -21,7 +21,7 @@ namespace {
 class CashierProcess {
 public:
     CashierProcess(const ArgumentParser::CashierArgs& args)
-        : shm_{SharedMemory<RopewaySystemState>::attach(args.shmKey)},
+        : shm_{SharedMemory<SharedRopewayState>::attach(args.shmKey)},
           sem_{args.semKey},
           requestQueue_{args.cashierMsgKey, "CashierReq"},
           responseQueue_{args.cashierMsgKey, "CashierResp"},
@@ -29,8 +29,8 @@ public:
 
         // Set simulation start time for logger
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            Logger::setSimulationStartTime(shm_->core.openingTime);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            Logger::setSimulationStartTime(shm_->operational.openingTime);
         }
 
         Logger::info(TAG, "Started (PID: %d)", getpid());
@@ -64,8 +64,8 @@ private:
         // Check if accepting
         bool accepting;
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            accepting = shm_->core.acceptingNewTourists;
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            accepting = shm_->operational.acceptingNewTourists;
         }
 
         if (!accepting) {
@@ -125,7 +125,7 @@ private:
         responseQueue_.send(response, responseType);
     }
 
-    SharedMemory<RopewaySystemState> shm_;
+    SharedMemory<SharedRopewayState> shm_;
     Semaphore sem_;
     MessageQueue<TicketRequest> requestQueue_;
     MessageQueue<TicketResponse> responseQueue_;

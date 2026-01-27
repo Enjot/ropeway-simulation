@@ -6,7 +6,7 @@
 #include "ipc/core/SharedMemory.hpp"
 #include "ipc/core/Semaphore.hpp"
 #include "ipc/core/MessageQueue.hpp"
-#include "ipc/RopewaySystemState.hpp"
+#include "../ipc/model/SharedRopewayState.hpp"
 #include "ipc/message/WorkerMessage.hpp"
 #include "ipc/message/EntryGateMessage.hpp"
 #include "Config.hpp"
@@ -25,7 +25,7 @@ public:
     static constexpr long MSG_TYPE_FROM_UPPER = 1;
 
     LowerWorkerProcess(const ArgumentParser::WorkerArgs& args)
-        : shm_{SharedMemory<RopewaySystemState>::attach(args.shmKey)},
+        : shm_{SharedMemory<SharedRopewayState>::attach(args.shmKey)},
           sem_{args.semKey},
           msgQueue_{args.msgKey, "WorkerMsg"},
           entryRequestQueue_{args.entryGateMsgKey, "EntryReq"},
@@ -33,9 +33,9 @@ public:
           isEmergencyStopped_{false} {
 
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            shm_->core.lowerWorkerPid = getpid();
-            Logger::setSimulationStartTime(shm_->core.openingTime);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            shm_->operational.lowerWorkerPid = getpid();
+            Logger::setSimulationStartTime(shm_->operational.openingTime);
         }
 
         Logger::info(TAG, "Started (PID: %d)", getpid());
@@ -61,8 +61,8 @@ public:
             // Check current state
             RopewayState currentState;
             {
-                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-                currentState = shm_->core.state;
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                currentState = shm_->operational.state;
             }
 
             if (currentState == RopewayState::EMERGENCY_STOP) {
@@ -95,8 +95,8 @@ private:
         Logger::warn(TAG, "!!! EMERGENCY STOP TRIGGERED !!!");
 
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            shm_->core.state = RopewayState::EMERGENCY_STOP;
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            shm_->operational.state = RopewayState::EMERGENCY_STOP;
         }
 
         isEmergencyStopped_ = true;
@@ -107,8 +107,8 @@ private:
         // Also send signal to UpperWorker
         pid_t upperWorkerPid;
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            upperWorkerPid = shm_->core.upperWorkerPid;
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            upperWorkerPid = shm_->operational.upperWorkerPid;
         }
         if (upperWorkerPid > 0) {
             kill(upperWorkerPid, SIGUSR1);
@@ -126,8 +126,8 @@ private:
         // Wake up UpperWorker with signal
         pid_t upperWorkerPid;
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            upperWorkerPid = shm_->core.upperWorkerPid;
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            upperWorkerPid = shm_->operational.upperWorkerPid;
         }
         if (upperWorkerPid > 0) {
             kill(upperWorkerPid, SIGUSR2);
@@ -141,8 +141,8 @@ private:
             Logger::info(TAG, "UpperWorker confirmed ready. Resuming operations!");
 
             {
-                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-                shm_->core.state = RopewayState::RUNNING;
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                shm_->operational.state = RopewayState::RUNNING;
             }
 
             isEmergencyStopped_ = false;
@@ -170,10 +170,12 @@ private:
             uint32_t queueCount, chairsInUse;
             RopewayState state;
             {
-                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+                // Lock ordering: SHM_OPERATIONAL first, then SHM_CHAIRS
+                Semaphore::ScopedLock lockCore(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
                 queueCount = shm_->chairPool.boardingQueue.count;
                 chairsInUse = shm_->chairPool.chairsInUse;
-                state = shm_->core.state;
+                state = shm_->operational.state;
             }
 
             if (state == RopewayState::EMERGENCY_STOP) {
@@ -207,8 +209,8 @@ private:
         // Check if ropeway is accepting
         bool accepting;
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            accepting = shm_->core.acceptingNewTourists;
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            accepting = shm_->operational.acceptingNewTourists;
         }
 
         if (!accepting) {
@@ -231,8 +233,8 @@ private:
 
         // Station has capacity, allow entry
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            shm_->core.touristsInLowerStation++;
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            shm_->operational.touristsInLowerStation++;
         }
 
         response.allowed = true;
@@ -267,10 +269,12 @@ private:
     }
 
     void processBoardingQueue() {
-        Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+        // Lock ordering: SHM_OPERATIONAL first, then SHM_CHAIRS
+        Semaphore::ScopedLock lockCore(sem_, Semaphore::Index::SHM_OPERATIONAL);
+        Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
 
         // Don't process during emergency
-        if (shm_->core.state == RopewayState::EMERGENCY_STOP) {
+        if (shm_->operational.state == RopewayState::EMERGENCY_STOP) {
             return;
         }
 
@@ -403,7 +407,7 @@ private:
         }
     }
 
-    SharedMemory<RopewaySystemState> shm_;
+    SharedMemory<SharedRopewayState> shm_;
     Semaphore sem_;
     MessageQueue<WorkerMessage> msgQueue_;
     MessageQueue<EntryGateRequest> entryRequestQueue_;

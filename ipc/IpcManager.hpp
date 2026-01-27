@@ -4,7 +4,7 @@
 #include "core/Semaphore.hpp"
 #include "core/MessageQueue.hpp"
 #include "core/IpcException.hpp"
-#include "RopewaySystemState.hpp"
+#include "model/SharedRopewayState.hpp"
 #include "message/WorkerMessage.hpp"
 #include "message/CashierMessage.hpp"
 #include "message/EntryGateMessage.hpp"
@@ -19,7 +19,7 @@ public:
           workerMsgKey_{ftok(".", 'W')},
           cashierMsgKey_{ftok(".", 'C')},
           entryGateMsgKey_{ftok(".", 'E')},
-          shm_{SharedMemory<RopewaySystemState>::create(shmKey_)},
+          shm_{SharedMemory<SharedRopewayState>::create(shmKey_)},
           sem_{semKey_},
           workerQueue_{workerMsgKey_, "WorkerMessageQueue"},
           cashierQueue_{cashierMsgKey_, "CashierMessageQueue"},
@@ -43,8 +43,8 @@ public:
     IpcManager &operator=(IpcManager &&) = delete;
 
     // State access
-    RopewaySystemState *state() { return shm_.get(); }
-    RopewaySystemState *operator->() { return shm_.get(); }
+    SharedRopewayState *state() { return shm_.get(); }
+    SharedRopewayState *operator->() { return shm_.get(); }
 
     // Resource access
     Semaphore &sem() { return sem_; }
@@ -64,7 +64,9 @@ public:
         sem_.initialize(Semaphore::Index::RIDE_GATES, Config::Gate::NUM_RIDE_GATES);
         sem_.initialize(Semaphore::Index::STATION_CAPACITY, stationCapacity);
         sem_.initialize(Semaphore::Index::CHAIR_ALLOCATION, 1);
-        sem_.initialize(Semaphore::Index::SHARED_MEMORY, 1);
+        sem_.initialize(Semaphore::Index::SHM_OPERATIONAL, 1);
+        sem_.initialize(Semaphore::Index::SHM_CHAIRS, 1);
+        sem_.initialize(Semaphore::Index::SHM_STATS, 1);
         sem_.initialize(Semaphore::Index::WORKER_SYNC, 0);
         sem_.initialize(Semaphore::Index::CASHIER_READY, 0);
         sem_.initialize(Semaphore::Index::LOWER_WORKER_READY, 0);
@@ -75,10 +77,10 @@ public:
     }
 
     void initState(time_t openTime, time_t closeTime) {
-        state()->core.state = RopewayState::RUNNING;
-        state()->core.acceptingNewTourists = true;
-        state()->core.openingTime = openTime;
-        state()->core.closingTime = closeTime;
+        state()->operational.state = RopewayState::RUNNING;
+        state()->operational.acceptingNewTourists = true;
+        state()->operational.openingTime = openTime;
+        state()->operational.closingTime = closeTime;
         state()->stats.dailyStats.simulationStartTime = openTime;
     }
 
@@ -91,7 +93,7 @@ private:
     key_t cashierMsgKey_;
     key_t entryGateMsgKey_;
 
-    SharedMemory<RopewaySystemState> shm_;
+    SharedMemory<SharedRopewayState> shm_;
     Semaphore sem_;
     MessageQueue<WorkerMessage> workerQueue_;
     MessageQueue<TicketRequest> cashierQueue_;

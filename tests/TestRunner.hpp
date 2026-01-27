@@ -68,9 +68,9 @@ public:
                 ipc.shmKey(), ipc.semKey(), ipc.workerMsgKey(), ipc.entryGateMsgKey());
 
             {
-                Semaphore::ScopedLock lock(ipc.sem(), Semaphore::Index::SHARED_MEMORY);
-                ipc.state()->core.lowerWorkerPid = lowerWorkerPid;
-                ipc.state()->core.upperWorkerPid = upperWorkerPid;
+                Semaphore::ScopedLock lock(ipc.sem(), Semaphore::Index::SHM_OPERATIONAL);
+                ipc.state()->operational.lowerWorkerPid = lowerWorkerPid;
+                ipc.state()->operational.upperWorkerPid = upperWorkerPid;
             }
             ipc.sem().wait(Semaphore::Index::LOWER_WORKER_READY);
             ipc.sem().wait(Semaphore::Index::UPPER_WORKER_READY);
@@ -145,7 +145,7 @@ private:
         bool emergencyTriggered = false;
         bool resumeTriggered = false;
         uint32_t maxObservedCapacity = 0;
-        RopewaySystemState lastState{};
+        SharedRopewayState lastState{};
 
         std::cout << "[Test] Simulation running..." << std::endl;
 
@@ -153,13 +153,17 @@ private:
             time_t elapsed = time(nullptr) - startTime;
 
             {
-                Semaphore::ScopedLock lock(ipc.sem(), Semaphore::Index::SHARED_MEMORY);
-                uint32_t currentCapacity = ipc.state()->core.touristsInLowerStation;
+                // Lock all for consistent snapshot (needed for deadlock check)
+                Semaphore::ScopedLock lockCore(ipc.sem(), Semaphore::Index::SHM_OPERATIONAL);
+                Semaphore::ScopedLock lockChairs(ipc.sem(), Semaphore::Index::SHM_CHAIRS);
+                Semaphore::ScopedLock lockStats(ipc.sem(), Semaphore::Index::SHM_STATS);
+
+                uint32_t currentCapacity = ipc.state()->operational.touristsInLowerStation;
                 if (currentCapacity > maxObservedCapacity) {
                     maxObservedCapacity = currentCapacity;
                 }
 
-                if (ipc.state()->core.state == RopewayState::STOPPED) {
+                if (ipc.state()->operational.state == RopewayState::STOPPED) {
                     std::cout << "[Test] Ropeway stopped.\n";
                     break;
                 }
@@ -199,7 +203,10 @@ private:
         }
 
         {
-            Semaphore::ScopedLock lock(ipc.sem(), Semaphore::Index::SHARED_MEMORY);
+            // Lock all for final validation snapshot
+            Semaphore::ScopedLock lockCore(ipc.sem(), Semaphore::Index::SHM_OPERATIONAL);
+            Semaphore::ScopedLock lockChairs(ipc.sem(), Semaphore::Index::SHM_CHAIRS);
+            Semaphore::ScopedLock lockStats(ipc.sem(), Semaphore::Index::SHM_STATS);
             ipc.state()->stats.dailyStats.simulationEndTime = time(nullptr);
             result = TestValidator::validate(scenario, *ipc.state(), maxObservedCapacity);
         }

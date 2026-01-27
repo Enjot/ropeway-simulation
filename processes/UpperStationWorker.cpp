@@ -6,7 +6,7 @@
 #include "ipc/core/SharedMemory.hpp"
 #include "ipc/core/Semaphore.hpp"
 #include "ipc/core/MessageQueue.hpp"
-#include "ipc/RopewaySystemState.hpp"
+#include "../ipc/model/SharedRopewayState.hpp"
 #include "ipc/message/WorkerMessage.hpp"
 #include "Config.hpp"
 #include "utils/SignalHelper.hpp"
@@ -24,15 +24,15 @@ public:
     static constexpr long MSG_TYPE_FROM_LOWER = 2;
 
     UpperWorkerProcess(const ArgumentParser::WorkerArgs& args)
-        : shm_{SharedMemory<RopewaySystemState>::attach(args.shmKey)},
+        : shm_{SharedMemory<SharedRopewayState>::attach(args.shmKey)},
           sem_{args.semKey},
           msgQueue_{args.msgKey, "WorkerMsg"},
           isEmergencyStopped_{false} {
 
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            shm_->core.upperWorkerPid = getpid();
-            Logger::setSimulationStartTime(shm_->core.openingTime);
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            shm_->operational.upperWorkerPid = getpid();
+            Logger::setSimulationStartTime(shm_->operational.openingTime);
         }
 
         Logger::info(TAG, "Started (PID: %d)", getpid());
@@ -73,8 +73,8 @@ private:
         Logger::warn(TAG, "!!! EMERGENCY STOP RECEIVED !!!");
 
         {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-            shm_->core.state = RopewayState::EMERGENCY_STOP;
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            shm_->operational.state = RopewayState::EMERGENCY_STOP;
         }
 
         isEmergencyStopped_ = true;
@@ -139,9 +139,9 @@ private:
             uint32_t totalRides;
             RopewayState state;
             {
-                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
-                totalRides = shm_->core.totalRidesToday;
-                state = shm_->core.state;
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                totalRides = shm_->operational.totalRidesToday;
+                state = shm_->operational.state;
             }
 
             if (state == RopewayState::EMERGENCY_STOP) {
@@ -153,7 +153,7 @@ private:
         }
     }
 
-    SharedMemory<RopewaySystemState> shm_;
+    SharedMemory<SharedRopewayState> shm_;
     Semaphore sem_;
     MessageQueue<WorkerMessage> msgQueue_;
     bool isEmergencyStopped_;

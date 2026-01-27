@@ -33,18 +33,27 @@ public:
      */
     struct Index {
         enum : uint8_t {
-            ENTRY_GATES = 0,
-            RIDE_GATES,
-            STATION_CAPACITY,
-            CHAIR_ALLOCATION,
-            SHARED_MEMORY,
-            WORKER_SYNC,
-            CASHIER_READY,
-            LOWER_WORKER_READY,
-            UPPER_WORKER_READY,
-            CHAIR_ASSIGNED,
-            BOARDING_QUEUE_WORK,
-            ENTRY_QUEUE_WORK,
+            // === Resource counting semaphores ===
+            ENTRY_GATES = 0,     // 4 entry gates to station area (init: NUM_ENTRY_GATES)
+            RIDE_GATES,          // 3 ride gates to platform (init: NUM_RIDE_GATES)
+            STATION_CAPACITY,    // Max N tourists in station area (init: stationCapacity)
+            CHAIR_ALLOCATION,    // Mutex for chair assignment (init: 1)
+
+            // === Shared memory protection (fine-grained locking) ===
+            // Lock ordering: SHM_OPERATIONAL -> SHM_CHAIRS -> SHM_STATS
+            SHM_OPERATIONAL,     // Protects SharedOperationalState (state, counters, PIDs)
+            SHM_CHAIRS,          // Protects SharedChairPoolState (chairs, boarding queue)
+            SHM_STATS,           // Protects SharedStatisticsState (stats, records, gate log)
+
+            // === Synchronization semaphores ===
+            WORKER_SYNC,         // Emergency stop blocking (init: 0)
+            CASHIER_READY,       // Cashier startup signal (init: 0, post when ready)
+            LOWER_WORKER_READY,  // LowerWorker startup signal (init: 0, post when ready)
+            UPPER_WORKER_READY,  // UpperWorker startup signal (init: 0, post when ready)
+            CHAIR_ASSIGNED,      // Tourist notified of chair assignment (init: 0)
+            BOARDING_QUEUE_WORK, // Work available signal for LowerWorker (init: 0)
+            ENTRY_QUEUE_WORK,    // Reserved for future use (init: 0)
+
             TOTAL_SEMAPHORES
         };
 
@@ -54,7 +63,9 @@ public:
                 case RIDE_GATES: return "RIDE_GATES";
                 case STATION_CAPACITY: return "STATION_CAPACITY";
                 case CHAIR_ALLOCATION: return "CHAIR_ALLOCATION";
-                case SHARED_MEMORY: return "SHARED_MEMORY";
+                case SHM_OPERATIONAL: return "SHM_OPERATIONAL";
+                case SHM_CHAIRS: return "SHM_CHAIRS";
+                case SHM_STATS: return "SHM_STATS";
                 case WORKER_SYNC: return "WORKER_SYNC";
                 case CASHIER_READY: return "CASHIER_READY";
                 case LOWER_WORKER_READY: return "LOWER_WORKER_READY";

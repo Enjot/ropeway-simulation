@@ -1,88 +1,13 @@
 #pragma once
 
-#include <sys/types.h>
 #include <ctime>
-#include "enums/RopewayState.hpp"
-#include "../Config.hpp"
+
+#include "SharedChairPoolState.hpp"
+#include "SharedOperationalState.hpp"
+#include "SharedStatisticState.hpp"
+#include "../../Config.hpp"
 #include "enums/GateType.hpp"
-#include "structures/Chair.hpp"
-#include "structures/DailyStatistic.hpp"
-#include "ipc/BoardingQueue.hpp"
-#include "ipc/ReportingData.hpp"
-
-// ============================================================================
-// SUB-STRUCTURES FOR LOGICAL ORGANIZATION
-// ============================================================================
-
-/**
- * Core operational state of the ropeway.
- * Contains primary status flags, timing, and station counters.
- *
- * OWNERSHIP: Main orchestrator initializes; workers update state/counters.
- */
-struct RopewayCoreState {
-    RopewayState state;             // STOPPED, RUNNING, EMERGENCY_STOP, CLOSING
-    bool acceptingNewTourists;      // False after closing time (Tk)
-    time_t openingTime;             // Tp - simulation start
-    time_t closingTime;             // Tk - gates stop accepting
-
-    uint32_t touristsInLowerStation;  // After entry gate, before platform
-    uint32_t touristsOnPlatform;      // On chairs, in transit
-    uint32_t totalRidesToday;         // Cumulative ride count
-
-    pid_t lowerWorkerPid;  // Lower station controller
-    pid_t upperWorkerPid;  // Upper station controller
-
-    RopewayCoreState()
-        : state{RopewayState::STOPPED},
-          acceptingNewTourists{false},
-          openingTime{0},  // Set by initializeState()
-          closingTime{0},  // Set by initializeState()
-          touristsInLowerStation{0},
-          touristsOnPlatform{0},
-          totalRidesToday{0},
-          lowerWorkerPid{0},
-          upperWorkerPid{0} {}
-};
-
-/**
- * Chair management pool.
- * Contains all chairs and the boarding queue.
- *
- * OWNERSHIP: LowerWorker manages assignments; tourists update on board/disembark.
- */
-struct ChairPool {
-    Chair chairs[Config::Chair::QUANTITY];  // All 72 chairs
-    uint32_t chairsInUse;                   // Currently occupied chairs
-    BoardingQueue boardingQueue;            // Tourists waiting to board
-
-    ChairPool()
-        : chairs{},
-          chairsInUse{0},
-          boardingQueue{} {}
-};
-
-/**
- * Simulation statistics and reporting data.
- * Accumulated throughout simulation for daily report generation.
- *
- * OWNERSHIP: Various processes update; main orchestrator reads for report.
- */
-struct SimulationStatistics {
-
-    DailyStatistics dailyStats;
-    TouristRideRecord touristRecords[Config::Simulation::MAX_TOURIST_RECORDS];
-    uint32_t touristRecordCount;
-    uint32_t nextTouristId;  // Counter for generating unique tourist IDs (for spawned children)
-    GatePassageLog gateLog;
-
-    SimulationStatistics()
-        : dailyStats{},
-          touristRecords{},
-          touristRecordCount{0},
-          nextTouristId{0},
-          gateLog{} {}
-};
+#include "ReportingData.hpp"
 
 // ============================================================================
 // MAIN SHARED MEMORY STRUCTURE
@@ -92,10 +17,15 @@ struct SimulationStatistics {
  * Main shared memory structure for the ropeway simulation.
  *
  * This structure is shared across all processes via System V shared memory.
- * Access must be synchronized using semaphores (SHARED_MEMORY semaphore).
+ * Access must be synchronized using fine-grained semaphores:
+ * - SHM_OPERATIONAL: Protects 'operational' section (state, counters, PIDs)
+ * - SHM_CHAIRS: Protects 'chairPool' section (chairs, boarding queue)
+ * - SHM_STATS: Protects 'stats' section (statistics, records, gate log)
+ *
+ * Lock ordering (to prevent deadlocks): SHM_OPERATIONAL -> SHM_CHAIRS -> SHM_STATS
  *
  * Organized into three logical sections:
- * - core: Operational state, timing, counters, worker PIDs
+ * - operational: Ropeway state, timing, counters, worker PIDs
  * - chairPool: Chair management and boarding queue
  * - stats: Statistics and reporting data
  *
@@ -103,16 +33,16 @@ struct SimulationStatistics {
  * - Main orchestrator: Creates and initializes, sets opening/closing times
  * - LowerWorker (lower station): Manages chairPool.boardingQueue, assigns chairs
  * - UpperWorker (upper station): Monitors arrivals at top
- * - Cashier: Reads core.acceptingNewTourists flag
+ * - Cashier: Reads operational.acceptingNewTourists flag
  * - Tourists: Update counters, register for tracking, log gate passages
  */
-struct RopewaySystemState {
+struct SharedRopewayState {
 
-    RopewayCoreState core;
-    ChairPool chairPool;
-    SimulationStatistics stats;
+    SharedOperationalState operational;
+    SharedChairPoolState chairPool;
+    SharedStatisticsState stats;
 
-    RopewaySystemState() = default;
+    SharedRopewayState() = default;
 
     // ==================== TOURIST TRACKING METHODS ====================
 

@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <csignal>
 #include "tests/TestConfig.hpp"
-#include "ipc/RopewaySystemState.hpp"
+#include "../ipc/model/SharedRopewayState.hpp"
 #include "../ipc/core/Semaphore.hpp"
 #include "../Config.hpp"
 
@@ -21,7 +21,7 @@ public:
      * Validate all aspects of the simulation based on scenario expectations
      */
     static TestResult validate(const TestScenario& scenario,
-                               const RopewaySystemState& state,
+                               const SharedRopewayState& state,
                                uint32_t observedMaxCapacity) {
         TestResult result;
         result.testName = scenario.name;
@@ -51,7 +51,7 @@ public:
         validateMinimumRides(scenario, state, result);
 
         // Copy statistics (use core.totalRidesToday as it's actively updated during simulation)
-        result.totalRidesCompleted = state.core.totalRidesToday;
+        result.totalRidesCompleted = state.operational.totalRidesToday;
         result.emergencyStopsTriggered = state.stats.dailyStats.emergencyStops;
         result.emergenciesResumed = countResumedEmergencies(state);
 
@@ -78,14 +78,14 @@ public:
      * Compares two state snapshots to detect lack of progress.
      * Returns true if no progress detected between snapshots.
      */
-    static bool checkForDeadlock(const RopewaySystemState& stateBefore,
-                                  const RopewaySystemState& stateAfter,
+    static bool checkForDeadlock(const SharedRopewayState& stateBefore,
+                                  const SharedRopewayState& stateAfter,
                                   [[maybe_unused]] uint32_t checkIntervalSec) {
         // If state changed, not deadlocked
-        if (stateBefore.core.totalRidesToday != stateAfter.core.totalRidesToday) {
+        if (stateBefore.operational.totalRidesToday != stateAfter.operational.totalRidesToday) {
             return false;
         }
-        if (stateBefore.core.touristsInLowerStation != stateAfter.core.touristsInLowerStation) {
+        if (stateBefore.operational.touristsInLowerStation != stateAfter.operational.touristsInLowerStation) {
             return false;
         }
         if (stateBefore.chairPool.boardingQueue.count != stateAfter.chairPool.boardingQueue.count) {
@@ -93,18 +93,18 @@ public:
         }
         // Check if any tourists are waiting - if queue is empty, no work to do = not a deadlock
         if (stateAfter.chairPool.boardingQueue.count == 0 &&
-            stateAfter.core.touristsInLowerStation == 0) {
+            stateAfter.operational.touristsInLowerStation == 0) {
             return false;
         }
 
         // If emergency stop, don't consider it a deadlock
-        if (stateAfter.core.state == RopewayState::EMERGENCY_STOP) {
+        if (stateAfter.operational.state == RopewayState::EMERGENCY_STOP) {
             return false;
         }
 
         // If stopped or closing, not a deadlock
-        if (stateAfter.core.state == RopewayState::STOPPED ||
-            stateAfter.core.state == RopewayState::CLOSING) {
+        if (stateAfter.operational.state == RopewayState::STOPPED ||
+            stateAfter.operational.state == RopewayState::CLOSING) {
             return false;
         }
 
@@ -117,7 +117,7 @@ private:
      * Validate that station capacity was never exceeded
      */
     static void validateCapacityLimit(const TestScenario& scenario,
-                                       const RopewaySystemState& state,
+                                       const SharedRopewayState& state,
                                        uint32_t observedMaxCapacity,
                                        TestResult& result) {
         if (observedMaxCapacity > scenario.stationCapacity) {
@@ -137,7 +137,7 @@ private:
      * Validate child supervision rules from gate passage log
      */
     static void validateChildSupervision(const TestScenario& scenario,
-                                          const RopewaySystemState& state,
+                                          const SharedRopewayState& state,
                                           TestResult& result) {
         uint32_t childrenRodeAlone = 0;
         uint32_t childrenTotal = 0;
@@ -219,7 +219,7 @@ private:
      * Validate VIP priority handling
      */
     static void validateVipPriority(const TestScenario& scenario,
-                                     const RopewaySystemState& state,
+                                     const SharedRopewayState& state,
                                      TestResult& result) {
         // Count VIP and regular entry gate passages
         uint32_t vipEntries = 0;
@@ -286,7 +286,7 @@ private:
      * Validate emergency stop/resume handling
      */
     static void validateEmergencyHandling(const TestScenario& scenario,
-                                           const RopewaySystemState& state,
+                                           const SharedRopewayState& state,
                                            TestResult& result) {
         const DailyStatistics& stats = state.stats.dailyStats;
 
@@ -337,10 +337,10 @@ private:
      * Validate minimum rides completed
      */
     static void validateMinimumRides(const TestScenario& scenario,
-                                      const RopewaySystemState& state,
+                                      const SharedRopewayState& state,
                                       TestResult& result) {
         // Use core.totalRidesToday as it's actively updated during simulation
-        uint32_t totalRides = state.core.totalRidesToday;
+        uint32_t totalRides = state.operational.totalRidesToday;
         if (totalRides < scenario.expectedMinRides) {
             std::ostringstream oss;
             oss << "INSUFFICIENT RIDES: " << totalRides
@@ -357,7 +357,7 @@ private:
     /**
      * Count resumed emergencies
      */
-    static uint32_t countResumedEmergencies(const RopewaySystemState& state) {
+    static uint32_t countResumedEmergencies(const SharedRopewayState& state) {
         uint32_t count = 0;
         for (uint32_t i = 0; i < state.stats.dailyStats.emergencyRecordCount; ++i) {
             if (state.stats.dailyStats.emergencyRecords[i].resumed) {

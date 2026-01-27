@@ -111,17 +111,19 @@ private:
                 Logger::warn(tag_, ">>> CLOSING TIME REACHED (Tk=%u:00) - Gates stop accepting <<<",
                              Config::Simulation::CLOSING_HOUR);
 
-                Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHARED_MEMORY);
-                ipc_->state()->core.acceptingNewTourists = false;
-                ipc_->state()->core.state = RopewayState::CLOSING;
+                Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
+                ipc_->state()->operational.acceptingNewTourists = false;
+                ipc_->state()->operational.state = RopewayState::CLOSING;
             }
 
             // After closing, wait for tourists to drain then shutdown
             if (closingTimeReached) {
                 uint32_t touristsInStation, chairsInUse;
                 {
-                    Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHARED_MEMORY);
-                    touristsInStation = ipc_->state()->core.touristsInLowerStation;
+                    // Lock ordering: SHM_OPERATIONAL first, then SHM_CHAIRS
+                    Semaphore::ScopedLock lockCore(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
+                    Semaphore::ScopedLock lockChairs(ipc_->sem(), Semaphore::Index::SHM_CHAIRS);
+                    touristsInStation = ipc_->state()->operational.touristsInLowerStation;
                     chairsInUse = ipc_->state()->chairPool.chairsInUse;
                 }
 
@@ -136,8 +138,8 @@ private:
                     if (now - drainStartTime >= Config::Ropeway::SHUTDOWN_DELAY_US / Config::Time::ONE_SECOND_US) {
                         Logger::info(tag_, "Shutdown delay complete, stopping ropeway");
                         {
-                            Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHARED_MEMORY);
-                            ipc_->state()->core.state = RopewayState::STOPPED;
+                            Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
+                            ipc_->state()->operational.state = RopewayState::STOPPED;
                         }
                         break;
                     }
@@ -172,8 +174,8 @@ private:
             }
 
             {
-                Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHARED_MEMORY);
-                if (ipc_->state()->core.state == RopewayState::STOPPED) {
+                Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
+                if (ipc_->state()->operational.state == RopewayState::STOPPED) {
                     Logger::info(tag_, "Ropeway stopped");
                     break;
                 }
@@ -196,7 +198,7 @@ private:
 
         // Initialize nextTouristId counter in shared memory
         {
-            Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHARED_MEMORY);
+            Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_STATS);
             ipc_->state()->stats.nextTouristId = Config::Simulation::NUM_TOURISTS;
         }
 
@@ -291,7 +293,7 @@ private:
         fprintf(file, "  Cyclists:       %u\n\n", stats.cyclistRides);
 
         fprintf(file, "RIDES\n");
-        fprintf(file, "  Total rides:    %u\n", state.core.totalRidesToday);
+        fprintf(file, "  Total rides:    %u\n", state.operational.totalRidesToday);
         fprintf(file, "  Gate passages:  %u\n", state.stats.gateLog.count);
 
         if (stats.emergencyStops > 0) {
