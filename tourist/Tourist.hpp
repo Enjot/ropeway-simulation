@@ -29,7 +29,7 @@ struct Tourist {
     // Supervision
     int32_t guardianId;
     uint32_t dependentCount;
-    int32_t dependentIds[Config::Gate::MAX_CHILDREN_PER_ADULT];
+    int32_t dependentIds[Constants::Gate::MAX_CHILDREN_PER_ADULT];
 
     // Cyclist trails
     TrailDifficulty preferredTrail;
@@ -79,14 +79,14 @@ struct Tourist {
      * Check if tourist needs supervision (child under 8)
      */
     [[nodiscard]] constexpr bool needsSupervision() const noexcept {
-        return age < Config::Age::SUPERVISION_AGE_LIMIT;
+        return age < Constants::Age::SUPERVISION_AGE_LIMIT;
     }
 
     /**
      * Check if tourist is an adult (can supervise children)
      */
     [[nodiscard]] constexpr bool isAdult() const noexcept {
-        return age >= Config::Age::ADULT_AGE_FROM;
+        return age >= Constants::Age::ADULT_AGE_FROM;
     }
 
     /**
@@ -94,7 +94,7 @@ struct Tourist {
      */
     [[nodiscard]] constexpr uint32_t getSlotCost() const noexcept {
         return (type == TouristType::CYCLIST)
-                   ? Config::Chair::CYCLIST_SLOT_COST
-                   : Config::Chair::PEDESTRIAN_SLOT_COST;
+                   ? Constants::Chair::CYCLIST_SLOT_COST
+                   : Constants::Chair::PEDESTRIAN_SLOT_COST;
     }
 };

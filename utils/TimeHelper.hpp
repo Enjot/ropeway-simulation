@@ -20,10 +20,10 @@ namespace TimeHelper {
         time_t elapsed = now - simulationStartTime;
 
         // Scale elapsed time to simulated time
-        uint32_t simulatedElapsed = static_cast<uint32_t>(elapsed) * Config::Simulation::TIME_SCALE;
+        uint32_t simulatedElapsed = static_cast<uint32_t>(elapsed) * Config::Simulation::TIME_SCALE();
 
         // Add to opening hour (converted to seconds)
-        uint32_t simulatedSeconds = Config::Simulation::OPENING_HOUR * 3600 + simulatedElapsed;
+        uint32_t simulatedSeconds = Config::Simulation::OPENING_HOUR() * 3600 + simulatedElapsed;
 
         // Cap at end of day (23:59:59)
         if (simulatedSeconds > 24 * 3600 - 1) {
@@ -63,7 +63,7 @@ namespace TimeHelper {
      */
     inline bool isPastClosingTime(time_t simulationStartTime) {
         uint32_t seconds = getSimulatedSeconds(simulationStartTime);
-        return seconds >= Config::Simulation::CLOSING_HOUR * 3600;
+        return seconds >= Config::Simulation::CLOSING_HOUR() * 3600;
     }
 
     /**

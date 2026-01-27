@@ -199,7 +199,7 @@ namespace Test {
                     break;
                 }
 
-                usleep(Config::Time::MAIN_LOOP_POLL_US);
+                usleep(Config::Time::MAIN_LOOP_POLL_US());
             }
 
             {

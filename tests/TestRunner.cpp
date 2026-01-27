@@ -6,6 +6,7 @@
 
 #include "tests/TestRunner.hpp"
 #include "tests/TestConfig.hpp"
+#include "core/Config.hpp"
 
 namespace {
     void printUsage(const char *programName) {
@@ -168,6 +169,14 @@ int main(int argc, char *argv[]) {
             printUsage(argv[0]);
             return 1;
         }
+    }
+
+    try {
+        Config::validate();
+    } catch (const std::exception& e) {
+        std::cerr << "Config error: " << e.what() << "\n";
+        std::cerr << "Run: source ropeway.env && ./test_runner\n";
+        return 1;
     }
 
     Test::TestRunner runner;

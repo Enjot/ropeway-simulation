@@ -35,8 +35,8 @@ namespace Logger {
             if (elapsedUs < 0) elapsedUs = 0;
 
             // Convert to simulated seconds: elapsed_us * TIME_SCALE / 1_000_000
-            uint32_t simulatedElapsed = static_cast<uint32_t>(elapsedUs * Config::Simulation::TIME_SCALE / 1000000);
-            uint32_t simulatedSeconds = Config::Simulation::OPENING_HOUR * 3600 + simulatedElapsed;
+            uint32_t simulatedElapsed = static_cast<uint32_t>(elapsedUs * Config::Simulation::TIME_SCALE() / 1000000);
+            uint32_t simulatedSeconds = Config::Simulation::OPENING_HOUR() * 3600 + simulatedElapsed;
 
             if (simulatedSeconds > 24 * 3600 - 1) {
                 simulatedSeconds = 24 * 3600 - 1;

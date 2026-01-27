@@ -79,10 +79,10 @@ private:
         double basePrice = TicketPricing::getPrice(request.requestedType);
         double discount = 0.0;
 
-        if (request.touristAge < Config::Discount::CHILD_DISCOUNT_AGE) {
-            discount = Config::Discount::CHILD_DISCOUNT;
-        } else if (request.touristAge >= Config::Age::SENIOR_AGE_FROM) {
-            discount = Config::Discount::SENIOR_DISCOUNT;
+        if (request.touristAge < Constants::Discount::CHILD_DISCOUNT_AGE) {
+            discount = Constants::Discount::CHILD_DISCOUNT;
+        } else if (request.touristAge >= Constants::Age::SENIOR_AGE_FROM) {
+            discount = Constants::Discount::SENIOR_DISCOUNT;
         }
 
         // Issue ticket
@@ -100,16 +100,16 @@ private:
                 response.validUntil = response.validFrom + 24 * 3600; // Valid all day
                 break;
             case TicketType::TIME_TK1:
-                response.validUntil = response.validFrom + Config::Ticket::TK1_DURATION_SEC;
+                response.validUntil = response.validFrom + Config::Ticket::TK1_DURATION_SEC();
                 break;
             case TicketType::TIME_TK2:
-                response.validUntil = response.validFrom + Config::Ticket::TK2_DURATION_SEC;
+                response.validUntil = response.validFrom + Config::Ticket::TK2_DURATION_SEC();
                 break;
             case TicketType::TIME_TK3:
-                response.validUntil = response.validFrom + Config::Ticket::TK3_DURATION_SEC;
+                response.validUntil = response.validFrom + Config::Ticket::TK3_DURATION_SEC();
                 break;
             case TicketType::DAILY:
-                response.validUntil = response.validFrom + Config::Ticket::DAILY_DURATION_SEC;
+                response.validUntil = response.validFrom + Config::Ticket::DAILY_DURATION_SEC();
                 break;
         }
         strcpy(response.message, "Ticket issued");

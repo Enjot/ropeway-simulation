@@ -12,6 +12,7 @@ include_directories(${CMAKE_SOURCE_DIR})
 
 set(CORE_HEADERS
         core/Config.hpp
+        core/Constants.hpp
         core/RopewayState.hpp
         core/Simulation.hpp
 )

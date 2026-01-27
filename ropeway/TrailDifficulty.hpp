@@ -40,9 +40,9 @@ constexpr const char *toTrailCode(const TrailDifficulty trail) {
 
 constexpr uint32_t getDurationUs(const TrailDifficulty difficulty) {
     switch (difficulty) {
-        case TrailDifficulty::EASY: return Config::Trail::DURATION_EASY_US;
-        case TrailDifficulty::MEDIUM: return Config::Trail::DURATION_MEDIUM_US;
-        case TrailDifficulty::HARD: return Config::Trail::DURATION_HARD_US;
+        case TrailDifficulty::EASY: return Config::Trail::DURATION_EASY_US();
+        case TrailDifficulty::MEDIUM: return Config::Trail::DURATION_MEDIUM_US();
+        case TrailDifficulty::HARD: return Config::Trail::DURATION_HARD_US();
         default: throw std::invalid_argument("Invalid TrailDifficulty value");
     }
 }

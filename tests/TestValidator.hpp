@@ -146,7 +146,7 @@ namespace Test {
             for (uint32_t i = 0; i < state.stats.touristRecordCount; ++i) {
                 const TouristRideRecord &rec = state.stats.touristRecords[i];
 
-                if (rec.age < Config::Age::SUPERVISION_AGE_LIMIT) {
+                if (rec.age < Constants::Age::SUPERVISION_AGE_LIMIT) {
                     ++childrenTotal;
 
                     if (rec.rideGatePassages > 0) {
@@ -175,7 +175,7 @@ namespace Test {
             uint32_t adultsWithExcess = 0;
             for (uint32_t i = 0; i < state.chairPool.boardingQueue.count; ++i) {
                 const BoardingQueueEntry &entry = state.chairPool.boardingQueue.entries[i];
-                if (entry.isAdult && entry.dependentCount > Config::Gate::MAX_CHILDREN_PER_ADULT) {
+                if (entry.isAdult && entry.dependentCount > Constants::Gate::MAX_CHILDREN_PER_ADULT) {
                     ++adultsWithExcess;
                 }
             }
@@ -193,7 +193,7 @@ namespace Test {
             if (adultsWithExcess > 0) {
                 std::ostringstream oss;
                 oss << "SUPERVISION VIOLATION: " << adultsWithExcess
-                        << " adult(s) supervising more than " << Config::Gate::MAX_CHILDREN_PER_ADULT << " children";
+                        << " adult(s) supervising more than " << Constants::Gate::MAX_CHILDREN_PER_ADULT << " children";
                 result.addFailure(oss.str());
             }
 
@@ -201,7 +201,7 @@ namespace Test {
             if (childrenTotal > 0) {
                 std::ostringstream oss;
                 oss << "Child supervision: " << childrenTotal << " children under "
-                        << Config::Age::SUPERVISION_AGE_LIMIT << " years, "
+                        << Constants::Age::SUPERVISION_AGE_LIMIT << " years, "
                         << childrenWithRides << " completed rides";
                 result.addWarning(oss.str());
             }

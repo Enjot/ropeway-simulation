@@ -151,16 +151,16 @@ private:
         float roll = static_cast<float>(rand()) / RAND_MAX;
         float cumulative = 0.0f;
 
-        cumulative += Config::Ticket::SINGLE_USE_CHANCE;
+        cumulative += Config::Ticket::SINGLE_USE_CHANCE();
         if (roll < cumulative) return TicketType::SINGLE_USE;
 
-        cumulative += Config::Ticket::TK1_CHANCE;
+        cumulative += Config::Ticket::TK1_CHANCE();
         if (roll < cumulative) return TicketType::TIME_TK1;
 
-        cumulative += Config::Ticket::TK2_CHANCE;
+        cumulative += Config::Ticket::TK2_CHANCE();
         if (roll < cumulative) return TicketType::TIME_TK2;
 
-        cumulative += Config::Ticket::TK3_CHANCE;
+        cumulative += Config::Ticket::TK3_CHANCE();
         if (roll < cumulative) return TicketType::TIME_TK3;
 
         return TicketType::DAILY;
@@ -223,9 +223,9 @@ private:
             stats.totalRevenueWithDiscounts += response->price;
 
             if (tourist_.isVip) stats.vipTourists++;
-            if (tourist_.age < Config::Discount::CHILD_DISCOUNT_AGE) {
+            if (tourist_.age < Constants::Discount::CHILD_DISCOUNT_AGE) {
                 stats.childrenServed++;
-            } else if (tourist_.age >= Config::Age::SENIOR_AGE_FROM) {
+            } else if (tourist_.age >= Constants::Age::SENIOR_AGE_FROM) {
                 stats.seniorsServed++;
             }
 
@@ -354,7 +354,7 @@ private:
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
             uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
-            uint32_t gateNum = tourist_.id % Config::Gate::NUM_ENTRY_GATES;
+            uint32_t gateNum = tourist_.id % Constants::Gate::NUM_ENTRY_GATES;
             shm_->logGatePassage(tourist_.id, tourist_.ticketId,
                                  GateType::ENTRY, gateNum, true, simTime);
         }
@@ -416,7 +416,7 @@ private:
 
                         // Log ride gate passage
                         uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
-                        uint32_t gateNum = assignedChairId_ % Config::Gate::NUM_RIDE_GATES;
+                        uint32_t gateNum = assignedChairId_ % Constants::Gate::NUM_RIDE_GATES;
                         shm_->logGatePassage(tourist_.id, tourist_.ticketId,
                                              GateType::RIDE, gateNum, true, simTime);
 
@@ -445,7 +445,7 @@ private:
     void rideChair() {
         Logger::info(tag_, "Riding chair %d...", assignedChairId_);
 
-        usleep(Config::Chair::RIDE_DURATION_US);
+        usleep(Config::Chair::RIDE_DURATION_US());
 
         {
             // Lock ordering: SHM_OPERATIONAL first, then SHM_CHAIRS
@@ -454,7 +454,7 @@ private:
             shm_->operational.totalRidesToday++;
 
             // Release chair
-            if (assignedChairId_ >= 0 && static_cast<uint32_t>(assignedChairId_) < Config::Chair::QUANTITY) {
+            if (assignedChairId_ >= 0 && static_cast<uint32_t>(assignedChairId_) < Constants::Chair::QUANTITY) {
                 Chair &chair = shm_->chairPool.chairs[assignedChairId_];
                 chair.isOccupied = false;
                 chair.numPassengers = 0;
@@ -493,15 +493,15 @@ private:
             const char *trailName;
             switch (tourist_.preferredTrail) {
                 case TrailDifficulty::MEDIUM:
-                    trailDuration = Config::Trail::DURATION_MEDIUM_US;
+                    trailDuration = Config::Trail::DURATION_MEDIUM_US();
                     trailName = "T2 (medium)";
                     break;
                 case TrailDifficulty::HARD:
-                    trailDuration = Config::Trail::DURATION_HARD_US;
+                    trailDuration = Config::Trail::DURATION_HARD_US();
                     trailName = "T3 (hard)";
                     break;
                 default:
-                    trailDuration = Config::Trail::DURATION_EASY_US;
+                    trailDuration = Config::Trail::DURATION_EASY_US();
                     trailName = "T1 (easy)";
                     break;
             }
@@ -509,7 +509,7 @@ private:
             usleep(trailDuration);
         } else {
             Logger::info(tag_, "Walking down trail...");
-            usleep(Config::Trail::DURATION_EASY_US / 2); // Pedestrians are faster (no bike)
+            usleep(Config::Trail::DURATION_EASY_US() / 2); // Pedestrians are faster (no bike)
         }
 
         tourist_.ridesCompleted++;

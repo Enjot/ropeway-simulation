@@ -51,10 +51,10 @@ private:
         Logger::info(tag_, "Creating IPC...");
         ipc_ = std::make_unique<IpcManager>();
 
-        ipc_->initSemaphores(Config::Simulation::STATION_CAPACITY);
+        ipc_->initSemaphores(Config::Simulation::STATION_CAPACITY());
 
         startTime_ = time(nullptr);
-        const time_t endTime = startTime_ + Config::Simulation::DURATION_US / Config::Time::ONE_SECOND_US;
+        const time_t endTime = startTime_ + Config::Simulation::DURATION_US() / Config::Time::ONE_SECOND_US();
         ipc_->initState(startTime_, endTime);
 
         // Set simulation start time for logger
@@ -104,15 +104,15 @@ private:
             time_t elapsed = now - startTime_;
 
             // Calculate simulated time
-            uint32_t simSeconds = Config::Simulation::OPENING_HOUR * 3600 +
-                                  static_cast<uint32_t>(elapsed) * Config::Simulation::TIME_SCALE;
+            uint32_t simSeconds = Config::Simulation::OPENING_HOUR() * 3600 +
+                                  static_cast<uint32_t>(elapsed) * Config::Simulation::TIME_SCALE();
             uint32_t simHour = simSeconds / 3600;
 
             // Check for closing time (Tk)
-            if (!closingTimeReached && simHour >= Config::Simulation::CLOSING_HOUR) {
+            if (!closingTimeReached && simHour >= Config::Simulation::CLOSING_HOUR()) {
                 closingTimeReached = true;
                 Logger::warn(tag_, ">>> CLOSING TIME REACHED (Tk=%u:00) - Gates stop accepting <<<",
-                             Config::Simulation::CLOSING_HOUR);
+                             Config::Simulation::CLOSING_HOUR());
 
                 Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
                 ipc_->state()->operational.acceptingNewTourists = false;
@@ -134,11 +134,11 @@ private:
                     if (drainStartTime == 0) {
                         drainStartTime = now;
                         Logger::info(tag_, "Station empty, waiting %u seconds before shutdown...",
-                                     Config::Ropeway::SHUTDOWN_DELAY_US / Config::Time::ONE_SECOND_US);
+                                     Constants::Ropeway::SHUTDOWN_DELAY_SEC * Config::Time::ONE_SECOND_US() / Config::Time::ONE_SECOND_US());
                     }
 
                     // Wait 3 seconds after station is empty
-                    if (now - drainStartTime >= Config::Ropeway::SHUTDOWN_DELAY_US / Config::Time::ONE_SECOND_US) {
+                    if (now - drainStartTime >= Constants::Ropeway::SHUTDOWN_DELAY_SEC * Config::Time::ONE_SECOND_US() / Config::Time::ONE_SECOND_US()) {
                         Logger::info(tag_, "Shutdown delay complete, stopping ropeway");
                         {
                             Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
@@ -184,7 +184,7 @@ private:
                 }
             }
 
-            usleep(Config::Time::MAIN_LOOP_POLL_US);
+            usleep(Config::Time::MAIN_LOOP_POLL_US());
         }
     }
 
@@ -202,10 +202,10 @@ private:
         // Initialize nextTouristId counter in shared memory
         {
             Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_STATS);
-            ipc_->state()->stats.nextTouristId = Config::Simulation::NUM_TOURISTS;
+            ipc_->state()->stats.nextTouristId = Config::Simulation::NUM_TOURISTS();
         }
 
-        for (uint32_t id = 1; id <= Config::Simulation::NUM_TOURISTS; ++id) {
+        for (uint32_t id = 1; id <= Config::Simulation::NUM_TOURISTS(); ++id) {
             uint32_t age = adultAgeDist(gen);
 
             // ~20% of adults have children
@@ -222,7 +222,7 @@ private:
                                                   std::to_string(age),
                                                   std::to_string(typeDist(gen)),
                                                   std::to_string(
-                                                      vipDist(gen) < Config::Vip::VIP_CHANCE_PERCENTAGE ? 1 : 0),
+                                                      vipDist(gen) < Constants::Vip::VIP_CHANCE ? 1 : 0),
                                                   std::to_string(wantsToRide ? 1 : 0),
                                                   std::to_string(-1),
                                                   // guardianId (-1 = no guardian, independent adult)
@@ -237,7 +237,7 @@ private:
 
             if (pid > 0) touristPids_.push_back(pid);
 
-            usleep(Config::Time::ARRIVAL_DELAY_BASE_US + (gen() % Config::Time::ARRIVAL_DELAY_RANDOM_US));
+            usleep(Config::Time::ARRIVAL_DELAY_BASE_US() + (gen() % Config::Time::ARRIVAL_DELAY_RANDOM_US()));
         }
         Logger::info(tag_, "Spawned %d adult tourists", static_cast<int>(touristPids_.size()));
     }
@@ -282,7 +282,7 @@ private:
         fprintf(file, "ROPEWAY DAILY REPORT\n");
         fprintf(file, "====================\n");
         fprintf(file, "Operating hours: %02u:00 - %02u:00\n\n",
-                Config::Simulation::OPENING_HOUR, Config::Simulation::CLOSING_HOUR);
+                Config::Simulation::OPENING_HOUR(), Config::Simulation::CLOSING_HOUR());
 
         fprintf(file, "FINANCIAL\n");
         fprintf(file, "  Revenue:        %.2f PLN\n", stats.totalRevenueWithDiscounts);

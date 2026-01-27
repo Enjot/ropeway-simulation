@@ -59,9 +59,9 @@ public:
     key_t cashierMsgKey() const { return cashierMsgKey_; }
     key_t entryGateMsgKey() const { return entryGateMsgKey_; }
 
-    void initSemaphores(const uint16_t stationCapacity = Config::Gate::MAX_TOURISTS_ON_STATION) const {
-        sem_.initialize(Semaphore::Index::ENTRY_GATES, Config::Gate::NUM_ENTRY_GATES);
-        sem_.initialize(Semaphore::Index::RIDE_GATES, Config::Gate::NUM_RIDE_GATES);
+    void initSemaphores(const uint16_t stationCapacity = Config::Gate::MAX_TOURISTS_ON_STATION()) const {
+        sem_.initialize(Semaphore::Index::ENTRY_GATES, Constants::Gate::NUM_ENTRY_GATES);
+        sem_.initialize(Semaphore::Index::RIDE_GATES, Constants::Gate::NUM_RIDE_GATES);
         sem_.initialize(Semaphore::Index::STATION_CAPACITY, stationCapacity);
         sem_.initialize(Semaphore::Index::CHAIR_ALLOCATION, 1);
         sem_.initialize(Semaphore::Index::SHM_OPERATIONAL, 1);

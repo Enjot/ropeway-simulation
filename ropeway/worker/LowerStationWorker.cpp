@@ -179,13 +179,13 @@ private:
 
             if (state == RopewayState::EMERGENCY_STOP) {
                 Logger::warn(TAG, "EMERGENCY STOP - Queue=%u, Chairs=%u/%u",
-                             queueCount, chairsInUse, Config::Chair::MAX_CONCURRENT_IN_USE);
+                             queueCount, chairsInUse, Constants::Chair::MAX_CONCURRENT_IN_USE);
             } else if (state == RopewayState::CLOSING) {
                 Logger::info(TAG, "CLOSING - Queue=%u, ChairsInUse=%u/%u (draining)",
-                             queueCount, chairsInUse, Config::Chair::MAX_CONCURRENT_IN_USE);
+                             queueCount, chairsInUse, Constants::Chair::MAX_CONCURRENT_IN_USE);
             } else {
                 Logger::info(TAG, "Queue=%u, ChairsInUse=%u/%u",
-                             queueCount, chairsInUse, Config::Chair::MAX_CONCURRENT_IN_USE);
+                             queueCount, chairsInUse, Constants::Chair::MAX_CONCURRENT_IN_USE);
             }
             lastLog = now;
         }
@@ -246,8 +246,8 @@ private:
 
     uint32_t getSlotCost(const BoardingQueueEntry &entry) {
         return (entry.type == TouristType::CYCLIST)
-                   ? Config::Chair::CYCLIST_SLOT_COST
-                   : Config::Chair::PEDESTRIAN_SLOT_COST;
+                   ? Constants::Chair::CYCLIST_SLOT_COST
+                   : Constants::Chair::PEDESTRIAN_SLOT_COST;
     }
 
     /**
@@ -280,7 +280,7 @@ private:
         BoardingQueue &queue = shm_->chairPool.boardingQueue;
         if (queue.count == 0) return;
 
-        if (shm_->chairPool.chairsInUse >= Config::Chair::MAX_CONCURRENT_IN_USE) {
+        if (shm_->chairPool.chairsInUse >= Constants::Chair::MAX_CONCURRENT_IN_USE) {
             return;
         }
 
@@ -316,7 +316,7 @@ private:
 
             // Check if this is a guardian with children
             if (entry.dependentCount > 0) {
-                uint32_t childIndices[Config::Gate::MAX_CHILDREN_PER_ADULT];
+                uint32_t childIndices[Constants::Gate::MAX_CHILDREN_PER_ADULT];
                 uint32_t numChildren = findChildren(queue, entry.touristId,
                                                     childIndices, entry.dependentCount);
 
@@ -330,7 +330,7 @@ private:
                     }
 
                     // Check if family fits
-                    if (slotsUsed + familySlots <= Config::Chair::SLOTS_PER_CHAIR &&
+                    if (slotsUsed + familySlots <= Constants::Chair::SLOTS_PER_CHAIR &&
                         groupSize + 1 + numChildren <= 4) {
                         // Add guardian
                         groupIndices[groupSize++] = i;
@@ -356,7 +356,7 @@ private:
 
             // Regular tourist without children (or orphaned child whose guardian left)
             uint32_t slotCost = getSlotCost(entry);
-            if (slotsUsed + slotCost <= Config::Chair::SLOTS_PER_CHAIR) {
+            if (slotsUsed + slotCost <= Constants::Chair::SLOTS_PER_CHAIR) {
                 if (entry.needsSupervision) {
                     Logger::info(TAG, "[ORPHAN] Child %u boarding alone (guardian %d left)",
                                  entry.touristId, entry.guardianId);
@@ -370,11 +370,11 @@ private:
         if (groupSize == 0) return;
 
         int32_t chairId = -1;
-        for (uint32_t c = 0; c < Config::Chair::QUANTITY; ++c) {
-            uint32_t idx = (queue.nextChairId + c) % Config::Chair::QUANTITY;
+        for (uint32_t c = 0; c < Constants::Chair::QUANTITY; ++c) {
+            uint32_t idx = (queue.nextChairId + c) % Constants::Chair::QUANTITY;
             if (!shm_->chairPool.chairs[idx].isOccupied) {
                 chairId = static_cast<int32_t>(idx);
-                queue.nextChairId = (idx + 1) % Config::Chair::QUANTITY;
+                queue.nextChairId = (idx + 1) % Constants::Chair::QUANTITY;
                 break;
             }
         }
@@ -398,7 +398,7 @@ private:
         }
 
         Logger::info(TAG, "Chair %d assigned to %u tourists (ChairsInUse: %u/%u)",
-                     chairId, groupSize, shm_->chairPool.chairsInUse, Config::Chair::MAX_CONCURRENT_IN_USE);
+                     chairId, groupSize, shm_->chairPool.chairsInUse, Constants::Chair::MAX_CONCURRENT_IN_USE);
 
         for (uint32_t i = 0; i < groupSize; ++i) {
             sem_.post(Semaphore::Index::CHAIR_ASSIGNED, false);
