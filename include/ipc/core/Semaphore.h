@@ -27,7 +27,7 @@ public:
             ENTRY_GATES = 0,
             RIDE_GATES,
             STATION_CAPACITY,
-            CHAIR_ALLOCATION,
+            CHAIR_ALLOCATION, // TODO remove it
             SHM_OPERATIONAL,
             SHM_CHAIRS,
             SHM_STATS,
@@ -35,7 +35,7 @@ public:
             CASHIER_READY,
             LOWER_WORKER_READY,
             UPPER_WORKER_READY,
-            CHAIR_ASSIGNED,
+            CHAIR_ASSIGNED, // TODO rename to car
             BOARDING_QUEUE_WORK,
             ENTRY_QUEUE_WORK,
             EXIT_BIKE_TRAILS, // Upper station exit to downhill bike trails (cyclists)
@@ -43,6 +43,7 @@ public:
             CASHIER_QUEUE_SLOTS, // Flow control for cashier message queue
             ENTRY_QUEUE_VIP_SLOTS, // Reserved entry queue slots for VIPs
             ENTRY_QUEUE_REGULAR_SLOTS, // Entry queue slots for regular tourists
+            CURRENT_CHAIR_SLOTS, // Available slots on current boarding chair (0-4)
             TOTAL_SEMAPHORES
         };
 
@@ -57,9 +58,13 @@ public:
 
     void initialize(uint8_t semIndex, int32_t value) const;
     bool wait(uint8_t semIndex, bool useUndo = true) const;
+    bool wait(uint8_t semIndex, int32_t n, bool useUndo = true) const;
     bool waitInterruptible(uint8_t semIndex, bool useUndo = true) const;
     bool tryAcquire(uint8_t semIndex, bool useUndo = true) const;
+    bool tryAcquire(uint8_t semIndex, int32_t n, bool useUndo = true) const;
     void post(uint8_t semIndex, bool useUndo = true) const;
+    void post(uint8_t semIndex, int32_t n, bool useUndo = true) const;
+    void setValue(uint8_t semIndex, int32_t value) const;
     [[nodiscard]] int32_t getAvailableSpace(uint8_t semIndex) const;
     void destroy() const;
 

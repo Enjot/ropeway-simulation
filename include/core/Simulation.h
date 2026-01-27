@@ -187,55 +187,42 @@ private:
     void spawnTourists() {
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_int_distribution adultAgeDist(18, 75); // Adults only
+        std::uniform_int_distribution ageDist(18, 75);
         std::uniform_int_distribution typeDist(0, 1);
         std::uniform_real_distribution<> vipDist(0.0, 1.0);
         std::uniform_real_distribution<> rideDist(0.0, 1.0);
-        std::uniform_real_distribution<> childrenDist(0.0, 1.0);
-        std::uniform_int_distribution numChildrenDist(1, 2);
         std::uniform_int_distribution trailDist(0, 2);
 
-        // Initialize nextTouristId counter in shared memory
+        // Initialize nextTouristId counter
         {
             Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_STATS);
             ipc_->state()->stats.nextTouristId = Config::Simulation::NUM_TOURISTS();
         }
 
         for (uint32_t id = 1; id <= Config::Simulation::NUM_TOURISTS(); ++id) {
-            uint32_t age = adultAgeDist(gen);
+            uint32_t age = ageDist(gen);
+            bool wantsToRide = (rideDist(gen) > 0.1);
 
-            // ~20% of adults have children
-            uint32_t numChildren = 0;
-            if (childrenDist(gen) < 0.2) {
-                numChildren = numChildrenDist(gen);
-            }
-
-            // Guardians with children must want to ride (children need supervision)
-            bool wantsToRide = (numChildren > 0) ? true : (rideDist(gen) > 0.1);
-
+            // Tourist process handles children/bike internally as threads
             pid_t pid = ProcessSpawner::spawn("tourist_process", {
-                                                  std::to_string(id),
-                                                  std::to_string(age),
-                                                  std::to_string(typeDist(gen)),
-                                                  std::to_string(
-                                                      vipDist(gen) < Constants::Vip::VIP_CHANCE ? 1 : 0),
-                                                  std::to_string(wantsToRide ? 1 : 0),
-                                                  std::to_string(-1),
-                                                  // guardianId (-1 = no guardian, independent adult)
-                                                  std::to_string(numChildren),
-                                                  std::to_string(trailDist(gen)),
-                                                  std::to_string(ipc_->shmKey()),
-                                                  std::to_string(ipc_->semKey()),
-                                                  std::to_string(ipc_->workerMsgKey()),
-                                                  std::to_string(ipc_->cashierMsgKey()),
-                                                  std::to_string(ipc_->entryGateMsgKey())
-                                              });
+                std::to_string(id),
+                std::to_string(age),
+                std::to_string(typeDist(gen)),
+                std::to_string(vipDist(gen) < Constants::Vip::VIP_CHANCE ? 1 : 0),
+                std::to_string(wantsToRide ? 1 : 0),
+                std::to_string(trailDist(gen)),
+                std::to_string(ipc_->shmKey()),
+                std::to_string(ipc_->semKey()),
+                std::to_string(ipc_->workerMsgKey()),
+                std::to_string(ipc_->cashierMsgKey()),
+                std::to_string(ipc_->entryGateMsgKey())
+            });
 
             if (pid > 0) touristPids_.push_back(pid);
 
             usleep(Config::Time::ARRIVAL_DELAY_BASE_US() + (gen() % Config::Time::ARRIVAL_DELAY_RANDOM_US()));
         }
-        Logger::info(tag_, "Spawned %d adult tourists", static_cast<int>(touristPids_.size()));
+        Logger::info(tag_, "Spawned %d tourists", static_cast<int>(touristPids_.size()));
     }
 
     void shutdown() {

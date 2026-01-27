@@ -38,6 +38,12 @@ namespace Constants {
         constexpr float VIP_CHANCE{0.01f}; // "ok. 1%"
     }
 
+    namespace Group {
+        constexpr float CHILD_CHANCE{0.20f};     // 20% chance adult has children
+        constexpr float TWO_CHILDREN_CHANCE{0.30f}; // 30% of parents have 2 kids (rest have 1)
+        constexpr float BIKE_CHANCE{0.80f};      // 80% of cyclists have a bike
+    }
+
     namespace Ropeway {
         constexpr uint32_t SHUTDOWN_DELAY_SEC{3}; // "po 3 sekundach kolej zostanie wyłączona"
     }

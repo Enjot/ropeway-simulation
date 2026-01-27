@@ -70,15 +70,18 @@ namespace ArgumentParser {
         key_t cashierMsgKey;
     };
 
+    /**
+     * Tourist process arguments.
+     * Note: Children and bikes are handled as threads WITHIN the tourist process,
+     * determined randomly based on Constants::Group::* chances.
+     */
     struct TouristArgs {
         uint32_t id;
         uint32_t age;
-        int type;
+        int type;           // 0 = pedestrian, 1 = cyclist
         bool isVip;
         bool wantsToRide;
-        int32_t guardianId;
-        uint32_t numChildren; // Number of children this adult will spawn (0-2)
-        int trail;
+        int trail;          // 0-2 (easy, medium, hard)
         key_t shmKey;
         key_t semKey;
         key_t msgKey;
@@ -133,10 +136,10 @@ namespace ArgumentParser {
     }
 
     inline bool parseTouristArgs(int argc, char *argv[], TouristArgs &args) {
-        if (argc != 14) {
+        if (argc != 12) {
             detail::usage(
                 argv[0],
-                "<id> <age> <type> <isVip> <wantsToRide> <guardianId> <numChildren> <trail> <shmKey> <semKey> <msgKey> <cashierMsgKey> <entryGateMsgKey>");
+                "<id> <age> <type> <isVip> <wantsToRide> <trail> <shmKey> <semKey> <msgKey> <cashierMsgKey> <entryGateMsgKey>");
             return false;
         }
         if (!parseUint32(argv[1], args.id)) {
@@ -148,7 +151,7 @@ namespace ArgumentParser {
             return false;
         }
         if (!parseEnum(argv[3], 0, 1, args.type)) {
-            detail::err("Invalid type (0-1)");
+            detail::err("Invalid type (0=pedestrian, 1=cyclist)");
             return false;
         }
         if (!parseBool(argv[4], args.isVip)) {
@@ -159,35 +162,27 @@ namespace ArgumentParser {
             detail::err("Invalid wantsToRide (0-1)");
             return false;
         }
-        if (!parseInt32(argv[6], args.guardianId)) {
-            detail::err("Invalid guardianId");
-            return false;
-        }
-        if (!parseUint32(argv[7], args.numChildren)) {
-            detail::err("Invalid numChildren");
-            return false;
-        }
-        if (!parseEnum(argv[8], 0, 2, args.trail)) {
+        if (!parseEnum(argv[6], 0, 2, args.trail)) {
             detail::err("Invalid trail (0-2)");
             return false;
         }
-        if (!parseKeyT(argv[9], args.shmKey)) {
+        if (!parseKeyT(argv[7], args.shmKey)) {
             detail::err("Invalid shmKey");
             return false;
         }
-        if (!parseKeyT(argv[10], args.semKey)) {
+        if (!parseKeyT(argv[8], args.semKey)) {
             detail::err("Invalid semKey");
             return false;
         }
-        if (!parseKeyT(argv[11], args.msgKey)) {
+        if (!parseKeyT(argv[9], args.msgKey)) {
             detail::err("Invalid msgKey");
             return false;
         }
-        if (!parseKeyT(argv[12], args.cashierMsgKey)) {
+        if (!parseKeyT(argv[10], args.cashierMsgKey)) {
             detail::err("Invalid cashierMsgKey");
             return false;
         }
-        if (!parseKeyT(argv[13], args.entryGateMsgKey)) {
+        if (!parseKeyT(argv[11], args.entryGateMsgKey)) {
             detail::err("Invalid entryGateMsgKey");
             return false;
         }

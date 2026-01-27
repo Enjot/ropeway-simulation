@@ -162,20 +162,16 @@ namespace Test {
 
             result.childrenWithoutGuardian = childrenRodeAlone;
 
-            // Check boarding queue for stranded children at end of simulation
-            uint32_t strandedChildren = 0;
-            for (uint32_t i = 0; i < state.chairPool.boardingQueue.count; ++i) {
-                const BoardingQueueEntry &entry = state.chairPool.boardingQueue.entries[i];
-                if (entry.needsSupervision && entry.guardianId < 0 && !entry.readyToBoard) {
-                    ++strandedChildren;
-                }
-            }
+            // With children as threads inside parent processes, stranded children shouldn't occur
+            // Children are part of the parent's process and use combined slots
+            uint32_t strandedChildren = 0; // Always 0 now - children can't be separated
 
             // Validate max 2 children per adult constraint
+            // Now checked via childCount field on each tourist
             uint32_t adultsWithExcess = 0;
             for (uint32_t i = 0; i < state.chairPool.boardingQueue.count; ++i) {
                 const BoardingQueueEntry &entry = state.chairPool.boardingQueue.entries[i];
-                if (entry.isAdult && entry.dependentCount > Constants::Gate::MAX_CHILDREN_PER_ADULT) {
+                if (entry.childCount > Constants::Gate::MAX_CHILDREN_PER_ADULT) {
                     ++adultsWithExcess;
                 }
             }

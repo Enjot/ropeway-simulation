@@ -9,35 +9,45 @@
  * Owned and managed by LowerWorker (lower station controller).
  *
  * Flow:
- * 1. Tourist enters station -> adds BoardingQueueEntry
- * 2. LowerWorker pairs children with guardians
- * 3. LowerWorker assigns tourists to chairs (sets assignedChairId, readyToBoard)
- * 4. Tourist boards chair -> removed from queue
+ * 1. Tourist enters station -> adds BoardingQueueEntry with their slot count
+ * 2. LowerWorker checks if tourist fits on current chair (using slots)
+ * 3. If fits: assign chair, tourist boards
+ * 4. If doesn't fit: dispatch current chair, assign to next chair
+ *
+ * Note: Children and bikes are threads within tourist process, not separate queue entries.
+ * The 'slots' field represents the total space needed (adult + children + bike).
  */
 
 /**
  * Single entry in the boarding queue.
- * Represents a tourist waiting to board a chair.
+ * Represents a tourist (and their group) waiting to board a chair.
  */
 struct BoardingQueueEntry {
     uint32_t touristId;
     pid_t touristPid;
     uint32_t age;
     TouristType type;
+    bool isVip;
 
-    // Guardian/supervision tracking (for children under 8)
-    int32_t guardianId; // Guardian tourist ID (-1 if none needed)
-    bool needsSupervision; // True if child under 8
-    bool isAdult; // True if can supervise children
-    uint32_t dependentCount; // Children currently assigned to this adult
+    /**
+     * Total slots needed on chair:
+     * - Pedestrian alone: 1
+     * - Cyclist with bike: 2
+     * - + 1 for each child
+     */
+    uint32_t slots;
+
+    // Group info (for logging/reporting)
+    uint32_t childCount;    // Number of children with this tourist
+    bool hasBike;           // Has a bike (cyclist)
 
     // Chair assignment (set by LowerWorker)
     int32_t assignedChairId; // Assigned chair ID (-1 if waiting)
-    bool readyToBoard; // True when group is ready to board
+    bool readyToBoard;       // True when ready to board
 
     BoardingQueueEntry()
         : touristId{0}, touristPid{0}, age{0}, type{TouristType::PEDESTRIAN},
-          guardianId{-1}, needsSupervision{false}, isAdult{false}, dependentCount{0},
+          isVip{false}, slots{1}, childCount{0}, hasBike{false},
           assignedChairId{-1}, readyToBoard{false} {
     }
 };
@@ -47,7 +57,7 @@ struct BoardingQueueEntry {
  * Fixed-size array suitable for shared memory.
  */
 struct BoardingQueue {
-    static constexpr uint32_t MAX_SIZE = 32;
+    static constexpr uint32_t MAX_SIZE = 64;
 
     BoardingQueueEntry entries[MAX_SIZE];
     uint32_t count;

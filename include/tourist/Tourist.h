@@ -4,12 +4,13 @@
 #include "ropeway/TrailDifficulty.h"
 #include "entrance/TicketName.h"
 #include "core/Config.h"
+#include "core/Constants.h"
 #include <ctime>
 #include "tourist/TouristState.h"
 
-
 /**
- * Structure representing a tourist
+ * Structure representing a tourist and their group (children, bike).
+ * Children and bikes are threads within the tourist process, not separate processes.
  */
 struct Tourist {
     uint32_t id;
@@ -26,14 +27,21 @@ struct Tourist {
     TicketType ticketType;
     time_t ticketValidUntil;
 
-    // Supervision
-    int32_t guardianId;
-    uint32_t dependentCount;
-    int32_t dependentIds[Constants::Gate::MAX_CHILDREN_PER_ADULT];
-
     // Cyclist trails
     TrailDifficulty preferredTrail;
     uint32_t ridesCompleted;
+
+    // Group composition (children are threads, not processes)
+    uint32_t childCount;        // Number of children (0, 1, or 2)
+    uint32_t childAges[2];      // Ages of children (for ticket pricing)
+    bool hasBike;               // Cyclist has a bike (takes extra slot)
+
+    /**
+     * Total slots needed on chair.
+     * Pedestrian = 1, Cyclist (with bike) = 2
+     * Each child = 1 additional slot
+     */
+    uint32_t slots;
 
     // Reporting
     time_t arrivalTime;
@@ -50,13 +58,29 @@ struct Tourist {
                 hasTicket{false},
                 ticketType{TicketType::SINGLE_USE},
                 ticketValidUntil{0},
-                guardianId{-1},
-                dependentCount{0},
-                dependentIds{-1, -1},
                 preferredTrail{TrailDifficulty::EASY},
                 ridesCompleted{0},
+                childCount{0},
+                childAges{0, 0},
+                hasBike{false},
+                slots{1},
                 arrivalTime{0},
                 lastRideTime{0} {
+    }
+
+    /**
+     * Calculate and set the slots field based on type and children.
+     */
+    void calculateSlots() {
+        slots = 1; // Base: person takes 1 slot
+
+        // Cyclist with bike takes 2 slots
+        if (type == TouristType::CYCLIST && hasBike) {
+            slots = 2;
+        }
+
+        // Each child takes 1 additional slot
+        slots += childCount;
     }
 
     /**
@@ -76,25 +100,16 @@ struct Tourist {
     }
 
     /**
-     * Check if tourist needs supervision (child under 8)
-     */
-    [[nodiscard]] constexpr bool needsSupervision() const noexcept {
-        return age < Constants::Age::SUPERVISION_AGE_LIMIT;
-    }
-
-    /**
-     * Check if tourist is an adult (can supervise children)
+     * Check if tourist is an adult (can have children)
      */
     [[nodiscard]] constexpr bool isAdult() const noexcept {
         return age >= Constants::Age::ADULT_AGE_FROM;
     }
 
     /**
-     * Get number of chair slots this tourist requires
+     * Check if this tourist has a group (children or bike)
      */
-    [[nodiscard]] constexpr uint32_t getSlotCost() const noexcept {
-        return (type == TouristType::CYCLIST)
-                   ? Constants::Chair::CYCLIST_SLOT_COST
-                   : Constants::Chair::PEDESTRIAN_SLOT_COST;
+    [[nodiscard]] constexpr bool hasGroup() const noexcept {
+        return childCount > 0 || hasBike;
     }
 };

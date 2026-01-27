@@ -95,6 +95,8 @@ public:
         sem_.initialize(Semaphore::Index::CASHIER_QUEUE_SLOTS, Constants::Queue::CASHIER_QUEUE_CAPACITY);
         sem_.initialize(Semaphore::Index::ENTRY_QUEUE_VIP_SLOTS, Constants::Queue::ENTRY_QUEUE_VIP_SLOTS);
         sem_.initialize(Semaphore::Index::ENTRY_QUEUE_REGULAR_SLOTS, Constants::Queue::ENTRY_QUEUE_REGULAR_SLOTS);
+        // Chair boarding: 4 slots available on current chair
+        sem_.initialize(Semaphore::Index::CURRENT_CHAIR_SLOTS, Constants::Chair::SLOTS_PER_CHAIR);
     }
 
     void initState(time_t openTime, time_t closeTime) {

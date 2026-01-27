@@ -26,6 +26,7 @@ const char* Semaphore::Index::toString(const uint8_t index) {
         case CASHIER_QUEUE_SLOTS: return "CASHIER_QUEUE_SLOTS";
         case ENTRY_QUEUE_VIP_SLOTS: return "ENTRY_QUEUE_VIP_SLOTS";
         case ENTRY_QUEUE_REGULAR_SLOTS: return "ENTRY_QUEUE_REGULAR_SLOTS";
+        case CURRENT_CHAIR_SLOTS: return "CURRENT_CHAIR_SLOTS";
         default: return "UNKNOWN_SEMAPHORE";
     }
 }
@@ -102,6 +103,39 @@ bool Semaphore::tryAcquire(const uint8_t semIndex, const bool useUndo) const {
     return true;
 }
 
+bool Semaphore::tryAcquire(const uint8_t semIndex, const int32_t n, const bool useUndo) const {
+    if (n <= 0) return true;
+
+    sembuf operation{};
+    operation.sem_num = semIndex;
+    operation.sem_op = static_cast<short>(-n);
+    operation.sem_flg = IPC_NOWAIT | (useUndo ? SEM_UNDO : 0);
+
+    if (semop(semId_, &operation, 1) == -1) {
+        if (errno == EAGAIN) return false;
+        if (errno == EINTR) return false;
+        perror("semop tryAcquire");
+        throw ipc_exception("Semaphore tryAcquire failed");
+    }
+    return true;
+}
+
+bool Semaphore::wait(const uint8_t semIndex, const int32_t n, const bool useUndo) const {
+    if (n <= 0) return true;
+
+    sembuf operation{};
+    operation.sem_num = semIndex;
+    operation.sem_op = static_cast<short>(-n);
+    operation.sem_flg = useUndo ? SEM_UNDO : 0;
+
+    if (semop(semId_, &operation, 1) == -1) {
+        if (errno == EINTR) return false;
+        perror("semop wait");
+        throw ipc_exception("Semaphore wait failed");
+    }
+    return true;
+}
+
 void Semaphore::post(const uint8_t semIndex, const bool useUndo) const {
     sembuf operation{};
     operation.sem_num = semIndex;
@@ -112,6 +146,30 @@ void Semaphore::post(const uint8_t semIndex, const bool useUndo) const {
         if (errno == EINTR) continue;
         perror("semop post");
         throw ipc_exception("Semaphore post failed");
+    }
+}
+
+void Semaphore::post(const uint8_t semIndex, const int32_t n, const bool useUndo) const {
+    if (n <= 0) return;
+
+    sembuf operation{};
+    operation.sem_num = semIndex;
+    operation.sem_op = static_cast<short>(n);
+    operation.sem_flg = useUndo ? SEM_UNDO : 0;
+
+    while (semop(semId_, &operation, 1) == -1) {
+        if (errno == EINTR) continue;
+        perror("semop post");
+        throw ipc_exception("Semaphore post failed");
+    }
+}
+
+void Semaphore::setValue(const uint8_t semIndex, const int32_t value) const {
+    semun arg{};
+    arg.val = value;
+    if (semctl(semId_, semIndex, SETVAL, arg) == -1) {
+        perror("semctl SETVAL");
+        throw ipc_exception("Failed to set semaphore value");
     }
 }
 

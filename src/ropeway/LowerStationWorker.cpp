@@ -318,35 +318,50 @@ private:
                      request->touristId, request->isVip ? " [VIP]" : "");
     }
 
-    uint32_t getSlotCost(const BoardingQueueEntry &entry) {
-        return (entry.type == TouristType::CYCLIST)
-                   ? Constants::Chair::CYCLIST_SLOT_COST
-                   : Constants::Chair::PEDESTRIAN_SLOT_COST;
+    /**
+     * Dispatch current chair and notify waiting tourists.
+     */
+    void dispatchChair(int32_t chairId, uint32_t* groupIndices, uint32_t groupCount,
+                       BoardingQueue &queue, uint32_t totalSlots) {
+        if (groupCount == 0) return;
+
+        Chair &chair = shm_->chairPool.chairs[chairId];
+        chair.isOccupied = true;
+        chair.numPassengers = groupCount;
+        chair.slotsUsed = totalSlots;
+        chair.departureTime = time(nullptr);
+        shm_->chairPool.chairsInUse++;
+
+        for (uint32_t i = 0; i < groupCount; ++i) {
+            BoardingQueueEntry &entry = queue.entries[groupIndices[i]];
+            entry.assignedChairId = chairId;
+            entry.readyToBoard = true;
+            if (i < 4) {
+                chair.passengerIds[i] = static_cast<int32_t>(entry.touristId);
+            }
+        }
+
+        Logger::info(TAG, "Chair %d departing: %u groups, %u/4 slots",
+                     chairId, groupCount, totalSlots);
+
+        // Wake up tourists
+        for (uint32_t i = 0; i < groupCount; ++i) {
+            sem_.post(Semaphore::Index::CHAIR_ASSIGNED, false);
+        }
+
+        // Reset chair slots for next chair
+        sem_.setValue(Semaphore::Index::CURRENT_CHAIR_SLOTS, Constants::Chair::SLOTS_PER_CHAIR);
     }
 
     /**
-     * Find children of a guardian in the queue.
-     * Returns number of children found, fills childIndices array.
+     * Simple FIFO boarding with slots.
+     * Each tourist (group) has a pre-calculated slot count.
+     * If tourist doesn't fit, dispatch current chair and wait for next.
      */
-    uint32_t findChildren(BoardingQueue &queue, uint32_t guardianId,
-                          uint32_t childIndices[], uint32_t maxChildren) {
-        uint32_t found = 0;
-        for (uint32_t i = 0; i < queue.count && found < maxChildren; ++i) {
-            BoardingQueueEntry &entry = queue.entries[i];
-            if (entry.guardianId == static_cast<int32_t>(guardianId) &&
-                entry.assignedChairId < 0 && !entry.readyToBoard) {
-                childIndices[found++] = i;
-            }
-        }
-        return found;
-    }
-
     void processBoardingQueue() {
-        // Lock ordering: SHM_OPERATIONAL first, then SHM_CHAIRS
         Semaphore::ScopedLock lockCore(sem_, Semaphore::Index::SHM_OPERATIONAL);
         Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
 
-        // Don't process during emergency
         if (shm_->operational.state == RopewayState::EMERGENCY_STOP) {
             return;
         }
@@ -358,93 +373,7 @@ private:
             return;
         }
 
-        uint32_t slotsUsed = 0;
-        uint32_t groupSize = 0;
-        uint32_t groupIndices[4] = {0};
-        bool addedToGroup[BoardingQueue::MAX_SIZE] = {false};
-
-        // Helper: count how many of guardian's children are already in queue
-        auto countChildrenInQueue = [&queue](uint32_t guardianId) -> uint32_t {
-            uint32_t count = 0;
-            for (uint32_t j = 0; j < queue.count; ++j) {
-                if (queue.entries[j].guardianId == static_cast<int32_t>(guardianId)) {
-                    count++;
-                }
-            }
-            return count;
-        };
-
-        // First pass: find guardians with children and add them as family units
-        for (uint32_t i = 0; i < queue.count && groupSize < 4; ++i) {
-            BoardingQueueEntry &entry = queue.entries[i];
-
-            if (entry.readyToBoard || entry.assignedChairId >= 0 || addedToGroup[i]) {
-                continue;
-            }
-
-            // Check if this is a guardian with children
-            if (entry.dependentCount > 0) {
-                uint32_t childrenInQueue = countChildrenInQueue(entry.touristId);
-
-                // Guardian must wait until ALL children are in queue
-                if (childrenInQueue < entry.dependentCount) {
-                    Logger::debug(TAG, "Guardian %u waiting for children (%u/%u in queue)",
-                                  entry.touristId, childrenInQueue, entry.dependentCount);
-                    continue; // Skip - wait for all children
-                }
-
-                uint32_t childIndices[Constants::Gate::MAX_CHILDREN_PER_ADULT];
-                uint32_t numChildren = findChildren(queue, entry.touristId,
-                                                    childIndices, entry.dependentCount);
-
-                // All children present - board together as family
-                if (numChildren > 0) {
-                    // Calculate total slots for family
-                    uint32_t familySlots = getSlotCost(entry);
-                    for (uint32_t c = 0; c < numChildren; ++c) {
-                        familySlots += getSlotCost(queue.entries[childIndices[c]]);
-                    }
-
-                    // Check if family fits
-                    if (slotsUsed + familySlots <= Constants::Chair::SLOTS_PER_CHAIR &&
-                        groupSize + 1 + numChildren <= 4) {
-                        // Add guardian
-                        groupIndices[groupSize++] = i;
-                        addedToGroup[i] = true;
-                        slotsUsed += getSlotCost(entry);
-
-                        // Add children
-                        for (uint32_t c = 0; c < numChildren; ++c) {
-                            groupIndices[groupSize++] = childIndices[c];
-                            addedToGroup[childIndices[c]] = true;
-                            slotsUsed += getSlotCost(queue.entries[childIndices[c]]);
-                        }
-
-                        Logger::info(TAG, "[FAMILY] Guardian %u boarding with %u children",
-                                     entry.touristId, numChildren);
-                    }
-                }
-                continue; // Guardian with children - don't fall through
-            }
-
-            // Child waiting for guardian - skip (guardian will pick them up)
-            if (entry.needsSupervision) {
-                Logger::debug(TAG, "Child %u waiting for guardian %d",
-                              entry.touristId, entry.guardianId);
-                continue;
-            }
-
-            // Regular adult tourist without children
-            uint32_t slotCost = getSlotCost(entry);
-            if (slotsUsed + slotCost <= Constants::Chair::SLOTS_PER_CHAIR) {
-                groupIndices[groupSize++] = i;
-                addedToGroup[i] = true;
-                slotsUsed += slotCost;
-            }
-        }
-
-        if (groupSize == 0) return;
-
+        // Find available chair
         int32_t chairId = -1;
         for (uint32_t c = 0; c < Constants::Chair::QUANTITY; ++c) {
             uint32_t idx = (queue.nextChairId + c) % Constants::Chair::QUANTITY;
@@ -454,30 +383,73 @@ private:
                 break;
             }
         }
-
         if (chairId < 0) return;
 
-        Chair &chair = shm_->chairPool.chairs[chairId];
-        chair.isOccupied = true;
-        chair.numPassengers = groupSize;
-        chair.slotsUsed = slotsUsed;
-        chair.departureTime = time(nullptr);
-        shm_->chairPool.chairsInUse++;
+        // Current chair state
+        uint32_t slotsUsed = 0;
+        uint32_t groupCount = 0;
+        uint32_t groupIndices[4] = {0};
 
-        for (uint32_t i = 0; i < groupSize; ++i) {
-            BoardingQueueEntry &entry = queue.entries[groupIndices[i]];
-            entry.assignedChairId = chairId;
-            entry.readyToBoard = true;
-            if (i < 4) {
-                chair.passengerIds[i] = static_cast<int32_t>(entry.touristId);
+        // FIFO processing - simple slot-based boarding
+        for (uint32_t i = 0; i < queue.count && groupCount < 4; ++i) {
+            BoardingQueueEntry &entry = queue.entries[i];
+
+            if (entry.readyToBoard || entry.assignedChairId >= 0) {
+                continue;
+            }
+
+            // Check if this tourist's group fits
+            if (slotsUsed + entry.slots <= Constants::Chair::SLOTS_PER_CHAIR) {
+                // Fits - add to current chair
+                groupIndices[groupCount++] = i;
+                slotsUsed += entry.slots;
+
+                // Log group composition
+                if (entry.childCount > 0 && entry.hasBike) {
+                    Logger::info(TAG, "Boarding Tourist %u: %s with bike + %u children (%u slots)",
+                                 entry.touristId,
+                                 entry.type == TouristType::CYCLIST ? "cyclist" : "pedestrian",
+                                 entry.childCount, entry.slots);
+                } else if (entry.childCount > 0) {
+                    Logger::info(TAG, "Boarding Tourist %u: %s + %u children (%u slots)",
+                                 entry.touristId,
+                                 entry.type == TouristType::CYCLIST ? "cyclist" : "pedestrian",
+                                 entry.childCount, entry.slots);
+                } else if (entry.hasBike) {
+                    Logger::info(TAG, "Boarding Tourist %u: cyclist with bike (%u slots)",
+                                 entry.touristId, entry.slots);
+                }
+
+                // Chair full?
+                if (slotsUsed >= Constants::Chair::SLOTS_PER_CHAIR) {
+                    break;
+                }
+            } else {
+                // Doesn't fit - dispatch current chair (if not empty)
+                if (groupCount > 0) {
+                    dispatchChair(chairId, groupIndices, groupCount, queue, slotsUsed);
+                    return; // Tourist waits for next iteration
+                }
+                // Empty chair but tourist still doesn't fit (slots > 4)?
+                // This shouldn't happen, but handle gracefully
+                if (entry.slots > Constants::Chair::SLOTS_PER_CHAIR) {
+                    Logger::error(TAG, "Tourist %u needs %u slots (max %u) - cannot board!",
+                                  entry.touristId, entry.slots, Constants::Chair::SLOTS_PER_CHAIR);
+                    // Remove from queue
+                    queue.removeTourist(i);
+                    shm_->operational.touristsInLowerStation--;
+                    sem_.post(Semaphore::Index::STATION_CAPACITY, false);
+                    if (entry.touristPid > 0) {
+                        kill(entry.touristPid, SIGTERM);
+                    }
+                    i--; // Adjust index after removal
+                }
             }
         }
 
-        Logger::info(TAG, "Chair %d assigned to %u tourists (ChairsInUse: %u/%u)",
-                     chairId, groupSize, shm_->chairPool.chairsInUse, Constants::Chair::MAX_CONCURRENT_IN_USE);
-
-        for (uint32_t i = 0; i < groupSize; ++i) {
-            sem_.post(Semaphore::Index::CHAIR_ASSIGNED, false);
+        // Dispatch chair if we have passengers
+        if (groupCount > 0) {
+            dispatchChair(chairId, groupIndices, groupCount, queue, slotsUsed);
         }
     }
 

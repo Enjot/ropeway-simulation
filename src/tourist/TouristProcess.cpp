@@ -2,7 +2,8 @@
 #include <ctime>
 #include <cstdlib>
 #include <cstring>
-#include <sys/wait.h>
+#include <thread>
+#include <atomic>
 #include <vector>
 
 #include "ipc/core/SharedMemory.h"
@@ -23,6 +24,76 @@ namespace {
     SignalHelper::Flags g_signals;
 }
 
+/**
+ * Child thread - simply exists and dies with parent.
+ * Children are represented as threads, not separate processes.
+ */
+class ChildThread {
+public:
+    ChildThread(uint32_t childId, uint32_t age, uint32_t parentId)
+        : childId_{childId}, age_{age}, parentId_{parentId}, running_{true} {
+    }
+
+    void start() {
+        thread_ = std::thread([this]() {
+            Logger::info("Child", "[Thread %u] age=%u, with parent %u", childId_, age_, parentId_);
+            // Child thread just waits until parent finishes
+            while (running_.load()) {
+                usleep(100000); // 100ms check interval
+            }
+            Logger::debug("Child", "[Thread %u] finished with parent", childId_);
+        });
+    }
+
+    void stop() {
+        running_.store(false);
+        if (thread_.joinable()) {
+            thread_.join();
+        }
+    }
+
+    uint32_t age() const { return age_; }
+
+private:
+    uint32_t childId_;
+    uint32_t age_;
+    uint32_t parentId_;
+    std::atomic<bool> running_;
+    std::thread thread_;
+};
+
+/**
+ * Bike thread - represents the cyclist's bike.
+ * Takes an extra slot on the chair.
+ */
+class BikeThread {
+public:
+    explicit BikeThread(uint32_t ownerId) : ownerId_{ownerId}, running_{true} {
+    }
+
+    void start() {
+        thread_ = std::thread([this]() {
+            Logger::debug("Bike", "[Thread] bike of tourist %u", ownerId_);
+            while (running_.load()) {
+                usleep(100000);
+            }
+            Logger::debug("Bike", "[Thread] bike stored", ownerId_);
+        });
+    }
+
+    void stop() {
+        running_.store(false);
+        if (thread_.joinable()) {
+            thread_.join();
+        }
+    }
+
+private:
+    uint32_t ownerId_;
+    std::atomic<bool> running_;
+    std::thread thread_;
+};
+
 class TouristProcess {
 public:
     TouristProcess(const ArgumentParser::TouristArgs &args)
@@ -32,8 +103,6 @@ public:
           responseQueue_{args.cashierMsgKey, "CashierResp"},
           entryRequestQueue_{args.entryGateMsgKey, "EntryReq"},
           entryResponseQueue_{args.entryGateMsgKey, "EntryResp"},
-          args_{args},
-          numChildren_{args.numChildren},
           tag_{"Tourist"} {
         tourist_.id = args.id;
         tourist_.pid = getpid();
@@ -41,38 +110,61 @@ public:
         tourist_.type = static_cast<TouristType>(args.type);
         tourist_.isVip = args.isVip;
         tourist_.wantsToRide = args.wantsToRide;
-        tourist_.guardianId = args.guardianId;
         tourist_.preferredTrail = static_cast<TrailDifficulty>(args.trail);
         tourist_.state = TouristState::BUYING_TICKET;
 
-        // Set simulation start time for logger (read from shared memory)
+        // Determine group composition (children and bike)
+        setupGroup();
+
+        // Set simulation start time for logger
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
             simulationStartTime_ = shm_->operational.openingTime;
             Logger::setSimulationStartTime(simulationStartTime_);
         }
 
-        // Create descriptive tag based on role
-        if (tourist_.guardianId >= 0) {
-            snprintf(tagBuf_, sizeof(tagBuf_), "Child %u", tourist_.id);
-            Logger::info(tagBuf_, "[CHILD] age=%u, guardian=%d",
-                         tourist_.age, tourist_.guardianId);
-        } else if (numChildren_ > 0) {
-            snprintf(tagBuf_, sizeof(tagBuf_), "Guardian %u", tourist_.id);
-            Logger::info(tagBuf_, "[GUARDIAN] age=%u, %s, will have %u children",
-                         tourist_.age,
-                         tourist_.type == TouristType::CYCLIST ? "cyclist" : "pedestrian",
-                         numChildren_);
-        } else {
-            snprintf(tagBuf_, sizeof(tagBuf_), "Tourist %u", tourist_.id);
-            Logger::info(tagBuf_, "age=%u, %s",
-                         tourist_.age,
-                         tourist_.type == TouristType::CYCLIST ? "cyclist" : "pedestrian");
-        }
+        // Create descriptive tag
+        snprintf(tagBuf_, sizeof(tagBuf_), "Tourist %u", tourist_.id);
         tag_ = tagBuf_;
+
+        // Log tourist info
+        const char* typeStr = tourist_.type == TouristType::CYCLIST ? "cyclist" : "pedestrian";
+        if (tourist_.childCount > 0 && tourist_.hasBike) {
+            Logger::info(tag_, "age=%u, %s with bike, %u children (slots=%u)",
+                         tourist_.age, typeStr, tourist_.childCount, tourist_.slots);
+        } else if (tourist_.childCount > 0) {
+            Logger::info(tag_, "age=%u, %s, %u children (slots=%u)",
+                         tourist_.age, typeStr, tourist_.childCount, tourist_.slots);
+        } else if (tourist_.hasBike) {
+            Logger::info(tag_, "age=%u, %s with bike (slots=%u)",
+                         tourist_.age, typeStr, tourist_.slots);
+        } else {
+            Logger::info(tag_, "age=%u, %s (slots=%u)",
+                         tourist_.age, typeStr, tourist_.slots);
+        }
+    }
+
+    ~TouristProcess() {
+        // Stop all child threads
+        for (auto& child : childThreads_) {
+            child->stop();
+        }
+        // Stop bike thread
+        if (bikeThread_) {
+            bikeThread_->stop();
+        }
     }
 
     void run() {
+        // Start child threads (they just exist alongside parent)
+        for (auto& child : childThreads_) {
+            child->start();
+        }
+        // Start bike thread
+        if (bikeThread_) {
+            bikeThread_->start();
+        }
+
         while (tourist_.state != TouristState::FINISHED && !g_signals.exit) {
             switch (tourist_.state) {
                 case TouristState::BUYING_TICKET:
@@ -98,21 +190,51 @@ public:
             }
         }
 
-        // Wait for children before finishing
-        for (pid_t childPid: childPids_) {
-            int status;
-            waitpid(childPid, &status, 0);
-        }
-
-        Logger::info(tag_, "Finished");
+        Logger::info(tag_, "Finished (group of %u)", tourist_.slots);
     }
 
 private:
+    /**
+     * Setup group composition - determine if tourist has children and/or bike.
+     * Children and bikes are represented as threads.
+     */
+    void setupGroup() {
+        // Only adults can have children
+        if (tourist_.isAdult()) {
+            float childRoll = static_cast<float>(rand()) / RAND_MAX;
+            if (childRoll < Constants::Group::CHILD_CHANCE) {
+                // Determine number of children (1 or 2)
+                float twoChildRoll = static_cast<float>(rand()) / RAND_MAX;
+                tourist_.childCount = (twoChildRoll < Constants::Group::TWO_CHILDREN_CHANCE) ? 2 : 1;
+
+                // Create child threads
+                for (uint32_t i = 0; i < tourist_.childCount; ++i) {
+                    uint32_t childAge = 3 + (rand() % 5); // Age 3-7
+                    tourist_.childAges[i] = childAge;
+                    childThreads_.push_back(
+                        std::make_unique<ChildThread>(tourist_.id * 100 + i, childAge, tourist_.id)
+                    );
+                }
+            }
+        }
+
+        // Cyclists may have a bike (takes extra slot)
+        if (tourist_.type == TouristType::CYCLIST) {
+            float bikeRoll = static_cast<float>(rand()) / RAND_MAX;
+            if (bikeRoll < Constants::Group::BIKE_CHANCE) {
+                tourist_.hasBike = true;
+                bikeThread_ = std::make_unique<BikeThread>(tourist_.id);
+            }
+        }
+
+        // Calculate total slots needed
+        tourist_.calculateSlots();
+    }
+
     void changeState(TouristState newState) {
         Logger::info(tag_, "%s -> %s", toString(tourist_.state), toString(newState));
         tourist_.state = newState;
     }
-
 
     TicketType chooseTicketType() {
         float roll = static_cast<float>(rand()) / RAND_MAX;
@@ -148,15 +270,12 @@ private:
         TicketRequest request;
         request.touristId = tourist_.id;
         request.touristAge = tourist_.age;
-        // Children use same ticket type as guardian, adults choose randomly
-        request.requestedType = (tourist_.guardianId >= 0) ? tourist_.ticketType : chooseTicketType();
+        request.requestedType = chooseTicketType();
         request.requestVip = tourist_.isVip;
 
-        Logger::info(tag_, "Requesting %s ticket%s...",
-                     toString(request.requestedType),
-                     (tourist_.guardianId >= 0) ? " (child discount)" : "");
+        Logger::info(tag_, "Requesting %s ticket...", toString(request.requestedType));
 
-        // Acquire queue slot (blocks until slot available - no usleep retry needed)
+        // Acquire queue slot
         if (!sem_.waitInterruptible(Semaphore::Index::CASHIER_QUEUE_SLOTS)) {
             if (g_signals.exit) {
                 changeState(TouristState::FINISHED);
@@ -164,9 +283,8 @@ private:
             }
         }
 
-        // Slot acquired, send is guaranteed to succeed
         if (!requestQueue_.send(request, CashierMsgType::REQUEST)) {
-            sem_.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, false); // Release slot on error
+            sem_.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, false);
             changeState(TouristState::FINISHED);
             return;
         }
@@ -187,22 +305,21 @@ private:
         tourist_.ticketType = response->ticketType;
         tourist_.ticketValidUntil = response->validUntil;
 
-        // Register tourist for daily statistics tracking
+        // Register tourist and group for statistics
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
-            shm_->registerTourist(tourist_.id, tourist_.ticketId, tourist_.age,
-                                  tourist_.type, tourist_.isVip, tourist_.guardianId);
 
-            // Update daily statistics
+            // Register main tourist
+            shm_->registerTourist(tourist_.id, tourist_.ticketId, tourist_.age,
+                                  tourist_.type, tourist_.isVip, -1);
+
             auto &stats = shm_->stats.dailyStats;
             stats.totalTourists++;
             stats.ticketsSold++;
             stats.totalRevenueWithDiscounts += response->price;
 
             if (tourist_.isVip) stats.vipTourists++;
-            if (tourist_.age < Constants::Discount::CHILD_DISCOUNT_AGE) {
-                stats.childrenServed++;
-            } else if (tourist_.age >= Constants::Age::SENIOR_AGE_FROM) {
+            if (tourist_.age >= Constants::Age::SENIOR_AGE_FROM) {
                 stats.seniorsServed++;
             }
 
@@ -211,6 +328,10 @@ private:
             } else {
                 stats.pedestrianRides++;
             }
+
+            // Count children
+            stats.childrenServed += tourist_.childCount;
+            stats.totalTourists += tourist_.childCount;
         }
 
         Logger::info(tag_, "Got %s ticket #%u%s",
@@ -220,81 +341,11 @@ private:
         if (!tourist_.wantsToRide) {
             changeState(TouristState::FINISHED);
         } else {
-            // Spawn children after getting ticket (parent only)
-            // Returns true if this process became a child (needs to buy own ticket)
-            if (spawnChildren()) {
-                return; // Child will go through buyTicket() in main loop
-            }
             changeState(TouristState::WAITING_ENTRY);
         }
     }
 
-    // Returns true if this process is now a child (after fork)
-    bool spawnChildren() {
-        // Only adults without guardians can spawn children
-        if (numChildren_ == 0 || tourist_.guardianId >= 0) {
-            return false;
-        }
-
-        for (uint32_t i = 0; i < numChildren_; ++i) {
-            // Get unique ID for child from shared memory
-            uint32_t childId;
-            {
-                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
-                childId = ++shm_->stats.nextTouristId;
-            }
-
-            pid_t childPid = fork();
-
-            if (childPid == -1) {
-                Logger::error(tag_, "Failed to fork child");
-                continue;
-            }
-
-            if (childPid == 0) {
-                // === CHILD PROCESS ===
-                // Save parent's ticket type for child to use
-                TicketType parentTicketType = tourist_.ticketType;
-
-                // Modify tourist data for child
-                tourist_.id = childId;
-                tourist_.pid = getpid();
-                tourist_.age = 3 + (rand() % 5); // Age 3-7 (needs supervision)
-                tourist_.type = TouristType::PEDESTRIAN;
-                tourist_.guardianId = static_cast<int32_t>(args_.id); // Parent's ID
-                tourist_.ticketType = parentTicketType; // Use same ticket type as guardian
-                tourist_.hasTicket = false;
-                tourist_.state = TouristState::BUYING_TICKET; // Children also buy tickets (with 25% discount)
-
-                // Reset for child
-                numChildren_ = 0;
-                childPids_.clear();
-
-                // Update tag for logging
-                snprintf(tagBuf_, sizeof(tagBuf_), "Child %u", tourist_.id);
-                tag_ = tagBuf_;
-
-                Logger::info(tag_, "Started (age=%u, guardian=%d)",
-                             tourist_.age, tourist_.guardianId);
-
-                // Child needs to buy ticket, return to main loop
-                return true;
-            }
-
-            // === PARENT PROCESS ===
-            childPids_.push_back(childPid);
-            tourist_.dependentIds[i] = static_cast<int32_t>(childId);
-            tourist_.dependentCount++;
-
-            Logger::info(tag_, "[SPAWN] child %u (PID: %d, age will be assigned)", childId, childPid);
-        }
-        return false; // Parent continues normally
-    }
-
     void enterStation() {
-        // Send entry request to LowerStationWorker via message queue
-        // VIPs use lower mtype for priority (will be processed first)
-        // VIPs have reserved queue slots, regular tourists have separate slots
         EntryGateRequest request;
         request.touristId = tourist_.id;
         request.touristPid = tourist_.pid;
@@ -305,9 +356,9 @@ private:
             ? Semaphore::Index::ENTRY_QUEUE_VIP_SLOTS
             : Semaphore::Index::ENTRY_QUEUE_REGULAR_SLOTS;
 
-        Logger::info(tag_, "Requesting entry%s...", tourist_.isVip ? " [VIP PRIORITY]" : "");
+        Logger::info(tag_, "Requesting entry (group of %u)%s...",
+                     tourist_.slots, tourist_.isVip ? " [VIP]" : "");
 
-        // Acquire queue slot (VIPs have reserved slots, regulars wait for their pool)
         if (!sem_.waitInterruptible(queueSlotSem)) {
             if (g_signals.exit) {
                 changeState(TouristState::FINISHED);
@@ -315,23 +366,19 @@ private:
             }
         }
 
-        // Slot acquired, send is guaranteed to succeed
         if (!entryRequestQueue_.send(request, requestType)) {
-            sem_.post(queueSlotSem, false); // Release slot on error
+            sem_.post(queueSlotSem, false);
             changeState(TouristState::FINISHED);
             return;
         }
 
-        // Signal worker there's work (unified signal for both entry and boarding)
         sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false);
 
-        // Wait for response from LowerStationWorker
         long responseType = EntryGateMsgType::RESPONSE_BASE + tourist_.id;
         auto response = entryResponseQueue_.receive(responseType);
 
         if (!response || !response->allowed) {
             Logger::info(tag_, "Entry denied");
-            // Log denied entry gate passage
             {
                 Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
                 uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
@@ -342,7 +389,6 @@ private:
             return;
         }
 
-        // Log successful entry gate passage
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
             uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
@@ -351,25 +397,25 @@ private:
                                  GateType::ENTRY, gateNum, true, simTime);
         }
 
-        Logger::info(tag_, "Entered station%s", tourist_.isVip ? " [VIP]" : "");
+        Logger::info(tag_, "Entered station (group of %u)", tourist_.slots);
         changeState(TouristState::WAITING_BOARDING);
     }
 
     void waitForChair() {
-        // Add to boarding queue
+        // Add to boarding queue with slot count
         {
-            // Lock ordering: SHM_OPERATIONAL first, then SHM_CHAIRS (for touristsInLowerStation on error)
             Semaphore::ScopedLock lockCore(sem_, Semaphore::Index::SHM_OPERATIONAL);
             Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
+
             BoardingQueueEntry entry;
             entry.touristId = tourist_.id;
             entry.touristPid = tourist_.pid;
             entry.age = tourist_.age;
             entry.type = tourist_.type;
-            entry.guardianId = tourist_.guardianId;
-            entry.needsSupervision = tourist_.needsSupervision();
-            entry.isAdult = tourist_.isAdult();
-            entry.dependentCount = tourist_.dependentCount;
+            entry.isVip = tourist_.isVip;
+            entry.slots = tourist_.slots;
+            entry.childCount = tourist_.childCount;
+            entry.hasBike = tourist_.hasBike;
             entry.assignedChairId = -1;
             entry.readyToBoard = false;
 
@@ -382,18 +428,15 @@ private:
             }
         }
 
-        // Signal worker there's work
         sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false);
 
-        Logger::info(tag_, "Waiting for chair...");
+        Logger::info(tag_, "Waiting for chair (need %u slots)...", tourist_.slots);
 
-        // Wait for chair assignment
         while (!g_signals.exit) {
             sem_.wait(Semaphore::Index::CHAIR_ASSIGNED);
 
             bool assigned = false;
             {
-                // Lock ordering: SHM_OPERATIONAL, SHM_CHAIRS, SHM_STATS
                 Semaphore::ScopedLock lockCore(sem_, Semaphore::Index::SHM_OPERATIONAL);
                 Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
                 Semaphore::ScopedLock lockStats(sem_, Semaphore::Index::SHM_STATS);
@@ -406,12 +449,10 @@ private:
                         shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
                         shm_->operational.touristsInLowerStation--;
 
-                        // Log ride gate passage
                         uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
                         uint32_t gateNum = assignedChairId_ % Constants::Gate::NUM_RIDE_GATES;
                         shm_->logGatePassage(tourist_.id, tourist_.ticketId,
                                              GateType::RIDE, gateNum, true, simTime);
-
                         assigned = true;
                     }
                 } else {
@@ -423,30 +464,44 @@ private:
             }
 
             if (assigned) {
-                Logger::info(tag_, "Assigned to chair %d", assignedChairId_);
+                Logger::info(tag_, "Assigned to chair %d (group of %u)", assignedChairId_, tourist_.slots);
                 changeState(TouristState::ON_CHAIR);
                 return;
             }
 
-            // Not assigned - re-post signal for another waiting tourist
-            // This prevents signal being consumed by wrong tourist (race condition)
             sem_.post(Semaphore::Index::CHAIR_ASSIGNED, false);
+        }
+
+        // Interrupted - cleanup
+        cleanupFromBoardingQueue();
+        changeState(TouristState::FINISHED);
+    }
+
+    void cleanupFromBoardingQueue() {
+        Logger::info(tag_, "Cleaning up from boarding queue");
+
+        Semaphore::ScopedLock lockCore(sem_, Semaphore::Index::SHM_OPERATIONAL);
+        Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
+
+        int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
+        if (idx >= 0) {
+            shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+            shm_->operational.touristsInLowerStation--;
+            sem_.post(Semaphore::Index::STATION_CAPACITY, false);
         }
     }
 
     void rideChair() {
-        Logger::info(tag_, "Riding chair %d...", assignedChairId_);
+        Logger::info(tag_, "Riding chair %d (group of %u)...", assignedChairId_, tourist_.slots);
 
         usleep(Config::Chair::RIDE_DURATION_US());
 
         {
-            // Lock ordering: SHM_OPERATIONAL first, then SHM_CHAIRS
             Semaphore::ScopedLock lockCore(sem_, Semaphore::Index::SHM_OPERATIONAL);
             Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
             shm_->operational.totalRidesToday++;
             shm_->operational.touristsAtUpperStation++;
 
-            // Release chair
             if (assignedChairId_ >= 0 && static_cast<uint32_t>(assignedChairId_) < Constants::Chair::QUANTITY) {
                 Chair &chair = shm_->chairPool.chairs[assignedChairId_];
                 chair.isOccupied = false;
@@ -464,14 +519,10 @@ private:
     }
 
     void exitAtTop() {
-        Logger::info(tag_, "Arrived at top");
+        Logger::info(tag_, "Arrived at top (group of %u)", tourist_.slots);
 
-        // Upper station has 2 exit routes operating simultaneously (one-way traffic)
-        // Route A: Cyclists exit to bike trails
-        // Route B: Pedestrians exit to walking paths
         bool isCyclist = (tourist_.type == TouristType::CYCLIST);
 
-        // Acquire exit route semaphore and track usage
         if (isCyclist) {
             sem_.wait(Semaphore::Index::EXIT_BIKE_TRAILS, false);
             {
@@ -488,27 +539,20 @@ private:
             Logger::info(tag_, "Exiting to walking path");
         }
 
-        // Simulate exit route transition
         usleep(Constants::Delay::EXIT_ROUTE_TRANSITION_US);
 
-        // Release exit route and update counters
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
             if (shm_->operational.touristsAtUpperStation > 0) {
                 shm_->operational.touristsAtUpperStation--;
             }
-            if (isCyclist) {
-                if (shm_->operational.cyclistsOnBikeTrailExit > 0) {
-                    shm_->operational.cyclistsOnBikeTrailExit--;
-                }
-            } else {
-                if (shm_->operational.pedestriansOnWalkingExit > 0) {
-                    shm_->operational.pedestriansOnWalkingExit--;
-                }
+            if (isCyclist && shm_->operational.cyclistsOnBikeTrailExit > 0) {
+                shm_->operational.cyclistsOnBikeTrailExit--;
+            } else if (!isCyclist && shm_->operational.pedestriansOnWalkingExit > 0) {
+                shm_->operational.pedestriansOnWalkingExit--;
             }
         }
 
-        // Release semaphore
         if (isCyclist) {
             sem_.post(Semaphore::Index::EXIT_BIKE_TRAILS, false);
         } else {
@@ -520,7 +564,6 @@ private:
 
     void descendTrail() {
         if (tourist_.type == TouristType::CYCLIST) {
-            // Select trail duration based on difficulty preference (T1 < T2 < T3)
             uint32_t trailDuration;
             const char *trailName;
             switch (tourist_.preferredTrail) {
@@ -541,12 +584,11 @@ private:
             usleep(trailDuration);
         } else {
             Logger::info(tag_, "Walking down trail...");
-            usleep(Config::Trail::DURATION_EASY_US() / 2); // Pedestrians are faster (no bike)
+            usleep(Config::Trail::DURATION_EASY_US() / 2);
         }
 
         tourist_.ridesCompleted++;
 
-        // Record completed ride in statistics
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
             shm_->recordRide(tourist_.id);
@@ -554,16 +596,13 @@ private:
 
         Logger::info(tag_, "Trail complete (rides: %u)", tourist_.ridesCompleted);
 
-        // Check if we can ride again (time-based/daily tickets)
         if (tourist_.canRideAgain() && tourist_.isTicketValid()) {
             Logger::info(tag_, "Ticket still valid, going for another ride!");
             changeState(TouristState::WAITING_ENTRY);
         } else if (tourist_.canRideAgain() && !tourist_.isTicketValid()) {
-            // Time-based ticket (Tk1/Tk2/Tk3) ran out of time
             Logger::info(tag_, "Time ticket expired (completed %u rides)", tourist_.ridesCompleted);
             changeState(TouristState::FINISHED);
         } else {
-            // Single-use ticket - only 1 ride allowed
             Logger::info(tag_, "Single-use ticket completed");
             changeState(TouristState::FINISHED);
         }
@@ -576,13 +615,14 @@ private:
     MessageQueue<TicketResponse> responseQueue_;
     MessageQueue<EntryGateRequest> entryRequestQueue_;
     MessageQueue<EntryGateResponse> entryResponseQueue_;
-    ArgumentParser::TouristArgs args_;
-    uint32_t numChildren_;
-    std::vector<pid_t> childPids_;
     int32_t assignedChairId_{-1};
     time_t simulationStartTime_{0};
     char tagBuf_[32];
     const char *tag_;
+
+    // Group threads (children and bike)
+    std::vector<std::unique_ptr<ChildThread>> childThreads_;
+    std::unique_ptr<BikeThread> bikeThread_;
 };
 
 int main(int argc, char *argv[]) {
@@ -592,7 +632,6 @@ int main(int argc, char *argv[]) {
     }
 
     SignalHelper::setup(g_signals, true);
-    // Better seeding using tourist ID, PID, and time for variety
     srand(static_cast<unsigned>(time(nullptr)) ^ static_cast<unsigned>(getpid()) ^ (args.id * 31337));
 
     try {
