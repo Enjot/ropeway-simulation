@@ -363,15 +363,15 @@ private:
         uint32_t groupIndices[4] = {0};
         bool addedToGroup[BoardingQueue::MAX_SIZE] = {false};
 
-        // Helper: check if guardian is present in queue
-        auto isGuardianInQueue = [&queue](int32_t guardianId) -> bool {
-            if (guardianId < 0) return false;
+        // Helper: count how many of guardian's children are already in queue
+        auto countChildrenInQueue = [&queue](uint32_t guardianId) -> uint32_t {
+            uint32_t count = 0;
             for (uint32_t j = 0; j < queue.count; ++j) {
-                if (queue.entries[j].touristId == static_cast<uint32_t>(guardianId)) {
-                    return true;
+                if (queue.entries[j].guardianId == static_cast<int32_t>(guardianId)) {
+                    count++;
                 }
             }
-            return false;
+            return count;
         };
 
         // First pass: find guardians with children and add them as family units
@@ -382,20 +382,22 @@ private:
                 continue;
             }
 
-            // Skip children waiting for guardian ONLY if guardian is actually in queue
-            // If guardian has left (not in queue), child can board alone (orphan handling)
-            if (entry.needsSupervision && isGuardianInQueue(entry.guardianId)) {
-                continue;
-            }
-
             // Check if this is a guardian with children
             if (entry.dependentCount > 0) {
+                uint32_t childrenInQueue = countChildrenInQueue(entry.touristId);
+
+                // Guardian must wait until ALL children are in queue
+                if (childrenInQueue < entry.dependentCount) {
+                    Logger::debug(TAG, "Guardian %u waiting for children (%u/%u in queue)",
+                                  entry.touristId, childrenInQueue, entry.dependentCount);
+                    continue; // Skip - wait for all children
+                }
+
                 uint32_t childIndices[Constants::Gate::MAX_CHILDREN_PER_ADULT];
                 uint32_t numChildren = findChildren(queue, entry.touristId,
                                                     childIndices, entry.dependentCount);
 
-                // If children are waiting in queue, board with them
-                // Note: Some children may have already boarded as orphans - that's OK
+                // All children present - board together as family
                 if (numChildren > 0) {
                     // Calculate total slots for family
                     uint32_t familySlots = getSlotCost(entry);
@@ -421,20 +423,20 @@ private:
                         Logger::info(TAG, "[FAMILY] Guardian %u boarding with %u children",
                                      entry.touristId, numChildren);
                     }
-                    continue;
                 }
-
-                // No children waiting - they may have all boarded as orphans
-                // Guardian can board alone (fall through to regular tourist handling)
+                continue; // Guardian with children - don't fall through
             }
 
-            // Regular tourist without children (or orphaned child whose guardian left)
+            // Child waiting for guardian - skip (guardian will pick them up)
+            if (entry.needsSupervision) {
+                Logger::debug(TAG, "Child %u waiting for guardian %d",
+                              entry.touristId, entry.guardianId);
+                continue;
+            }
+
+            // Regular adult tourist without children
             uint32_t slotCost = getSlotCost(entry);
             if (slotsUsed + slotCost <= Constants::Chair::SLOTS_PER_CHAIR) {
-                if (entry.needsSupervision) {
-                    Logger::info(TAG, "[ORPHAN] Child %u boarding alone (guardian %d left)",
-                                 entry.touristId, entry.guardianId);
-                }
                 groupIndices[groupSize++] = i;
                 addedToGroup[i] = true;
                 slotsUsed += slotCost;
