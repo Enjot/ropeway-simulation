@@ -11,12 +11,13 @@
  * OWNERSHIP: LowerWorker manages assignments; tourists update on board/disembark.
  */
 struct SharedChairPoolState {
-    Chair chairs[Config::Chair::QUANTITY];  // All 72 chairs
-    uint32_t chairsInUse;                   // Currently occupied chairs
-    BoardingQueue boardingQueue;            // Tourists waiting to board
+    Chair chairs[Config::Chair::QUANTITY]; // All 72 chairs
+    uint32_t chairsInUse; // Currently occupied chairs
+    BoardingQueue boardingQueue; // Tourists waiting to board
 
     SharedChairPoolState()
         : chairs{},
           chairsInUse{0},
-          boardingQueue{} {}
+          boardingQueue{} {
+    }
 };

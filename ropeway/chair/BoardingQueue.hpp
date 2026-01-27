@@ -26,19 +26,20 @@ struct BoardingQueueEntry {
     TouristType type;
 
     // Guardian/supervision tracking (for children under 8)
-    int32_t guardianId;         // Guardian tourist ID (-1 if none needed)
-    bool needsSupervision;      // True if child under 8
-    bool isAdult;               // True if can supervise children
-    uint32_t dependentCount;    // Children currently assigned to this adult
+    int32_t guardianId; // Guardian tourist ID (-1 if none needed)
+    bool needsSupervision; // True if child under 8
+    bool isAdult; // True if can supervise children
+    uint32_t dependentCount; // Children currently assigned to this adult
 
     // Chair assignment (set by LowerWorker)
-    int32_t assignedChairId;    // Assigned chair ID (-1 if waiting)
-    bool readyToBoard;          // True when group is ready to board
+    int32_t assignedChairId; // Assigned chair ID (-1 if waiting)
+    bool readyToBoard; // True when group is ready to board
 
     BoardingQueueEntry()
         : touristId{0}, touristPid{0}, age{0}, type{TouristType::PEDESTRIAN},
           guardianId{-1}, needsSupervision{false}, isAdult{false}, dependentCount{0},
-          assignedChairId{-1}, readyToBoard{false} {}
+          assignedChairId{-1}, readyToBoard{false} {
+    }
 };
 
 /**
@@ -50,9 +51,10 @@ struct BoardingQueue {
 
     BoardingQueueEntry entries[MAX_SIZE];
     uint32_t count;
-    uint32_t nextChairId;  // Round-robin chair assignment
+    uint32_t nextChairId; // Round-robin chair assignment
 
-    BoardingQueue() : entries{}, count{0}, nextChairId{0} {}
+    BoardingQueue() : entries{}, count{0}, nextChairId{0} {
+    }
 
     /** Find tourist by ID. Returns index or -1 if not found. */
     int32_t findTourist(uint32_t touristId) const {
@@ -65,7 +67,7 @@ struct BoardingQueue {
     }
 
     /** Add tourist to queue. Returns false if queue is full. */
-    bool addTourist(const BoardingQueueEntry& entry) {
+    bool addTourist(const BoardingQueueEntry &entry) {
         if (count >= MAX_SIZE) return false;
         entries[count] = entry;
         ++count;

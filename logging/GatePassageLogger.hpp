@@ -24,10 +24,11 @@ public:
         uint32_t count;
         GatePassage entries[MAX_LOG_ENTRIES];
 
-        GatePassageLog() : count{0}, entries{} {}
+        GatePassageLog() : count{0}, entries{} {
+        }
     };
 
-    explicit GatePassageLogger(const std::string& logFilePath = "")
+    explicit GatePassageLogger(const std::string &logFilePath = "")
         : logFilePath_{logFilePath}, logFile_{} {
         if (!logFilePath_.empty()) {
             logFile_.open(logFilePath_, std::ios::out | std::ios::app);
@@ -43,7 +44,7 @@ public:
     /**
      * Log a gate passage to memory and optionally to file
      */
-    void log(GatePassageLog* logMem, const GatePassage& passage) {
+    void log(GatePassageLog *logMem, const GatePassage &passage) {
         if (logMem != nullptr && logMem->count < MAX_LOG_ENTRIES) {
             logMem->entries[logMem->count] = passage;
             logMem->count++;
@@ -58,7 +59,7 @@ public:
     /**
      * Log an entry gate passage
      */
-    void logEntry(GatePassageLog* logMem, uint32_t touristId, uint32_t ticketId,
+    void logEntry(GatePassageLog *logMem, uint32_t touristId, uint32_t ticketId,
                   uint32_t gateNumber, bool wasAllowed) {
         GatePassage passage;
         passage.touristId = touristId;
@@ -74,7 +75,7 @@ public:
     /**
      * Log a ride gate passage
      */
-    void logRide(GatePassageLog* logMem, uint32_t touristId, uint32_t ticketId,
+    void logRide(GatePassageLog *logMem, uint32_t touristId, uint32_t ticketId,
                  uint32_t gateNumber, bool wasAllowed) {
         GatePassage passage;
         passage.touristId = touristId;
@@ -98,13 +99,13 @@ public:
         uint32_t deniedPassages;
     };
 
-    static LogStats getStats(const GatePassageLog* logMem) {
+    static LogStats getStats(const GatePassageLog *logMem) {
         LogStats stats{};
         if (logMem == nullptr) return stats;
 
         stats.totalPassages = logMem->count;
         for (uint32_t i = 0; i < logMem->count; ++i) {
-            const auto& entry = logMem->entries[i];
+            const auto &entry = logMem->entries[i];
             if (entry.gateType == GateType::ENTRY) {
                 stats.entryPassages++;
             } else {
@@ -120,18 +121,18 @@ public:
     }
 
 private:
-    std::string formatPassage(const GatePassage& passage) {
+    std::string formatPassage(const GatePassage &passage) {
         char timeStr[32];
-        struct tm* tm_info = localtime(&passage.timestamp);
+        struct tm *tm_info = localtime(&passage.timestamp);
         strftime(timeStr, sizeof(timeStr), "%H:%M:%S", tm_info);
 
         std::ostringstream oss;
         oss << "[" << timeStr << "] "
-            << (passage.gateType == GateType::ENTRY ? "ENTRY" : "RIDE")
-            << " Gate " << passage.gateNumber
-            << ": Tourist " << passage.touristId
-            << " (Ticket " << passage.ticketId << ") - "
-            << (passage.wasAllowed ? "ALLOWED" : "DENIED");
+                << (passage.gateType == GateType::ENTRY ? "ENTRY" : "RIDE")
+                << " Gate " << passage.gateNumber
+                << ": Tourist " << passage.touristId
+                << " (Ticket " << passage.ticketId << ") - "
+                << (passage.wasAllowed ? "ALLOWED" : "DENIED");
         return oss.str();
     }
 

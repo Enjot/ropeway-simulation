@@ -34,25 +34,25 @@ public:
     struct Index {
         enum : uint8_t {
             // === Resource counting semaphores ===
-            ENTRY_GATES = 0,     // 4 entry gates to station area (init: NUM_ENTRY_GATES)
-            RIDE_GATES,          // 3 ride gates to platform (init: NUM_RIDE_GATES)
-            STATION_CAPACITY,    // Max N tourists in station area (init: stationCapacity)
-            CHAIR_ALLOCATION,    // Mutex for chair assignment (init: 1)
+            ENTRY_GATES = 0, // 4 entry gates to station area (init: NUM_ENTRY_GATES)
+            RIDE_GATES, // 3 ride gates to platform (init: NUM_RIDE_GATES)
+            STATION_CAPACITY, // Max N tourists in station area (init: stationCapacity)
+            CHAIR_ALLOCATION, // Mutex for chair assignment (init: 1)
 
             // === Shared memory protection (fine-grained locking) ===
             // Lock ordering: SHM_OPERATIONAL -> SHM_CHAIRS -> SHM_STATS
-            SHM_OPERATIONAL,     // Protects SharedOperationalState (state, counters, PIDs)
-            SHM_CHAIRS,          // Protects SharedChairPoolState (chairs, boarding queue)
-            SHM_STATS,           // Protects SharedStatisticsState (stats, records, gate log)
+            SHM_OPERATIONAL, // Protects SharedOperationalState (state, counters, PIDs)
+            SHM_CHAIRS, // Protects SharedChairPoolState (chairs, boarding queue)
+            SHM_STATS, // Protects SharedStatisticsState (stats, records, gate log)
 
             // === Synchronization semaphores ===
-            WORKER_SYNC,         // Emergency stop blocking (init: 0)
-            CASHIER_READY,       // Cashier startup signal (init: 0, post when ready)
-            LOWER_WORKER_READY,  // LowerWorker startup signal (init: 0, post when ready)
-            UPPER_WORKER_READY,  // UpperWorker startup signal (init: 0, post when ready)
-            CHAIR_ASSIGNED,      // Tourist notified of chair assignment (init: 0)
+            WORKER_SYNC, // Emergency stop blocking (init: 0)
+            CASHIER_READY, // Cashier startup signal (init: 0, post when ready)
+            LOWER_WORKER_READY, // LowerWorker startup signal (init: 0, post when ready)
+            UPPER_WORKER_READY, // UpperWorker startup signal (init: 0, post when ready)
+            CHAIR_ASSIGNED, // Tourist notified of chair assignment (init: 0)
             BOARDING_QUEUE_WORK, // Work available signal for LowerWorker (init: 0)
-            ENTRY_QUEUE_WORK,    // Reserved for future use (init: 0)
+            ENTRY_QUEUE_WORK, // Reserved for future use (init: 0)
 
             TOTAL_SEMAPHORES
         };
@@ -155,7 +155,7 @@ public:
         operation.sem_flg = useUndo ? SEM_UNDO : 0;
 
         if (semop(semId_, &operation, 1) == -1) {
-            if (errno == EINTR) return false;  // Interrupted by signal
+            if (errno == EINTR) return false; // Interrupted by signal
             throw ipc_exception("Semaphore waitInterruptible failed");
         }
         return true;
@@ -175,8 +175,8 @@ public:
         operation.sem_flg = IPC_NOWAIT | (useUndo ? SEM_UNDO : 0);
 
         if (semop(semId_, &operation, 1) == -1) {
-            if (errno == EAGAIN) return false;  // Resource not available
-            if (errno == EINTR) return false;   // Interrupted
+            if (errno == EAGAIN) return false; // Resource not available
+            if (errno == EINTR) return false; // Interrupted
             throw ipc_exception("Semaphore tryAcquire failed");
         }
         return true;

@@ -15,18 +15,17 @@
 
 namespace {
     SignalHelper::Flags g_signals;
-    constexpr const char* TAG = "Cashier";
+    constexpr const char *TAG = "Cashier";
 }
 
 class CashierProcess {
 public:
-    CashierProcess(const ArgumentParser::CashierArgs& args)
+    CashierProcess(const ArgumentParser::CashierArgs &args)
         : shm_{SharedMemory<SharedRopewayState>::attach(args.shmKey)},
           sem_{args.semKey},
           requestQueue_{args.cashierMsgKey, "CashierReq"},
           responseQueue_{args.cashierMsgKey, "CashierResp"},
           nextTicketId_{1} {
-
         // Set simulation start time for logger
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
@@ -55,7 +54,7 @@ public:
     }
 
 private:
-    void processRequest(const TicketRequest& request) {
+    void processRequest(const TicketRequest &request) {
         Logger::info(TAG, "Processing Tourist %u (age %u)", request.touristId, request.touristAge);
 
         TicketResponse response;
@@ -120,7 +119,7 @@ private:
                      toString(response.ticketType), response.ticketId, request.touristId);
     }
 
-    void sendResponse(const TicketResponse& response, uint32_t touristId) {
+    void sendResponse(const TicketResponse &response, uint32_t touristId) {
         long responseType = CashierMsgType::RESPONSE_BASE + touristId;
         responseQueue_.send(response, responseType);
     }
@@ -132,7 +131,7 @@ private:
     uint32_t nextTicketId_;
 };
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     ArgumentParser::CashierArgs args{};
     if (!ArgumentParser::parseCashierArgs(argc, argv, args)) {
         return 1;
@@ -144,7 +143,7 @@ int main(int argc, char* argv[]) {
     try {
         CashierProcess cashier(args);
         cashier.run();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         Logger::error(TAG, "Exception: %s", e.what());
         return 1;
     }

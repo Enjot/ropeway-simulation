@@ -27,7 +27,7 @@ public:
         try {
             setup();
             mainLoop();
-        } catch (const std::exception& e) {
+        } catch (const std::exception &e) {
             Logger::error(tag_, "Exception: %s", e.what());
         }
 
@@ -68,15 +68,17 @@ private:
 
     void spawnWorkers() {
         lowerWorkerPid_ = ProcessSpawner::spawnWithKeys("lower_worker_process",
-            ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey(), ipc_->entryGateMsgKey());
+                                                        ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey(),
+                                                        ipc_->entryGateMsgKey());
         upperWorkerPid_ = ProcessSpawner::spawnWithKeys("upper_worker_process",
-            ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey(), ipc_->entryGateMsgKey());
+                                                        ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey(),
+                                                        ipc_->entryGateMsgKey());
         Logger::debug(tag_, "Workers spawned: %d, %d", lowerWorkerPid_, upperWorkerPid_);
     }
 
     void spawnCashier() {
         cashierPid_ = ProcessSpawner::spawnWithKeys("cashier_process",
-            ipc_->shmKey(), ipc_->semKey(), ipc_->cashierMsgKey());
+                                                    ipc_->shmKey(), ipc_->semKey(), ipc_->cashierMsgKey());
         Logger::debug(tag_, "Cashier spawned: %d", cashierPid_);
     }
 
@@ -189,7 +191,7 @@ private:
     void spawnTourists() {
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_int_distribution adultAgeDist(18, 75);  // Adults only
+        std::uniform_int_distribution adultAgeDist(18, 75); // Adults only
         std::uniform_int_distribution typeDist(0, 1);
         std::uniform_real_distribution<> vipDist(0.0, 1.0);
         std::uniform_real_distribution<> rideDist(0.0, 1.0);
@@ -216,20 +218,22 @@ private:
             bool wantsToRide = (numChildren > 0) ? true : (rideDist(gen) > 0.1);
 
             pid_t pid = ProcessSpawner::spawn("tourist_process", {
-                std::to_string(id),
-                std::to_string(age),
-                std::to_string(typeDist(gen)),
-                std::to_string(vipDist(gen) < Config::Vip::VIP_CHANCE_PERCENTAGE ? 1 : 0),
-                std::to_string(wantsToRide ? 1 : 0),
-                std::to_string(-1),  // guardianId (-1 = no guardian, independent adult)
-                std::to_string(numChildren),
-                std::to_string(trailDist(gen)),
-                std::to_string(ipc_->shmKey()),
-                std::to_string(ipc_->semKey()),
-                std::to_string(ipc_->workerMsgKey()),
-                std::to_string(ipc_->cashierMsgKey()),
-                std::to_string(ipc_->entryGateMsgKey())
-            });
+                                                  std::to_string(id),
+                                                  std::to_string(age),
+                                                  std::to_string(typeDist(gen)),
+                                                  std::to_string(
+                                                      vipDist(gen) < Config::Vip::VIP_CHANCE_PERCENTAGE ? 1 : 0),
+                                                  std::to_string(wantsToRide ? 1 : 0),
+                                                  std::to_string(-1),
+                                                  // guardianId (-1 = no guardian, independent adult)
+                                                  std::to_string(numChildren),
+                                                  std::to_string(trailDist(gen)),
+                                                  std::to_string(ipc_->shmKey()),
+                                                  std::to_string(ipc_->semKey()),
+                                                  std::to_string(ipc_->workerMsgKey()),
+                                                  std::to_string(ipc_->cashierMsgKey()),
+                                                  std::to_string(ipc_->entryGateMsgKey())
+                                              });
 
             if (pid > 0) touristPids_.push_back(pid);
 
@@ -251,7 +255,8 @@ private:
         ProcessSpawner::terminateAll(touristPids_);
 
         // Wait for all children
-        while (waitpid(-1, nullptr, 0) > 0) {}
+        while (waitpid(-1, nullptr, 0) > 0) {
+        }
 
         // IpcManager cleans up automatically (isOwner_)
         ipc_.reset();
@@ -262,17 +267,17 @@ private:
     void generateDailyReport() {
         Logger::info(tag_, "Generating end-of-day report...");
 
-        FILE* file = fopen("daily_report.txt", "w");
+        FILE *file = fopen("daily_report.txt", "w");
         if (!file) {
             Logger::error(tag_, "Failed to create report file");
             return;
         }
 
-        const auto& state = *ipc_->state();
-        const auto& stats = state.stats.dailyStats;
+        const auto &state = *ipc_->state();
+        const auto &stats = state.stats.dailyStats;
         uint32_t adultsServed = stats.totalTourists > (stats.childrenServed + stats.seniorsServed)
-                                ? stats.totalTourists - stats.childrenServed - stats.seniorsServed
-                                : 0;
+                                    ? stats.totalTourists - stats.childrenServed - stats.seniorsServed
+                                    : 0;
 
         fprintf(file, "ROPEWAY DAILY REPORT\n");
         fprintf(file, "====================\n");
@@ -309,7 +314,7 @@ private:
         fprintf(file, "--------------------------------------------------------------\n");
 
         for (uint32_t i = 0; i < state.stats.touristRecordCount; ++i) {
-            const auto& record = state.stats.touristRecords[i];
+            const auto &record = state.stats.touristRecords[i];
             fprintf(file, "%-10u %-10u %-5u %-10s %-6s %-8u %-8d\n",
                     record.touristId,
                     record.ticketId,
@@ -327,7 +332,7 @@ private:
         fprintf(file, "--------------------------------------------------------------\n");
 
         for (uint32_t i = 0; i < state.stats.gateLog.count; ++i) {
-            const auto& passage = state.stats.gateLog.entries[i];
+            const auto &passage = state.stats.gateLog.entries[i];
             char timeStr[6];
             passage.formatSimTime(timeStr);
             fprintf(file, "%-8s %-10u %-10u %-6u %-8s %-8s\n",

@@ -15,7 +15,7 @@
 
 namespace {
     SignalHelper::Flags g_signals;
-    constexpr const char* TAG = "UpperWorker";
+    constexpr const char *TAG = "UpperWorker";
 }
 
 class UpperWorkerProcess {
@@ -23,12 +23,11 @@ public:
     static constexpr long MSG_TYPE_TO_LOWER = 1;
     static constexpr long MSG_TYPE_FROM_LOWER = 2;
 
-    UpperWorkerProcess(const ArgumentParser::WorkerArgs& args)
+    UpperWorkerProcess(const ArgumentParser::WorkerArgs &args)
         : shm_{SharedMemory<SharedRopewayState>::attach(args.shmKey)},
           sem_{args.semKey},
           msgQueue_{args.msgKey, "WorkerMsg"},
           isEmergencyStopped_{false} {
-
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
             shm_->operational.upperWorkerPid = getpid();
@@ -97,7 +96,7 @@ private:
         isEmergencyStopped_ = false;
     }
 
-    void handleMessage(const WorkerMessage& msg) {
+    void handleMessage(const WorkerMessage &msg) {
         switch (msg.signal) {
             case WorkerSignal::EMERGENCY_STOP:
                 Logger::warn(TAG, "Emergency stop message from LowerWorker");
@@ -120,7 +119,7 @@ private:
         }
     }
 
-    void sendMessage(WorkerSignal signal, const char* text) {
+    void sendMessage(WorkerSignal signal, const char *text) {
         WorkerMessage msg;
         msg.senderId = 2;
         msg.receiverId = 1;
@@ -159,7 +158,7 @@ private:
     bool isEmergencyStopped_;
 };
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     ArgumentParser::WorkerArgs args{};
     if (!ArgumentParser::parseWorkerArgs(argc, argv, args)) {
         return 1;
@@ -170,7 +169,7 @@ int main(int argc, char* argv[]) {
     try {
         UpperWorkerProcess worker(args);
         worker.run();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         Logger::error(TAG, "Exception: %s", e.what());
         return 1;
     }

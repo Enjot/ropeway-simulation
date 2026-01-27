@@ -29,11 +29,13 @@ public:
     }
 
     // Convenience constructor for child processes
-    MessageQueue(const key_t key, bool /*unused*/) : MessageQueue(key, "MessageQueue") {}
+    MessageQueue(const key_t key, bool /*unused*/) : MessageQueue(key, "MessageQueue") {
+    }
 
     ~MessageQueue() = default;
 
     MessageQueue(const MessageQueue &) = delete;
+
     MessageQueue &operator=(const MessageQueue &) = delete;
 
     // Send with explicit type

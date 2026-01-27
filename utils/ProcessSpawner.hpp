@@ -14,7 +14,6 @@
 #endif
 
 namespace ProcessSpawner {
-
     inline std::string getExecutablePath(const char *processName) {
         char path[1024];
         uint32_t size = sizeof(path);
@@ -92,7 +91,8 @@ namespace ProcessSpawner {
      * Spawn a process with four IPC keys (common pattern for workers).
      * Convenience wrapper around spawn().
      */
-    inline pid_t spawnWithKeys(const char *processName, const key_t key1, const key_t key2, const key_t key3, const key_t key4) {
+    inline pid_t spawnWithKeys(const char *processName, const key_t key1, const key_t key2, const key_t key3,
+                               const key_t key4) {
         return spawn(processName, {
                          std::to_string(key1),
                          std::to_string(key2),

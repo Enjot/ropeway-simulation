@@ -16,7 +16,7 @@
 
 namespace {
     SignalHelper::Flags g_signals;
-    constexpr const char* TAG = "LowerWorker";
+    constexpr const char *TAG = "LowerWorker";
 }
 
 class LowerWorkerProcess {
@@ -24,14 +24,13 @@ public:
     static constexpr long MSG_TYPE_TO_UPPER = 2;
     static constexpr long MSG_TYPE_FROM_UPPER = 1;
 
-    LowerWorkerProcess(const ArgumentParser::WorkerArgs& args)
+    LowerWorkerProcess(const ArgumentParser::WorkerArgs &args)
         : shm_{SharedMemory<SharedRopewayState>::attach(args.shmKey)},
           sem_{args.semKey},
           msgQueue_{args.msgKey, "WorkerMsg"},
           entryRequestQueue_{args.entryGateMsgKey, "EntryReq"},
           entryResponseQueue_{args.entryGateMsgKey, "EntryResp"},
           isEmergencyStopped_{false} {
-
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
             shm_->operational.lowerWorkerPid = getpid();
@@ -151,7 +150,7 @@ private:
         }
     }
 
-    void sendMessage(WorkerSignal signal, const char* text) {
+    void sendMessage(WorkerSignal signal, const char *text) {
         WorkerMessage msg;
         msg.senderId = 1;
         msg.receiverId = 2;
@@ -227,7 +226,7 @@ private:
             // Preserve priority: VIP requests get lower mtype
             long reqType = request->isVip ? EntryGateMsgType::VIP_REQUEST : EntryGateMsgType::REGULAR_REQUEST;
             entryRequestQueue_.send(*request, reqType);
-            sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false);  // Re-signal unified work queue
+            sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false); // Re-signal unified work queue
             return;
         }
 
@@ -245,21 +244,21 @@ private:
                      request->touristId, request->isVip ? " [VIP]" : "");
     }
 
-    uint32_t getSlotCost(const BoardingQueueEntry& entry) {
+    uint32_t getSlotCost(const BoardingQueueEntry &entry) {
         return (entry.type == TouristType::CYCLIST)
-            ? Config::Chair::CYCLIST_SLOT_COST
-            : Config::Chair::PEDESTRIAN_SLOT_COST;
+                   ? Config::Chair::CYCLIST_SLOT_COST
+                   : Config::Chair::PEDESTRIAN_SLOT_COST;
     }
 
     /**
      * Find children of a guardian in the queue.
      * Returns number of children found, fills childIndices array.
      */
-    uint32_t findChildren(BoardingQueue& queue, uint32_t guardianId,
+    uint32_t findChildren(BoardingQueue &queue, uint32_t guardianId,
                           uint32_t childIndices[], uint32_t maxChildren) {
         uint32_t found = 0;
         for (uint32_t i = 0; i < queue.count && found < maxChildren; ++i) {
-            BoardingQueueEntry& entry = queue.entries[i];
+            BoardingQueueEntry &entry = queue.entries[i];
             if (entry.guardianId == static_cast<int32_t>(guardianId) &&
                 entry.assignedChairId < 0 && !entry.readyToBoard) {
                 childIndices[found++] = i;
@@ -278,7 +277,7 @@ private:
             return;
         }
 
-        BoardingQueue& queue = shm_->chairPool.boardingQueue;
+        BoardingQueue &queue = shm_->chairPool.boardingQueue;
         if (queue.count == 0) return;
 
         if (shm_->chairPool.chairsInUse >= Config::Chair::MAX_CONCURRENT_IN_USE) {
@@ -303,7 +302,7 @@ private:
 
         // First pass: find guardians with children and add them as family units
         for (uint32_t i = 0; i < queue.count && groupSize < 4; ++i) {
-            BoardingQueueEntry& entry = queue.entries[i];
+            BoardingQueueEntry &entry = queue.entries[i];
 
             if (entry.readyToBoard || entry.assignedChairId >= 0 || addedToGroup[i]) {
                 continue;
@@ -319,7 +318,7 @@ private:
             if (entry.dependentCount > 0) {
                 uint32_t childIndices[Config::Gate::MAX_CHILDREN_PER_ADULT];
                 uint32_t numChildren = findChildren(queue, entry.touristId,
-                                                     childIndices, entry.dependentCount);
+                                                    childIndices, entry.dependentCount);
 
                 // If children are waiting in queue, board with them
                 // Note: Some children may have already boarded as orphans - that's OK
@@ -333,7 +332,6 @@ private:
                     // Check if family fits
                     if (slotsUsed + familySlots <= Config::Chair::SLOTS_PER_CHAIR &&
                         groupSize + 1 + numChildren <= 4) {
-
                         // Add guardian
                         groupIndices[groupSize++] = i;
                         addedToGroup[i] = true;
@@ -383,7 +381,7 @@ private:
 
         if (chairId < 0) return;
 
-        Chair& chair = shm_->chairPool.chairs[chairId];
+        Chair &chair = shm_->chairPool.chairs[chairId];
         chair.isOccupied = true;
         chair.numPassengers = groupSize;
         chair.slotsUsed = slotsUsed;
@@ -391,7 +389,7 @@ private:
         shm_->chairPool.chairsInUse++;
 
         for (uint32_t i = 0; i < groupSize; ++i) {
-            BoardingQueueEntry& entry = queue.entries[groupIndices[i]];
+            BoardingQueueEntry &entry = queue.entries[groupIndices[i]];
             entry.assignedChairId = chairId;
             entry.readyToBoard = true;
             if (i < 4) {
@@ -415,7 +413,7 @@ private:
     bool isEmergencyStopped_;
 };
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     ArgumentParser::WorkerArgs args{};
     if (!ArgumentParser::parseWorkerArgs(argc, argv, args)) {
         return 1;
@@ -426,7 +424,7 @@ int main(int argc, char* argv[]) {
     try {
         LowerWorkerProcess worker(args);
         worker.run();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         Logger::error(TAG, "Exception: %s", e.what());
         return 1;
     }

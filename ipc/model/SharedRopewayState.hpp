@@ -37,7 +37,6 @@
  * - Tourists: Update counters, register for tracking, log gate passages
  */
 struct SharedRopewayState {
-
     SharedOperationalState operational;
     SharedChairPoolState chairPool;
     SharedStatisticsState stats;
@@ -56,7 +55,7 @@ struct SharedRopewayState {
         // Allow space for tourists + their children (3x multiplier)
         if (stats.touristRecordCount >= Config::Simulation::MAX_TOURIST_RECORDS) return -1;
 
-        TouristRideRecord& record = stats.touristRecords[stats.touristRecordCount];
+        TouristRideRecord &record = stats.touristRecords[stats.touristRecordCount];
         record.touristId = touristId;
         record.ticketId = ticketId;
         record.age = age;

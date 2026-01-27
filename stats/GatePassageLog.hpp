@@ -14,10 +14,11 @@ struct GatePassageLog {
     GatePassage entries[MAX_ENTRIES];
     uint32_t count;
 
-    GatePassageLog() : entries{}, count{0} {}
+    GatePassageLog() : entries{}, count{0} {
+    }
 
     /** Add gate passage entry. Returns false if log is full. */
-    bool addEntry(const GatePassage& entry) {
+    bool addEntry(const GatePassage &entry) {
         if (count >= MAX_ENTRIES) return false;
         entries[count] = entry;
         ++count;

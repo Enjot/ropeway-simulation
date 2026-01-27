@@ -20,7 +20,7 @@ namespace Logger {
         inline struct timeval simulationStartTime = {0, 0};
 
         /** Calculate simulated time string (HH:MM) */
-        inline void getSimulatedTime(char* buffer) {
+        inline void getSimulatedTime(char *buffer) {
             if (simulationStartTime.tv_sec == 0) {
                 buffer[0] = '\0';
                 return;

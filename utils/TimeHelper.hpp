@@ -10,7 +10,6 @@
  * Converts real elapsed time to simulated ropeway operating hours.
  */
 namespace TimeHelper {
-
     /**
      * Calculate simulated time from real time.
      * @param simulationStartTime When the simulation started (real time)
@@ -39,7 +38,7 @@ namespace TimeHelper {
      * @param simulationStartTime When the simulation started
      * @param buffer Output buffer (at least 6 bytes)
      */
-    inline void formatTime(time_t simulationStartTime, char* buffer) {
+    inline void formatTime(time_t simulationStartTime, char *buffer) {
         uint32_t seconds = getSimulatedSeconds(simulationStartTime);
         uint32_t hours = seconds / 3600;
         uint32_t minutes = (seconds % 3600) / 60;
@@ -51,7 +50,7 @@ namespace TimeHelper {
      * @param simulationStartTime When the simulation started
      * @param buffer Output buffer (at least 9 bytes)
      */
-    inline void formatTimeFull(time_t simulationStartTime, char* buffer) {
+    inline void formatTimeFull(time_t simulationStartTime, char *buffer) {
         uint32_t seconds = getSimulatedSeconds(simulationStartTime);
         uint32_t hours = seconds / 3600;
         uint32_t minutes = (seconds % 3600) / 60;

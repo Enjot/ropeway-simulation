@@ -9,11 +9,12 @@
 struct EmergencyStopRecord {
     time_t startTime;
     time_t endTime;
-    uint32_t initiatorWorkerId;  // 1 or 2
+    uint32_t initiatorWorkerId; // 1 or 2
     bool resumed;
 
     EmergencyStopRecord() : startTime{0}, endTime{0},
-                            initiatorWorkerId{0}, resumed{false} {}
+                            initiatorWorkerId{0}, resumed{false} {
+    }
 };
 
 /**
@@ -63,7 +64,7 @@ struct DailyStatistics {
     int32_t recordEmergencyStart(uint32_t workerId) {
         if (emergencyRecordCount >= MAX_EMERGENCY_RECORDS) return -1;
 
-        EmergencyStopRecord& record = emergencyRecords[emergencyRecordCount];
+        EmergencyStopRecord &record = emergencyRecords[emergencyRecordCount];
         record.startTime = time(nullptr);
         record.endTime = 0;
         record.initiatorWorkerId = workerId;
@@ -79,7 +80,7 @@ struct DailyStatistics {
     void recordEmergencyEnd(int32_t recordIndex) {
         if (recordIndex < 0 || static_cast<uint32_t>(recordIndex) >= emergencyRecordCount) return;
 
-        EmergencyStopRecord& record = emergencyRecords[recordIndex];
+        EmergencyStopRecord &record = emergencyRecords[recordIndex];
         record.endTime = time(nullptr);
         record.resumed = true;
 

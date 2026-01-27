@@ -12,9 +12,9 @@
 struct GatePassage {
     uint32_t touristId;
     uint32_t ticketId;
-    GateType gateType;      // Entry or ride gate
-    uint32_t gateNumber;    // Specific gate number (0-3 for entry, 0-2 for ride)
-    time_t timestamp;       // Real timestamp
+    GateType gateType; // Entry or ride gate
+    uint32_t gateNumber; // Specific gate number (0-3 for entry, 0-2 for ride)
+    time_t timestamp; // Real timestamp
     uint32_t simTimeSeconds; // Simulated time as seconds since midnight
     bool wasAllowed;
 
@@ -28,7 +28,7 @@ struct GatePassage {
     }
 
     /** Format simulated time as HH:MM string */
-    void formatSimTime(char* buffer) const {
+    void formatSimTime(char *buffer) const {
         uint32_t hours = simTimeSeconds / 3600;
         uint32_t minutes = (simTimeSeconds % 3600) / 60;
         snprintf(buffer, 6, "%02u:%02u", hours, minutes);

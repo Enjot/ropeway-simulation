@@ -13,13 +13,14 @@ namespace SignalHelper {
         volatile sig_atomic_t resume{0};
         volatile sig_atomic_t exit{0};
     };
+
     using SignalFlags = Flags;
 
     // Mode enum for different process types
     enum class Mode {
-        BASIC,      // Only SIGTERM/SIGINT
-        WORKER,     // All signals including SIGUSR1/SIGUSR2
-        TOURIST     // All signals including SIGUSR1/SIGUSR2
+        BASIC, // Only SIGTERM/SIGINT
+        WORKER, // All signals including SIGUSR1/SIGUSR2
+        TOURIST // All signals including SIGUSR1/SIGUSR2
     };
 
     namespace detail {

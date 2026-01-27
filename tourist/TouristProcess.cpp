@@ -23,8 +23,8 @@ namespace {
 
     // Retry configuration for message queue operations under load
     constexpr uint32_t MAX_SEND_RETRIES = 5;
-    constexpr uint32_t INITIAL_RETRY_DELAY_US = 10000;  // 10ms
-    constexpr uint32_t MAX_RETRY_DELAY_US = 500000;     // 500ms
+    constexpr uint32_t INITIAL_RETRY_DELAY_US = 10000; // 10ms
+    constexpr uint32_t MAX_RETRY_DELAY_US = 500000; // 500ms
 }
 
 class TouristProcess {
@@ -39,7 +39,6 @@ public:
           args_{args},
           numChildren_{args.numChildren},
           tag_{"Tourist"} {
-
         tourist_.id = args.id;
         tourist_.pid = getpid();
         tourist_.age = args.age;
@@ -104,7 +103,7 @@ public:
         }
 
         // Wait for children before finishing
-        for (pid_t childPid : childPids_) {
+        for (pid_t childPid: childPids_) {
             int status;
             waitpid(childPid, &status, 0);
         }
@@ -123,7 +122,7 @@ private:
      * Uses exponential backoff to prevent thundering herd.
      */
     template<typename T, typename Q>
-    bool sendWithRetry(Q& queue, const T& message, long type, const char* description) {
+    bool sendWithRetry(Q &queue, const T &message, long type, const char *description) {
         uint32_t delayUs = INITIAL_RETRY_DELAY_US;
 
         for (uint32_t attempt = 0; attempt < MAX_SEND_RETRIES; ++attempt) {
@@ -137,7 +136,7 @@ private:
 
             if (attempt < MAX_SEND_RETRIES - 1) {
                 Logger::debug(tag_, "Queue full, retry %u/%u for %s (delay: %ums)",
-                             attempt + 1, MAX_SEND_RETRIES, description, delayUs / 1000);
+                              attempt + 1, MAX_SEND_RETRIES, description, delayUs / 1000);
                 usleep(delayUs);
                 // Exponential backoff with jitter
                 delayUs = std::min(delayUs * 2 + (rand() % 10000), MAX_RETRY_DELAY_US);
@@ -218,7 +217,7 @@ private:
                                   tourist_.type, tourist_.isVip, tourist_.guardianId);
 
             // Update daily statistics
-            auto& stats = shm_->stats.dailyStats;
+            auto &stats = shm_->stats.dailyStats;
             stats.totalTourists++;
             stats.ticketsSold++;
             stats.totalRevenueWithDiscounts += response->price;
@@ -247,7 +246,7 @@ private:
             // Spawn children after getting ticket (parent only)
             // Returns true if this process became a child (needs to buy own ticket)
             if (spawnChildren()) {
-                return;  // Child will go through buyTicket() in main loop
+                return; // Child will go through buyTicket() in main loop
             }
             changeState(TouristState::WAITING_ENTRY);
         }
@@ -283,12 +282,12 @@ private:
                 // Modify tourist data for child
                 tourist_.id = childId;
                 tourist_.pid = getpid();
-                tourist_.age = 3 + (rand() % 5);  // Age 3-7 (needs supervision)
+                tourist_.age = 3 + (rand() % 5); // Age 3-7 (needs supervision)
                 tourist_.type = TouristType::PEDESTRIAN;
-                tourist_.guardianId = static_cast<int32_t>(args_.id);  // Parent's ID
-                tourist_.ticketType = parentTicketType;  // Use same ticket type as guardian
+                tourist_.guardianId = static_cast<int32_t>(args_.id); // Parent's ID
+                tourist_.ticketType = parentTicketType; // Use same ticket type as guardian
                 tourist_.hasTicket = false;
-                tourist_.state = TouristState::BUYING_TICKET;  // Children also buy tickets (with 25% discount)
+                tourist_.state = TouristState::BUYING_TICKET; // Children also buy tickets (with 25% discount)
 
                 // Reset for child
                 numChildren_ = 0;
@@ -312,7 +311,7 @@ private:
 
             Logger::info(tag_, "[SPAWN] child %u (PID: %d, age will be assigned)", childId, childPid);
         }
-        return false;  // Parent continues normally
+        return false; // Parent continues normally
     }
 
     void enterStation() {
@@ -491,7 +490,7 @@ private:
         if (tourist_.type == TouristType::CYCLIST) {
             // Select trail duration based on difficulty preference (T1 < T2 < T3)
             uint32_t trailDuration;
-            const char* trailName;
+            const char *trailName;
             switch (tourist_.preferredTrail) {
                 case TrailDifficulty::MEDIUM:
                     trailDuration = Config::Trail::DURATION_MEDIUM_US;
@@ -510,7 +509,7 @@ private:
             usleep(trailDuration);
         } else {
             Logger::info(tag_, "Walking down trail...");
-            usleep(Config::Trail::DURATION_EASY_US / 2);  // Pedestrians are faster (no bike)
+            usleep(Config::Trail::DURATION_EASY_US / 2); // Pedestrians are faster (no bike)
         }
 
         tourist_.ridesCompleted++;
@@ -551,7 +550,7 @@ private:
     int32_t assignedChairId_{-1};
     time_t simulationStartTime_{0};
     char tagBuf_[32];
-    const char* tag_;
+    const char *tag_;
 };
 
 int main(int argc, char *argv[]) {
