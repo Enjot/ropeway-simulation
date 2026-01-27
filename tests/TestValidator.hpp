@@ -50,8 +50,8 @@ public:
         // Validate minimum rides completed
         validateMinimumRides(scenario, state, result);
 
-        // Copy statistics
-        result.totalRidesCompleted = state.stats.dailyStats.totalRides;
+        // Copy statistics (use core.totalRidesToday as it's actively updated during simulation)
+        result.totalRidesCompleted = state.core.totalRidesToday;
         result.emergencyStopsTriggered = state.stats.dailyStats.emergencyStops;
         result.emergenciesResumed = countResumedEmergencies(state);
 
@@ -75,11 +75,12 @@ public:
 
     /**
      * Check if simulation appears deadlocked
-     * Returns true if no progress detected within timeout
+     * Compares two state snapshots to detect lack of progress.
+     * Returns true if no progress detected between snapshots.
      */
     static bool checkForDeadlock(const RopewaySystemState& stateBefore,
                                   const RopewaySystemState& stateAfter,
-                                  uint32_t timeoutSec) {
+                                  [[maybe_unused]] uint32_t checkIntervalSec) {
         // If state changed, not deadlocked
         if (stateBefore.core.totalRidesToday != stateAfter.core.totalRidesToday) {
             return false;
@@ -88,6 +89,11 @@ public:
             return false;
         }
         if (stateBefore.chairPool.boardingQueue.count != stateAfter.chairPool.boardingQueue.count) {
+            return false;
+        }
+        // Check if any tourists are waiting - if queue is empty, no work to do = not a deadlock
+        if (stateAfter.chairPool.boardingQueue.count == 0 &&
+            stateAfter.core.touristsInLowerStation == 0) {
             return false;
         }
 
@@ -102,7 +108,7 @@ public:
             return false;
         }
 
-        // No progress for timeout seconds could indicate deadlock
+        // No progress but tourists waiting - potential deadlock
         return true;
     }
 
@@ -133,39 +139,40 @@ private:
     static void validateChildSupervision(const TestScenario& scenario,
                                           const RopewaySystemState& state,
                                           TestResult& result) {
-        // Check tourist records for children under 8 who completed rides
         uint32_t childrenRodeAlone = 0;
         uint32_t childrenTotal = 0;
+        uint32_t childrenWithRides = 0;
 
+        // Check tourist records for children under 8 who completed rides
         for (uint32_t i = 0; i < state.stats.touristRecordCount; ++i) {
             const TouristRideRecord& rec = state.stats.touristRecords[i];
 
-            // Find if this is a child under 8
             if (rec.age < Config::Age::SUPERVISION_AGE_LIMIT) {
                 ++childrenTotal;
 
-                // If child completed ride gate passages, they boarded a chair
-                // This should only happen with guardian (validated by RideGate)
                 if (rec.rideGatePassages > 0) {
-                    // The system allows this only with guardian, so if logged, it's valid
-                    // We can't detect violations from final state alone - would need real-time monitoring
+                    ++childrenWithRides;
+
+                    // Check if child had a guardian assigned
+                    if (rec.guardianId < 0) {
+                        ++childrenRodeAlone;
+                    }
                 }
             }
         }
 
         result.childrenWithoutGuardian = childrenRodeAlone;
 
-        // Check boarding queue for any stranded children (edge case)
+        // Check boarding queue for stranded children at end of simulation
+        uint32_t strandedChildren = 0;
         for (uint32_t i = 0; i < state.chairPool.boardingQueue.count; ++i) {
             const BoardingQueueEntry& entry = state.chairPool.boardingQueue.entries[i];
             if (entry.needsSupervision && entry.guardianId < 0 && !entry.readyToBoard) {
-                // Child waiting without guardian - could be waiting for pairing
-                // Only a failure if simulation ended with them still waiting
+                ++strandedChildren;
             }
         }
 
         // Validate max 2 children per adult constraint
-        // Count dependents per adult from boarding queue
         uint32_t adultsWithExcess = 0;
         for (uint32_t i = 0; i < state.chairPool.boardingQueue.count; ++i) {
             const BoardingQueueEntry& entry = state.chairPool.boardingQueue.entries[i];
@@ -176,6 +183,14 @@ private:
 
         result.adultsWithTooManyChildren = adultsWithExcess;
 
+        // Report failures
+        if (childrenRodeAlone > 0) {
+            std::ostringstream oss;
+            oss << "SUPERVISION VIOLATION: " << childrenRodeAlone
+                << " child(ren) rode without guardian";
+            result.addFailure(oss.str());
+        }
+
         if (adultsWithExcess > 0) {
             std::ostringstream oss;
             oss << "SUPERVISION VIOLATION: " << adultsWithExcess
@@ -183,10 +198,19 @@ private:
             result.addFailure(oss.str());
         }
 
+        // Report info
         if (childrenTotal > 0) {
             std::ostringstream oss;
-            oss << "Child supervision tracked: " << childrenTotal << " children under "
-                << Config::Age::SUPERVISION_AGE_LIMIT << " years old";
+            oss << "Child supervision: " << childrenTotal << " children under "
+                << Config::Age::SUPERVISION_AGE_LIMIT << " years, "
+                << childrenWithRides << " completed rides";
+            result.addWarning(oss.str());
+        }
+
+        if (strandedChildren > 0) {
+            std::ostringstream oss;
+            oss << "Stranded children at end: " << strandedChildren
+                << " (waiting for guardian pairing)";
             result.addWarning(oss.str());
         }
     }
@@ -315,14 +339,16 @@ private:
     static void validateMinimumRides(const TestScenario& scenario,
                                       const RopewaySystemState& state,
                                       TestResult& result) {
-        if (state.stats.dailyStats.totalRides < scenario.expectedMinRides) {
+        // Use core.totalRidesToday as it's actively updated during simulation
+        uint32_t totalRides = state.core.totalRidesToday;
+        if (totalRides < scenario.expectedMinRides) {
             std::ostringstream oss;
-            oss << "INSUFFICIENT RIDES: " << state.stats.dailyStats.totalRides
+            oss << "INSUFFICIENT RIDES: " << totalRides
                 << " completed, expected at least " << scenario.expectedMinRides;
             result.addFailure(oss.str());
         } else {
             std::ostringstream oss;
-            oss << "Rides OK: " << state.stats.dailyStats.totalRides
+            oss << "Rides OK: " << totalRides
                 << " completed (min: " << scenario.expectedMinRides << ")";
             result.addWarning(oss.str());
         }

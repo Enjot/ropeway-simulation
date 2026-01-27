@@ -63,9 +63,9 @@ public:
             ipc.sem().wait(Semaphore::Index::CASHIER_READY);
 
             pid_t lowerWorkerPid = ProcessSpawner::spawnWithKeys("lower_worker_process",
-                ipc.shmKey(), ipc.semKey(), ipc.workerMsgKey());
+                ipc.shmKey(), ipc.semKey(), ipc.workerMsgKey(), ipc.entryGateMsgKey());
             pid_t upperWorkerPid = ProcessSpawner::spawnWithKeys("upper_worker_process",
-                ipc.shmKey(), ipc.semKey(), ipc.workerMsgKey());
+                ipc.shmKey(), ipc.semKey(), ipc.workerMsgKey(), ipc.entryGateMsgKey());
 
             {
                 Semaphore::ScopedLock lock(ipc.sem(), Semaphore::Index::SHARED_MEMORY);
@@ -93,9 +93,10 @@ public:
             ProcessSpawner::terminate(upperWorkerPid, "UpperWorker");
             ProcessSpawner::terminateAll(touristPids);
 
-            // Wait for ALL child processes to terminate (blocking)
-            while (waitpid(-1, nullptr, 0) > 0) {}
+            // Brief pause to allow processes to become zombies if they haven't been reaped
+            usleep(100000);  // 100ms
 
+            // Check for zombie processes BEFORE reaping them
             result.zombieProcesses = TestValidator::checkForZombies();
             if (result.zombieProcesses > 0 && scenario.expectNoZombies) {
                 std::ostringstream oss;
@@ -103,6 +104,7 @@ public:
                 result.addFailure(oss.str());
             }
 
+            // Now wait for any remaining child processes
             ProcessSpawner::waitForAll();
             result.simulationDuration = time(nullptr) - startTime;
 
@@ -130,7 +132,8 @@ private:
             std::to_string(ipc.shmKey()),
             std::to_string(ipc.semKey()),
             std::to_string(ipc.workerMsgKey()),
-            std::to_string(ipc.cashierMsgKey())
+            std::to_string(ipc.cashierMsgKey()),
+            std::to_string(ipc.entryGateMsgKey())
         });
     }
 

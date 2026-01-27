@@ -20,6 +20,7 @@ namespace Config {
 
     namespace Simulation {
         constexpr uint32_t NUM_TOURISTS{10};
+        constexpr uint32_t MAX_TOURIST_RECORDS{1500};  // Max records for stress testing
         constexpr uint32_t STATION_CAPACITY{20};
 
         constexpr uint32_t OPENING_HOUR{8};

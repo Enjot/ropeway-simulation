@@ -20,6 +20,11 @@
 
 namespace {
     SignalHelper::Flags g_signals;
+
+    // Retry configuration for message queue operations under load
+    constexpr uint32_t MAX_SEND_RETRIES = 5;
+    constexpr uint32_t INITIAL_RETRY_DELAY_US = 10000;  // 10ms
+    constexpr uint32_t MAX_RETRY_DELAY_US = 500000;     // 500ms
 }
 
 class TouristProcess {
@@ -42,6 +47,7 @@ public:
         tourist_.isVip = args.isVip;
         tourist_.wantsToRide = args.wantsToRide;
         tourist_.guardianId = args.guardianId;
+        tourist_.preferredTrail = static_cast<TrailDifficulty>(args.trail);
         tourist_.state = TouristState::BUYING_TICKET;
 
         // Set simulation start time for logger (read from shared memory)
@@ -112,6 +118,36 @@ private:
         tourist_.state = newState;
     }
 
+    /**
+     * Send message with retry logic for handling queue saturation.
+     * Uses exponential backoff to prevent thundering herd.
+     */
+    template<typename T, typename Q>
+    bool sendWithRetry(Q& queue, const T& message, long type, const char* description) {
+        uint32_t delayUs = INITIAL_RETRY_DELAY_US;
+
+        for (uint32_t attempt = 0; attempt < MAX_SEND_RETRIES; ++attempt) {
+            if (queue.send(message, type)) {
+                return true;
+            }
+
+            if (g_signals.exit) {
+                return false;
+            }
+
+            if (attempt < MAX_SEND_RETRIES - 1) {
+                Logger::debug(tag_, "Queue full, retry %u/%u for %s (delay: %ums)",
+                             attempt + 1, MAX_SEND_RETRIES, description, delayUs / 1000);
+                usleep(delayUs);
+                // Exponential backoff with jitter
+                delayUs = std::min(delayUs * 2 + (rand() % 10000), MAX_RETRY_DELAY_US);
+            }
+        }
+
+        Logger::error(tag_, "Failed to send %s after %u retries", description, MAX_SEND_RETRIES);
+        return false;
+    }
+
     TicketType chooseTicketType() {
         float roll = static_cast<float>(rand()) / RAND_MAX;
         float cumulative = 0.0f;
@@ -148,13 +184,15 @@ private:
         TicketRequest request;
         request.touristId = tourist_.id;
         request.touristAge = tourist_.age;
-        request.requestedType = chooseTicketType();
+        // Children use same ticket type as guardian, adults choose randomly
+        request.requestedType = (tourist_.guardianId >= 0) ? tourist_.ticketType : chooseTicketType();
         request.requestVip = tourist_.isVip;
 
-        Logger::info(tag_, "Requesting %s ticket...", toString(request.requestedType));
+        Logger::info(tag_, "Requesting %s ticket%s...",
+                     toString(request.requestedType),
+                     (tourist_.guardianId >= 0) ? " (child discount)" : "");
 
-        if (!requestQueue_.send(request, CashierMsgType::REQUEST)) {
-            Logger::error(tag_, "Failed to send ticket request");
+        if (!sendWithRetry(requestQueue_, request, CashierMsgType::REQUEST, "ticket request")) {
             changeState(TouristState::FINISHED);
             return;
         }
@@ -175,6 +213,32 @@ private:
         tourist_.ticketType = response->ticketType;
         tourist_.ticketValidUntil = response->validUntil;
 
+        // Register tourist for daily statistics tracking
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+            shm_->registerTourist(tourist_.id, tourist_.ticketId, tourist_.age,
+                                  tourist_.type, tourist_.isVip, tourist_.guardianId);
+
+            // Update daily statistics
+            auto& stats = shm_->stats.dailyStats;
+            stats.totalTourists++;
+            stats.ticketsSold++;
+            stats.totalRevenueWithDiscounts += response->price;
+
+            if (tourist_.isVip) stats.vipTourists++;
+            if (tourist_.age < Config::Discount::CHILD_DISCOUNT_AGE) {
+                stats.childrenServed++;
+            } else if (tourist_.age >= Config::Age::SENIOR_AGE_FROM) {
+                stats.seniorsServed++;
+            }
+
+            if (tourist_.type == TouristType::CYCLIST) {
+                stats.cyclistRides++;
+            } else {
+                stats.pedestrianRides++;
+            }
+        }
+
         Logger::info(tag_, "Got %s ticket #%u%s",
                      toString(tourist_.ticketType), tourist_.ticketId,
                      tourist_.isVip ? " [VIP]" : "");
@@ -183,15 +247,19 @@ private:
             changeState(TouristState::FINISHED);
         } else {
             // Spawn children after getting ticket (parent only)
-            spawnChildren();
+            // Returns true if this process became a child (needs to buy own ticket)
+            if (spawnChildren()) {
+                return;  // Child will go through buyTicket() in main loop
+            }
             changeState(TouristState::WAITING_ENTRY);
         }
     }
 
-    void spawnChildren() {
+    // Returns true if this process is now a child (after fork)
+    bool spawnChildren() {
         // Only adults without guardians can spawn children
         if (numChildren_ == 0 || tourist_.guardianId >= 0) {
-            return;
+            return false;
         }
 
         for (uint32_t i = 0; i < numChildren_; ++i) {
@@ -211,27 +279,32 @@ private:
 
             if (childPid == 0) {
                 // === CHILD PROCESS ===
+                // Save parent's ticket type for child to use
+                TicketType parentTicketType = tourist_.ticketType;
+
                 // Modify tourist data for child
                 tourist_.id = childId;
                 tourist_.pid = getpid();
                 tourist_.age = 3 + (rand() % 5);  // Age 3-7 (needs supervision)
                 tourist_.type = TouristType::PEDESTRIAN;
                 tourist_.guardianId = static_cast<int32_t>(args_.id);  // Parent's ID
-                tourist_.state = TouristState::WAITING_ENTRY;
+                tourist_.ticketType = parentTicketType;  // Use same ticket type as guardian
+                tourist_.hasTicket = false;
+                tourist_.state = TouristState::BUYING_TICKET;  // Children also buy tickets (with 25% discount)
 
                 // Reset for child
                 numChildren_ = 0;
                 childPids_.clear();
 
                 // Update tag for logging
-                snprintf(tagBuf_, sizeof(tagBuf_), "Tourist %u", tourist_.id);
+                snprintf(tagBuf_, sizeof(tagBuf_), "Child %u", tourist_.id);
                 tag_ = tagBuf_;
 
-                Logger::info(tag_, "Child started (age=%u, guardian=%d)",
+                Logger::info(tag_, "Started (age=%u, guardian=%d)",
                              tourist_.age, tourist_.guardianId);
 
-                // Child continues from WAITING_ENTRY state
-                return;
+                // Child needs to buy ticket, return to main loop
+                return true;
             }
 
             // === PARENT PROCESS ===
@@ -241,6 +314,7 @@ private:
 
             Logger::info(tag_, "[SPAWN] child %u (PID: %d, age will be assigned)", childId, childPid);
         }
+        return false;  // Parent continues normally
     }
 
     void enterStation() {
@@ -254,14 +328,13 @@ private:
         long requestType = tourist_.isVip ? EntryGateMsgType::VIP_REQUEST : EntryGateMsgType::REGULAR_REQUEST;
         Logger::info(tag_, "Requesting entry%s...", tourist_.isVip ? " [VIP PRIORITY]" : "");
 
-        if (!entryRequestQueue_.send(request, requestType)) {
-            Logger::error(tag_, "Failed to send entry request");
+        if (!sendWithRetry(entryRequestQueue_, request, requestType, "entry request")) {
             changeState(TouristState::FINISHED);
             return;
         }
 
-        // Signal worker there's an entry request
-        sem_.post(Semaphore::Index::ENTRY_QUEUE_WORK, false);
+        // Signal worker there's work (unified signal for both entry and boarding)
+        sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false);
 
         // Wait for response from LowerStationWorker
         long responseType = EntryGateMsgType::RESPONSE_BASE + tourist_.id;
@@ -284,7 +357,6 @@ private:
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
             uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
-            // Use random gate number (0-3) to simulate different entry gates
             uint32_t gateNum = tourist_.id % Config::Gate::NUM_ENTRY_GATES;
             shm_->logGatePassage(tourist_.id, tourist_.ticketId,
                                  GateType::ENTRY, gateNum, true, simTime);
@@ -328,32 +400,43 @@ private:
         while (!g_signals.exit) {
             sem_.wait(Semaphore::Index::CHAIR_ASSIGNED);
 
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+            bool assigned = false;
+            {
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
 
-            int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
-            if (idx >= 0) {
-                BoardingQueueEntry &entry = shm_->chairPool.boardingQueue.entries[idx];
-                if (entry.readyToBoard && entry.assignedChairId >= 0) {
-                    assignedChairId_ = entry.assignedChairId;
-                    shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
-                    shm_->core.touristsInLowerStation--;
+                int32_t idx = shm_->chairPool.boardingQueue.findTourist(tourist_.id);
+                if (idx >= 0) {
+                    BoardingQueueEntry &entry = shm_->chairPool.boardingQueue.entries[idx];
+                    if (entry.readyToBoard && entry.assignedChairId >= 0) {
+                        assignedChairId_ = entry.assignedChairId;
+                        shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
+                        shm_->core.touristsInLowerStation--;
 
-                    // Log ride gate passage
-                    uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
-                    uint32_t gateNum = assignedChairId_ % Config::Gate::NUM_RIDE_GATES;
-                    shm_->logGatePassage(tourist_.id, tourist_.ticketId,
-                                         GateType::RIDE, gateNum, true, simTime);
+                        // Log ride gate passage
+                        uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
+                        uint32_t gateNum = assignedChairId_ % Config::Gate::NUM_RIDE_GATES;
+                        shm_->logGatePassage(tourist_.id, tourist_.ticketId,
+                                             GateType::RIDE, gateNum, true, simTime);
 
-                    Logger::info(tag_, "Assigned to chair %d", assignedChairId_);
-                    changeState(TouristState::ON_CHAIR);
+                        assigned = true;
+                    }
+                } else {
+                    Logger::error(tag_, "Lost from queue");
+                    sem_.post(Semaphore::Index::STATION_CAPACITY, false);
+                    changeState(TouristState::FINISHED);
                     return;
                 }
-            } else {
-                Logger::error(tag_, "Lost from queue");
-                sem_.post(Semaphore::Index::STATION_CAPACITY, false);
-                changeState(TouristState::FINISHED);
+            }
+
+            if (assigned) {
+                Logger::info(tag_, "Assigned to chair %d", assignedChairId_);
+                changeState(TouristState::ON_CHAIR);
                 return;
             }
+
+            // Not assigned - re-post signal for another waiting tourist
+            // This prevents signal being consumed by wrong tourist (race condition)
+            sem_.post(Semaphore::Index::CHAIR_ASSIGNED, false);
         }
     }
 
@@ -401,14 +484,38 @@ private:
 
     void descendTrail() {
         if (tourist_.type == TouristType::CYCLIST) {
-            Logger::info(tag_, "Cycling down trail...");
-            usleep(Config::Trail::DURATION_EASY_US);
+            // Select trail duration based on difficulty preference (T1 < T2 < T3)
+            uint32_t trailDuration;
+            const char* trailName;
+            switch (tourist_.preferredTrail) {
+                case TrailDifficulty::MEDIUM:
+                    trailDuration = Config::Trail::DURATION_MEDIUM_US;
+                    trailName = "T2 (medium)";
+                    break;
+                case TrailDifficulty::HARD:
+                    trailDuration = Config::Trail::DURATION_HARD_US;
+                    trailName = "T3 (hard)";
+                    break;
+                default:
+                    trailDuration = Config::Trail::DURATION_EASY_US;
+                    trailName = "T1 (easy)";
+                    break;
+            }
+            Logger::info(tag_, "Cycling down trail %s...", trailName);
+            usleep(trailDuration);
         } else {
             Logger::info(tag_, "Walking down trail...");
             usleep(Config::Trail::DURATION_EASY_US / 2);  // Pedestrians are faster (no bike)
         }
 
         tourist_.ridesCompleted++;
+
+        // Record completed ride in statistics
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHARED_MEMORY);
+            shm_->recordRide(tourist_.id);
+        }
+
         Logger::info(tag_, "Trail complete (rides: %u)", tourist_.ridesCompleted);
 
         // Check if we can ride again (time-based/daily tickets)
@@ -416,9 +523,12 @@ private:
             Logger::info(tag_, "Ticket still valid, going for another ride!");
             changeState(TouristState::WAITING_ENTRY);
         } else if (tourist_.canRideAgain() && !tourist_.isTicketValid()) {
-            Logger::info(tag_, "Ticket expired after %u rides", tourist_.ridesCompleted);
+            // Time-based ticket (Tk1/Tk2/Tk3) ran out of time
+            Logger::info(tag_, "Time ticket expired (completed %u rides)", tourist_.ridesCompleted);
             changeState(TouristState::FINISHED);
         } else {
+            // Single-use ticket - only 1 ride allowed
+            Logger::info(tag_, "Single-use ticket completed");
             changeState(TouristState::FINISHED);
         }
     }

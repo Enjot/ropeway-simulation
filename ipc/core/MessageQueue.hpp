@@ -55,13 +55,19 @@ public:
         return msgsnd(msgId_, &wrapper, sizeof(T), 0) != -1;
     }
 
-    // Blocking receive
+    // Blocking receive (retries on EINTR)
     std::optional<T> receive(const long type, const int32_t flags = 0) {
         Wrapper wrapper{};
-        if (msgrcv(msgId_, &wrapper, sizeof(T), type, flags) == -1) {
+        while (true) {
+            if (msgrcv(msgId_, &wrapper, sizeof(T), type, flags) != -1) {
+                return wrapper.message;
+            }
+            // Retry if interrupted by signal
+            if (errno == EINTR) {
+                continue;
+            }
             return std::nullopt;
         }
-        return wrapper.message;
     }
 
     // Non-blocking receive

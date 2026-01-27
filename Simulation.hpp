@@ -5,11 +5,13 @@
 #include <memory>
 #include <sys/wait.h>
 #include <csignal>
+#include <cstdio>
 
 #include "ipc/IpcManager.hpp"
 #include "utils/SignalHelper.hpp"
 #include "utils/ProcessSpawner.hpp"
 #include "utils/Logger.hpp"
+#include "utils/TimeHelper.hpp"
 
 class Simulation {
 public:
@@ -91,17 +93,68 @@ private:
         Logger::debug(tag_, "Running simulation...");
         bool emergencyTriggered = false;
         bool emergencyResumed = false;
+        bool closingTimeReached = false;
+        time_t drainStartTime = 0;
 
         while (!signals_.exit) {
-            time_t elapsed = time(nullptr) - startTime_;
+            time_t now = time(nullptr);
+            time_t elapsed = now - startTime_;
 
-            if (elapsed >= Config::Simulation::DURATION_US / Config::Time::ONE_SECOND_US) {
-                Logger::info(tag_, "Time limit reached");
-                break;
+            // Calculate simulated time
+            uint32_t simSeconds = Config::Simulation::OPENING_HOUR * 3600 +
+                                  static_cast<uint32_t>(elapsed) * Config::Simulation::TIME_SCALE;
+            uint32_t simHour = simSeconds / 3600;
+
+            // Check for closing time (Tk)
+            if (!closingTimeReached && simHour >= Config::Simulation::CLOSING_HOUR) {
+                closingTimeReached = true;
+                Logger::warn(tag_, ">>> CLOSING TIME REACHED (Tk=%u:00) - Gates stop accepting <<<",
+                             Config::Simulation::CLOSING_HOUR);
+
+                Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHARED_MEMORY);
+                ipc_->state()->core.acceptingNewTourists = false;
+                ipc_->state()->core.state = RopewayState::CLOSING;
             }
 
-            // Trigger emergency stop after 5 seconds for testing
-            if (!emergencyTriggered && elapsed >= 5) {
+            // After closing, wait for tourists to drain then shutdown
+            if (closingTimeReached) {
+                uint32_t touristsInStation, chairsInUse;
+                {
+                    Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHARED_MEMORY);
+                    touristsInStation = ipc_->state()->core.touristsInLowerStation;
+                    chairsInUse = ipc_->state()->chairPool.chairsInUse;
+                }
+
+                if (touristsInStation == 0 && chairsInUse == 0) {
+                    if (drainStartTime == 0) {
+                        drainStartTime = now;
+                        Logger::info(tag_, "Station empty, waiting %u seconds before shutdown...",
+                                     Config::Ropeway::SHUTDOWN_DELAY_US / Config::Time::ONE_SECOND_US);
+                    }
+
+                    // Wait 3 seconds after station is empty
+                    if (now - drainStartTime >= Config::Ropeway::SHUTDOWN_DELAY_US / Config::Time::ONE_SECOND_US) {
+                        Logger::info(tag_, "Shutdown delay complete, stopping ropeway");
+                        {
+                            Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHARED_MEMORY);
+                            ipc_->state()->core.state = RopewayState::STOPPED;
+                        }
+                        break;
+                    }
+                } else {
+                    // Reset drain timer if new tourists appear
+                    drainStartTime = 0;
+                    static time_t lastDrainLog = 0;
+                    if (now - lastDrainLog >= 2) {
+                        Logger::info(tag_, "Draining: %u in station, %u chairs in use",
+                                     touristsInStation, chairsInUse);
+                        lastDrainLog = now;
+                    }
+                }
+            }
+
+            // Trigger emergency stop at simulated 10:00 for testing (disabled during closing)
+            if (!closingTimeReached && !emergencyTriggered && simHour >= 10) {
                 Logger::warn(tag_, ">>> TRIGGERING EMERGENCY STOP <<<");
                 if (lowerWorkerPid_ > 0) {
                     kill(lowerWorkerPid_, SIGUSR1);
@@ -109,8 +162,8 @@ private:
                 emergencyTriggered = true;
             }
 
-            // Resume after 10 seconds
-            if (emergencyTriggered && !emergencyResumed && elapsed >= 10) {
+            // Resume at simulated 12:00
+            if (emergencyTriggered && !emergencyResumed && simHour >= 12) {
                 Logger::info(tag_, ">>> TRIGGERING RESUME <<<");
                 if (lowerWorkerPid_ > 0) {
                     kill(lowerWorkerPid_, SIGUSR2);
@@ -185,6 +238,9 @@ private:
     void shutdown() {
         Logger::debug(tag_, "Shutting down...");
 
+        // Generate end-of-day report before cleanup
+        generateDailyReport();
+
         // Terminate processes
         ProcessSpawner::terminate(cashierPid_, "Cashier");
         ProcessSpawner::terminate(lowerWorkerPid_, "LowerWorker");
@@ -198,5 +254,89 @@ private:
         ipc_.reset();
 
         Logger::debug(tag_, "Done");
+    }
+
+    void generateDailyReport() {
+        Logger::info(tag_, "Generating end-of-day report...");
+
+        FILE* file = fopen("daily_report.txt", "w");
+        if (!file) {
+            Logger::error(tag_, "Failed to create report file");
+            return;
+        }
+
+        const auto& state = *ipc_->state();
+        const auto& stats = state.stats.dailyStats;
+        uint32_t adultsServed = stats.totalTourists > (stats.childrenServed + stats.seniorsServed)
+                                ? stats.totalTourists - stats.childrenServed - stats.seniorsServed
+                                : 0;
+
+        fprintf(file, "ROPEWAY DAILY REPORT\n");
+        fprintf(file, "====================\n");
+        fprintf(file, "Operating hours: %02u:00 - %02u:00\n\n",
+                Config::Simulation::OPENING_HOUR, Config::Simulation::CLOSING_HOUR);
+
+        fprintf(file, "FINANCIAL\n");
+        fprintf(file, "  Revenue:        %.2f PLN\n", stats.totalRevenueWithDiscounts);
+        fprintf(file, "  Tickets sold:   %u\n\n", stats.ticketsSold);
+
+        fprintf(file, "TOURISTS (%u total)\n", stats.totalTourists);
+        fprintf(file, "  Children (<10): %u\n", stats.childrenServed);
+        fprintf(file, "  Adults (10-64): %u\n", adultsServed);
+        fprintf(file, "  Seniors (65+):  %u\n", stats.seniorsServed);
+        fprintf(file, "  VIP:            %u\n\n", stats.vipTourists);
+
+        fprintf(file, "TYPES\n");
+        fprintf(file, "  Pedestrians:    %u\n", stats.pedestrianRides);
+        fprintf(file, "  Cyclists:       %u\n\n", stats.cyclistRides);
+
+        fprintf(file, "RIDES\n");
+        fprintf(file, "  Total rides:    %u\n", state.core.totalRidesToday);
+        fprintf(file, "  Gate passages:  %u\n", state.stats.gateLog.count);
+
+        if (stats.emergencyStops > 0) {
+            fprintf(file, "\nEMERGENCY\n");
+            fprintf(file, "  Stops:          %u\n", stats.emergencyStops);
+        }
+
+        // Per-tourist/ticket ride counts (required by specification)
+        fprintf(file, "\nRIDES PER TOURIST/TICKET\n");
+        fprintf(file, "%-10s %-10s %-5s %-10s %-6s %-8s %-8s\n",
+                "Tourist", "Ticket", "Age", "Type", "VIP", "Rides", "Guardian");
+        fprintf(file, "--------------------------------------------------------------\n");
+
+        for (uint32_t i = 0; i < state.stats.touristRecordCount; ++i) {
+            const auto& record = state.stats.touristRecords[i];
+            fprintf(file, "%-10u %-10u %-5u %-10s %-6s %-8u %-8d\n",
+                    record.touristId,
+                    record.ticketId,
+                    record.age,
+                    record.type == TouristType::CYCLIST ? "Cyclist" : "Pedestrian",
+                    record.isVip ? "Yes" : "No",
+                    record.ridesCompleted,
+                    record.guardianId);
+        }
+
+        // Gate passage log (required: "przejście przez bramki jest rejestrowane")
+        fprintf(file, "\nGATE PASSAGE LOG\n");
+        fprintf(file, "%-8s %-10s %-10s %-6s %-8s %-8s\n",
+                "Time", "Tourist", "Ticket", "Gate", "Type", "Allowed");
+        fprintf(file, "--------------------------------------------------------------\n");
+
+        for (uint32_t i = 0; i < state.stats.gateLog.count; ++i) {
+            const auto& passage = state.stats.gateLog.entries[i];
+            char timeStr[6];
+            passage.formatSimTime(timeStr);
+            fprintf(file, "%-8s %-10u %-10u %-6u %-8s %-8s\n",
+                    timeStr,
+                    passage.touristId,
+                    passage.ticketId,
+                    passage.gateNumber,
+                    passage.gateType == GateType::ENTRY ? "Entry" : "Ride",
+                    passage.wasAllowed ? "Yes" : "No");
+        }
+
+        fclose(file);
+        Logger::info(tag_, "Report saved to daily_report.txt");
     }
 };

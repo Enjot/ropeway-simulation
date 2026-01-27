@@ -21,6 +21,7 @@ struct EmergencyStopRecord {
  */
 struct DailyStatistics {
     uint32_t totalTourists;
+    uint32_t ticketsSold;
     uint32_t totalRides;
     uint32_t vipTourists;
     uint32_t childrenServed;
@@ -39,6 +40,7 @@ struct DailyStatistics {
     time_t totalEmergencyDuration;
 
     DailyStatistics() : totalTourists{0},
+                        ticketsSold{0},
                         totalRides{0},
                         vipTourists{0},
                         childrenServed{0},

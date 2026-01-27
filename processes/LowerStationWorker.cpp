@@ -66,22 +66,20 @@ public:
             }
 
             if (currentState == RopewayState::EMERGENCY_STOP) {
-                // During emergency, just wait for signals
-                usleep(100000);
+                // During emergency, block waiting for resume signal
+                // waitInterruptible returns false when interrupted by signal
+                sem_.waitInterruptible(Semaphore::Index::WORKER_SYNC);
                 continue;
             }
 
-            // Process entry queue (VIP priority via negative mtype)
-            if (sem_.tryWait(Semaphore::Index::ENTRY_QUEUE_WORK)) {
+            // Block waiting for work (unified signal for both entry and boarding)
+            // This is the main blocking point - no CPU spinning
+            // Signals (SIGUSR1/SIGUSR2/SIGTERM) will interrupt and return false
+            if (sem_.waitInterruptible(Semaphore::Index::BOARDING_QUEUE_WORK)) {
                 if (!g_signals.exit && !g_signals.emergency) {
+                    // Process entry queue first (handles incoming tourists)
                     processEntryQueue();
-                }
-            }
-
-            // Normal operation - wait for work
-            // Use tryWait to periodically check for signals
-            if (sem_.tryWait(Semaphore::Index::BOARDING_QUEUE_WORK)) {
-                if (!g_signals.exit && !g_signals.emergency) {
+                    // Then process boarding queue (assigns chairs)
                     processBoardingQueue();
                 }
             }
@@ -181,6 +179,9 @@ private:
             if (state == RopewayState::EMERGENCY_STOP) {
                 Logger::warn(TAG, "EMERGENCY STOP - Queue=%u, Chairs=%u/%u",
                              queueCount, chairsInUse, Config::Chair::MAX_CONCURRENT_IN_USE);
+            } else if (state == RopewayState::CLOSING) {
+                Logger::info(TAG, "CLOSING - Queue=%u, ChairsInUse=%u/%u (draining)",
+                             queueCount, chairsInUse, Config::Chair::MAX_CONCURRENT_IN_USE);
             } else {
                 Logger::info(TAG, "Queue=%u, ChairsInUse=%u/%u",
                              queueCount, chairsInUse, Config::Chair::MAX_CONCURRENT_IN_USE);
@@ -218,13 +219,13 @@ private:
             return;
         }
 
-        // Try to acquire station capacity (non-blocking)
-        if (!sem_.tryWait(Semaphore::Index::STATION_CAPACITY)) {
+        // Try to acquire station capacity (non-blocking resource check)
+        if (!sem_.tryAcquire(Semaphore::Index::STATION_CAPACITY)) {
             // Station full, put request back in queue and try again later
             // Preserve priority: VIP requests get lower mtype
             long reqType = request->isVip ? EntryGateMsgType::VIP_REQUEST : EntryGateMsgType::REGULAR_REQUEST;
             entryRequestQueue_.send(*request, reqType);
-            sem_.post(Semaphore::Index::ENTRY_QUEUE_WORK, false);
+            sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false);  // Re-signal unified work queue
             return;
         }
 
@@ -285,6 +286,17 @@ private:
         uint32_t groupIndices[4] = {0};
         bool addedToGroup[BoardingQueue::MAX_SIZE] = {false};
 
+        // Helper: check if guardian is present in queue
+        auto isGuardianInQueue = [&queue](int32_t guardianId) -> bool {
+            if (guardianId < 0) return false;
+            for (uint32_t j = 0; j < queue.count; ++j) {
+                if (queue.entries[j].touristId == static_cast<uint32_t>(guardianId)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
         // First pass: find guardians with children and add them as family units
         for (uint32_t i = 0; i < queue.count && groupSize < 4; ++i) {
             BoardingQueueEntry& entry = queue.entries[i];
@@ -293,8 +305,9 @@ private:
                 continue;
             }
 
-            // Skip children waiting for guardian (they'll be added with their guardian)
-            if (entry.needsSupervision) {
+            // Skip children waiting for guardian ONLY if guardian is actually in queue
+            // If guardian has left (not in queue), child can board alone (orphan handling)
+            if (entry.needsSupervision && isGuardianInQueue(entry.guardianId)) {
                 continue;
             }
 
@@ -304,43 +317,48 @@ private:
                 uint32_t numChildren = findChildren(queue, entry.touristId,
                                                      childIndices, entry.dependentCount);
 
-                // Wait until ALL children are in the queue before boarding
-                if (numChildren < entry.dependentCount) {
-                    // Not all children arrived yet, skip this guardian
+                // If children are waiting in queue, board with them
+                // Note: Some children may have already boarded as orphans - that's OK
+                if (numChildren > 0) {
+                    // Calculate total slots for family
+                    uint32_t familySlots = getSlotCost(entry);
+                    for (uint32_t c = 0; c < numChildren; ++c) {
+                        familySlots += getSlotCost(queue.entries[childIndices[c]]);
+                    }
+
+                    // Check if family fits
+                    if (slotsUsed + familySlots <= Config::Chair::SLOTS_PER_CHAIR &&
+                        groupSize + 1 + numChildren <= 4) {
+
+                        // Add guardian
+                        groupIndices[groupSize++] = i;
+                        addedToGroup[i] = true;
+                        slotsUsed += getSlotCost(entry);
+
+                        // Add children
+                        for (uint32_t c = 0; c < numChildren; ++c) {
+                            groupIndices[groupSize++] = childIndices[c];
+                            addedToGroup[childIndices[c]] = true;
+                            slotsUsed += getSlotCost(queue.entries[childIndices[c]]);
+                        }
+
+                        Logger::info(TAG, "[FAMILY] Guardian %u boarding with %u children",
+                                     entry.touristId, numChildren);
+                    }
                     continue;
                 }
 
-                // Calculate total slots for family
-                uint32_t familySlots = getSlotCost(entry);
-                for (uint32_t c = 0; c < numChildren; ++c) {
-                    familySlots += getSlotCost(queue.entries[childIndices[c]]);
-                }
-
-                // Check if family fits
-                if (slotsUsed + familySlots <= Config::Chair::SLOTS_PER_CHAIR &&
-                    groupSize + 1 + numChildren <= 4) {
-
-                    // Add guardian
-                    groupIndices[groupSize++] = i;
-                    addedToGroup[i] = true;
-                    slotsUsed += getSlotCost(entry);
-
-                    // Add children
-                    for (uint32_t c = 0; c < numChildren; ++c) {
-                        groupIndices[groupSize++] = childIndices[c];
-                        addedToGroup[childIndices[c]] = true;
-                        slotsUsed += getSlotCost(queue.entries[childIndices[c]]);
-                    }
-
-                    Logger::info(TAG, "[FAMILY] Guardian %u boarding with %u children",
-                                 entry.touristId, numChildren);
-                }
-                continue;
+                // No children waiting - they may have all boarded as orphans
+                // Guardian can board alone (fall through to regular tourist handling)
             }
 
-            // Regular tourist without children
+            // Regular tourist without children (or orphaned child whose guardian left)
             uint32_t slotCost = getSlotCost(entry);
             if (slotsUsed + slotCost <= Config::Chair::SLOTS_PER_CHAIR) {
+                if (entry.needsSupervision) {
+                    Logger::info(TAG, "[ORPHAN] Child %u boarding alone (guardian %d left)",
+                                 entry.touristId, entry.guardianId);
+                }
                 groupIndices[groupSize++] = i;
                 addedToGroup[i] = true;
                 slotsUsed += slotCost;

@@ -131,22 +131,42 @@ public:
     }
 
     /**
-     * @brief Non-blocking wait (decrement) on a semaphore.
-     * Returns immediately if semaphore is not available.
+     * @brief Interruptible wait (decrement) on a semaphore.
+     * Blocks until semaphore is available OR interrupted by a signal.
      * @param semIndex The index of the semaphore.
      * @param useUndo Whether to use SEM_UNDO for automatic cleanup.
-     * @return true if semaphore was acquired, false otherwise.
+     * @return true if semaphore was acquired, false if interrupted by signal.
      */
-    bool tryWait(const uint8_t semIndex, const bool useUndo = true) const {
+    bool waitInterruptible(const uint8_t semIndex, const bool useUndo = true) const {
+        sembuf operation{};
+        operation.sem_num = semIndex;
+        operation.sem_op = -1;
+        operation.sem_flg = useUndo ? SEM_UNDO : 0;
+
+        if (semop(semId_, &operation, 1) == -1) {
+            if (errno == EINTR) return false;  // Interrupted by signal
+            throw ipc_exception("Semaphore waitInterruptible failed");
+        }
+        return true;
+    }
+
+    /**
+     * @brief Non-blocking check if resource is available.
+     * Used for checking resource availability (e.g., station capacity) without blocking.
+     * @param semIndex The index of the semaphore.
+     * @param useUndo Whether to use SEM_UNDO for automatic cleanup.
+     * @return true if resource was acquired, false if not available.
+     */
+    bool tryAcquire(const uint8_t semIndex, const bool useUndo = true) const {
         sembuf operation{};
         operation.sem_num = semIndex;
         operation.sem_op = -1;
         operation.sem_flg = IPC_NOWAIT | (useUndo ? SEM_UNDO : 0);
 
         if (semop(semId_, &operation, 1) == -1) {
-            if (errno == EAGAIN) return false;  // Would block
+            if (errno == EAGAIN) return false;  // Resource not available
             if (errno == EINTR) return false;   // Interrupted
-            throw ipc_exception("Semaphore tryWait failed");
+            throw ipc_exception("Semaphore tryAcquire failed");
         }
         return true;
     }

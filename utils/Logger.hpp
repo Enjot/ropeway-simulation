@@ -5,6 +5,7 @@
 #include <cstring>
 #include <cerrno>
 #include <ctime>
+#include <sys/time.h>
 
 #include "../Config.hpp"
 
@@ -15,20 +16,26 @@ namespace Logger {
         constexpr const char *colors[] = {"\033[90m", "\033[36m", "\033[33m", "\033[31m"};
         constexpr const char *names[] = {"DEBUG", "INFO ", "WARN ", "ERROR"};
 
-        // Simulation start time (set by each process to enable simulated time display)
-        inline time_t simulationStartTime = 0;
+        // Simulation start time with microsecond precision
+        inline struct timeval simulationStartTime = {0, 0};
 
         /** Calculate simulated time string (HH:MM) */
         inline void getSimulatedTime(char* buffer) {
-            if (simulationStartTime == 0) {
+            if (simulationStartTime.tv_sec == 0) {
                 buffer[0] = '\0';
                 return;
             }
 
-            time_t now = time(nullptr);
-            time_t elapsed = now - simulationStartTime;
+            struct timeval now;
+            gettimeofday(&now, nullptr);
 
-            uint32_t simulatedElapsed = static_cast<uint32_t>(elapsed) * Config::Simulation::TIME_SCALE;
+            // Calculate elapsed time in microseconds for sub-second precision
+            int64_t elapsedUs = (now.tv_sec - simulationStartTime.tv_sec) * 1000000LL +
+                                (now.tv_usec - simulationStartTime.tv_usec);
+            if (elapsedUs < 0) elapsedUs = 0;
+
+            // Convert to simulated seconds: elapsed_us * TIME_SCALE / 1_000_000
+            uint32_t simulatedElapsed = static_cast<uint32_t>(elapsedUs * Config::Simulation::TIME_SCALE / 1000000);
             uint32_t simulatedSeconds = Config::Simulation::OPENING_HOUR * 3600 + simulatedElapsed;
 
             if (simulatedSeconds > 24 * 3600 - 1) {
@@ -67,7 +74,12 @@ namespace Logger {
 
     /** Set simulation start time to enable simulated time in logs */
     inline void setSimulationStartTime(time_t startTime) {
-        detail::simulationStartTime = startTime;
+        // Convert time_t to timeval by calculating offset from current time
+        struct timeval now;
+        gettimeofday(&now, nullptr);
+        time_t offset = now.tv_sec - startTime;
+        detail::simulationStartTime.tv_sec = now.tv_sec - offset;
+        detail::simulationStartTime.tv_usec = now.tv_usec;
     }
 
     template<typename... Args>

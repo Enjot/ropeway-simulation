@@ -106,12 +106,12 @@ inline TestScenario createCapacityLimitTest() {
     scenario.emergencyStopAtSec = 0;
     scenario.resumeAtSec = 0;
 
-    // Generate 30 tourists with staggered arrivals
+    // Generate 30 tourists with staggered arrivals (as per specification)
     for (uint32_t i = 1; i <= 30; ++i) {
         uint32_t age = 20 + (i % 40);  // Ages 20-59
         TouristType type = (i % 3 == 0) ? TouristType::CYCLIST : TouristType::PEDESTRIAN;
         TrailDifficulty trail = static_cast<TrailDifficulty>(i % 3);
-        scenario.tourists.emplace_back(i, age, type, false, true, -1, trail, 200);
+        scenario.tourists.emplace_back(i, age, type, false, true, -1, trail, 500);
     }
 
     scenario.expectCapacityNeverExceeded = true;
@@ -120,7 +120,7 @@ inline TestScenario createCapacityLimitTest() {
     scenario.expectEmergencyHandled = false;
     scenario.expectNoZombies = true;
     scenario.expectNoDeadlocks = true;
-    scenario.expectedMinRides = 5;
+    scenario.expectedMinRides = 10;
 
     return scenario;
 }
@@ -141,24 +141,22 @@ inline TestScenario createChildSupervisionTest() {
 
     uint32_t id = 1;
 
-    // 3 adults (potential guardians) - spawn first
-    scenario.tourists.emplace_back(id++, 35, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, 100);
-    scenario.tourists.emplace_back(id++, 40, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, 100);
-    scenario.tourists.emplace_back(id++, 45, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, 100);
+    // 3 adults (guardians) - each will have 2 children spawned via numChildren parameter
+    // Adult 1 (id=1): will spawn children 4 and 5
+    scenario.tourists.emplace_back(id++, 35, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, 100, 2);
+    // Adult 2 (id=2): will spawn children 6 and 7
+    scenario.tourists.emplace_back(id++, 40, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, 100, 2);
+    // Adult 3 (id=3): will spawn children 8 and 9
+    scenario.tourists.emplace_back(id++, 45, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, 100, 2);
 
-    // 6 children under 8 (need supervision)
-    scenario.tourists.emplace_back(id++, 5, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, 200);
-    scenario.tourists.emplace_back(id++, 6, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, 200);
-    scenario.tourists.emplace_back(id++, 7, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, 200);
-    scenario.tourists.emplace_back(id++, 4, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, 200);
-    scenario.tourists.emplace_back(id++, 6, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, 200);
-    scenario.tourists.emplace_back(id++, 7, TouristType::PEDESTRIAN, false, true, -1, TrailDifficulty::EASY, 200);
+    // Skip IDs 4-9 as they will be spawned by parents
+    id = 10;
 
     // 11 other tourists (no children, various ages)
     for (uint32_t i = 0; i < 11; ++i) {
         uint32_t age = 15 + (i * 5);  // 15, 20, 25, ... 65
         TouristType type = (i % 2 == 0) ? TouristType::PEDESTRIAN : TouristType::CYCLIST;
-        scenario.tourists.emplace_back(id++, age, type, false, true, -1, TrailDifficulty::EASY, 300);
+        scenario.tourists.emplace_back(id++, age, type, false, true, -1, TrailDifficulty::EASY, 500);
     }
 
     scenario.expectCapacityNeverExceeded = true;
@@ -167,7 +165,7 @@ inline TestScenario createChildSupervisionTest() {
     scenario.expectEmergencyHandled = false;
     scenario.expectNoZombies = true;
     scenario.expectNoDeadlocks = true;
-    scenario.expectedMinRides = 3;
+    scenario.expectedMinRides = 5;
 
     return scenario;
 }
@@ -186,13 +184,13 @@ inline TestScenario createVipPriorityTest() {
     scenario.emergencyStopAtSec = 0;
     scenario.resumeAtSec = 0;
 
-    // Generate 100 tourists: 10 VIP, 90 regular
+    // Generate 100 tourists: 10 VIP (10%), 90 regular (as per specification)
     for (uint32_t i = 1; i <= 100; ++i) {
         uint32_t age = 20 + (i % 45);
         TouristType type = (i % 4 == 0) ? TouristType::CYCLIST : TouristType::PEDESTRIAN;
-        bool isVip = (i <= 10);  // First 10 are VIP
+        bool isVip = (i <= 10);  // First 10 are VIP (10%)
         TrailDifficulty trail = static_cast<TrailDifficulty>(i % 3);
-        scenario.tourists.emplace_back(i, age, type, isVip, true, -1, trail, 100);
+        scenario.tourists.emplace_back(i, age, type, isVip, true, -1, trail, 300);
     }
 
     scenario.expectCapacityNeverExceeded = true;
@@ -201,7 +199,7 @@ inline TestScenario createVipPriorityTest() {
     scenario.expectEmergencyHandled = false;
     scenario.expectNoZombies = true;
     scenario.expectNoDeadlocks = true;
-    scenario.expectedMinRides = 10;
+    scenario.expectedMinRides = 30;
 
     return scenario;
 }
@@ -220,7 +218,7 @@ inline TestScenario createEmergencyStopTest() {
     scenario.emergencyStopAtSec = 20;
     scenario.resumeAtSec = 30;
 
-    // Generate 20 tourists
+    // Generate 20 tourists (as per specification)
     for (uint32_t i = 1; i <= 20; ++i) {
         uint32_t age = 20 + (i % 40);
         TouristType type = (i % 3 == 0) ? TouristType::CYCLIST : TouristType::PEDESTRIAN;
@@ -234,7 +232,74 @@ inline TestScenario createEmergencyStopTest() {
     scenario.expectEmergencyHandled = true;
     scenario.expectNoZombies = true;
     scenario.expectNoDeadlocks = true;
-    scenario.expectedMinRides = 2;
+    scenario.expectedMinRides = 5;
+
+    return scenario;
+}
+
+/**
+ * Stress Test: High Load with 1000 tourists
+ * Tests message queue limits, VIP priority under load, and system stability
+ */
+inline TestScenario createStressTest() {
+    TestScenario scenario;
+    scenario.name = "StressTest_HighLoad";
+    scenario.description = "Stress test with 1000 tourists to test message queue limits and VIP priority";
+    scenario.stationCapacity = 50;
+    scenario.simulationDurationSec = 180;  // 3 minutes
+    scenario.emergencyStopAtSec = 0;
+    scenario.resumeAtSec = 0;
+
+    // Generate 1000 tourists: 10 VIP (1%), 990 regular
+    for (uint32_t i = 1; i <= 1000; ++i) {
+        uint32_t age = 18 + (i % 50);  // Ages 18-67
+        TouristType type = (i % 5 == 0) ? TouristType::CYCLIST : TouristType::PEDESTRIAN;
+        bool isVip = (i <= 10);  // First 10 are VIP (1%)
+        TrailDifficulty trail = static_cast<TrailDifficulty>(i % 3);
+        // Spawn tourists rapidly - 50ms apart
+        scenario.tourists.emplace_back(i, age, type, isVip, true, -1, trail, 50);
+    }
+
+    scenario.expectCapacityNeverExceeded = true;
+    scenario.expectAllChildrenSupervised = true;
+    scenario.expectVipPriority = true;
+    scenario.expectEmergencyHandled = false;
+    scenario.expectNoZombies = true;
+    scenario.expectNoDeadlocks = true;
+    scenario.expectedMinRides = 100;
+
+    return scenario;
+}
+
+/**
+ * Stress Test: Message Queue Saturation
+ * Tests what happens when message queues fill up
+ */
+inline TestScenario createQueueSaturationTest() {
+    TestScenario scenario;
+    scenario.name = "StressTest_QueueSaturation";
+    scenario.description = "Test message queue saturation with burst of tourists";
+    scenario.stationCapacity = 20;  // Moderate capacity
+    scenario.simulationDurationSec = 90;  // Longer duration for throughput
+    scenario.emergencyStopAtSec = 0;
+    scenario.resumeAtSec = 0;
+
+    // Generate 200 tourists spawning rapidly (50ms apart)
+    for (uint32_t i = 1; i <= 200; ++i) {
+        uint32_t age = 20 + (i % 40);
+        TouristType type = (i % 4 == 0) ? TouristType::CYCLIST : TouristType::PEDESTRIAN;
+        bool isVip = (i % 20 == 0);  // 5% VIP
+        TrailDifficulty trail = static_cast<TrailDifficulty>(i % 3);
+        scenario.tourists.emplace_back(i, age, type, isVip, true, -1, trail, 50);
+    }
+
+    scenario.expectCapacityNeverExceeded = true;
+    scenario.expectAllChildrenSupervised = true;
+    scenario.expectVipPriority = true;
+    scenario.expectEmergencyHandled = false;
+    scenario.expectNoZombies = true;
+    scenario.expectNoDeadlocks = true;
+    scenario.expectedMinRides = 15;  // Realistic expectation given queue saturation
 
     return scenario;
 }

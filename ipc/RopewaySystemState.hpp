@@ -71,7 +71,7 @@ struct ChairPool {
 struct SimulationStatistics {
 
     DailyStatistics dailyStats;
-    TouristRideRecord touristRecords[Config::Simulation::NUM_TOURISTS * 3];  // Extra space for children
+    TouristRideRecord touristRecords[Config::Simulation::MAX_TOURIST_RECORDS];
     uint32_t touristRecordCount;
     uint32_t nextTouristId;  // Counter for generating unique tourist IDs (for spawned children)
     GatePassageLog gateLog;
@@ -122,8 +122,9 @@ struct RopewaySystemState {
      * @return Record index or -1 if full
      */
     int32_t registerTourist(uint32_t touristId, uint32_t ticketId, uint32_t age,
-                            TouristType type, bool isVip) {
-        if (stats.touristRecordCount >= Config::Simulation::NUM_TOURISTS) return -1;
+                            TouristType type, bool isVip, int32_t guardianId = -1) {
+        // Allow space for tourists + their children (3x multiplier)
+        if (stats.touristRecordCount >= Config::Simulation::MAX_TOURIST_RECORDS) return -1;
 
         TouristRideRecord& record = stats.touristRecords[stats.touristRecordCount];
         record.touristId = touristId;
@@ -131,11 +132,23 @@ struct RopewaySystemState {
         record.age = age;
         record.type = type;
         record.isVip = isVip;
+        record.guardianId = guardianId;
         record.ridesCompleted = 0;
         record.entryGatePassages = 0;
         record.rideGatePassages = 0;
 
         return static_cast<int32_t>(stats.touristRecordCount++);
+    }
+
+    /**
+     * Set guardian ID for a tourist record.
+     * Used when pairing a child with a guardian.
+     */
+    void setGuardianId(uint32_t touristId, int32_t guardianId) {
+        int32_t idx = findTouristRecord(touristId);
+        if (idx >= 0) {
+            stats.touristRecords[idx].guardianId = guardianId;
+        }
     }
 
     /**

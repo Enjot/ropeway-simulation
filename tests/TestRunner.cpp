@@ -18,10 +18,12 @@ void printUsage(const char* programName) {
     std::cout << "  --output <file> Save results to file\n";
     std::cout << "  --help          Show this help\n\n";
     std::cout << "Tests:\n";
-    std::cout << "  1 - Station Capacity Limit (N=5, 30 tourists)\n";
-    std::cout << "  2 - Child Supervision (6 children <8, 3 adults)\n";
-    std::cout << "  3 - VIP Priority (10% VIP, 100 tourists)\n";
-    std::cout << "  4 - Emergency Stop/Resume (trigger at 20s, resume at 30s)\n";
+    std::cout << "  1 - Station Capacity Limit (N=5, 30 tourists, 60s)\n";
+    std::cout << "  2 - Child Supervision (6 children <8, 3 adults, 20 tourists, 90s)\n";
+    std::cout << "  3 - VIP Priority (10 VIP = 10%, 100 tourists, 120s)\n";
+    std::cout << "  4 - Emergency Stop/Resume (20 tourists, trigger at 20s, resume at 30s, 60s)\n";
+    std::cout << "  5 - STRESS: High Load (1000 tourists, 10 VIP, 180s)\n";
+    std::cout << "  6 - STRESS: Queue Saturation (200 tourists burst, N=10, 60s)\n";
 }
 
 void listTests() {
@@ -56,6 +58,20 @@ void listTests() {
               << ", duration=" << test4.simulationDurationSec << "s\n";
     std::cout << "        Emergency at " << test4.emergencyStopAtSec << "s, resume at "
               << test4.resumeAtSec << "s\n\n";
+
+    auto test5 = Test::Scenarios::createStressTest();
+    std::cout << "Test 5: " << test5.name << " [STRESS]\n";
+    std::cout << "        " << test5.description << "\n";
+    std::cout << "        Params: N=" << test5.stationCapacity
+              << ", tourists=" << test5.tourists.size()
+              << ", duration=" << test5.simulationDurationSec << "s\n\n";
+
+    auto test6 = Test::Scenarios::createQueueSaturationTest();
+    std::cout << "Test 6: " << test6.name << " [STRESS]\n";
+    std::cout << "        " << test6.description << "\n";
+    std::cout << "        Params: N=" << test6.stationCapacity
+              << ", tourists=" << test6.tourists.size()
+              << ", duration=" << test6.simulationDurationSec << "s\n\n";
 }
 
 void saveResultsToFile(const std::vector<Test::TestResult>& results, const std::string& filename) {
@@ -141,8 +157,8 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             specificTest = atoi(argv[++i]);
-            if (specificTest < 1 || specificTest > 4) {
-                std::cerr << "Error: Test number must be 1-4\n";
+            if (specificTest < 1 || specificTest > 6) {
+                std::cerr << "Error: Test number must be 1-6\n";
                 return 1;
             }
             runAll = false;
@@ -180,6 +196,12 @@ int main(int argc, char* argv[]) {
                 break;
             case 4:
                 scenario = Test::Scenarios::createEmergencyStopTest();
+                break;
+            case 5:
+                scenario = Test::Scenarios::createStressTest();
+                break;
+            case 6:
+                scenario = Test::Scenarios::createQueueSaturationTest();
                 break;
             default:
                 std::cerr << "Invalid test number\n";
