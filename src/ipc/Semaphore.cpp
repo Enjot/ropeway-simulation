@@ -21,6 +21,8 @@ const char* Semaphore::Index::toString(const uint8_t index) {
         case CHAIR_ASSIGNED: return "CHAIR_ASSIGNED";
         case BOARDING_QUEUE_WORK: return "BOARDING_QUEUE_WORK";
         case ENTRY_QUEUE_WORK: return "ENTRY_QUEUE_WORK";
+        case EXIT_BIKE_TRAILS: return "EXIT_BIKE_TRAILS";
+        case EXIT_WALKING_PATH: return "EXIT_WALKING_PATH";
         default: return "UNKNOWN_SEMAPHORE";
     }
 }

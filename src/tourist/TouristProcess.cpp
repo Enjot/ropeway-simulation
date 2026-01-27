@@ -453,6 +453,7 @@ private:
             Semaphore::ScopedLock lockCore(sem_, Semaphore::Index::SHM_OPERATIONAL);
             Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
             shm_->operational.totalRidesToday++;
+            shm_->operational.touristsAtUpperStation++;
 
             // Release chair
             if (assignedChairId_ >= 0 && static_cast<uint32_t>(assignedChairId_) < Constants::Chair::QUANTITY) {
@@ -474,16 +475,55 @@ private:
     void exitAtTop() {
         Logger::info(tag_, "Arrived at top");
 
-        // Upper station has 2 exit routes (one-way traffic)
+        // Upper station has 2 exit routes operating simultaneously (one-way traffic)
         // Route A: Cyclists exit to bike trails
         // Route B: Pedestrians exit to walking paths
-        if (tourist_.type == TouristType::CYCLIST) {
-            Logger::info(tag_, "Exiting via Route A (cyclists)");
+        bool isCyclist = (tourist_.type == TouristType::CYCLIST);
+
+        // Acquire exit route semaphore and track usage
+        if (isCyclist) {
+            sem_.wait(Semaphore::Index::EXIT_BIKE_TRAILS, false);
+            {
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                shm_->operational.cyclistsOnBikeTrailExit++;
+            }
+            Logger::info(tag_, "Exiting to bike trails");
         } else {
-            Logger::info(tag_, "Exiting via Route B (pedestrians)");
+            sem_.wait(Semaphore::Index::EXIT_WALKING_PATH, false);
+            {
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                shm_->operational.pedestriansOnWalkingExit++;
+            }
+            Logger::info(tag_, "Exiting to walking path");
         }
 
+        // Simulate exit route transition
         usleep(Constants::Delay::EXIT_ROUTE_TRANSITION_US);
+
+        // Release exit route and update counters
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            if (shm_->operational.touristsAtUpperStation > 0) {
+                shm_->operational.touristsAtUpperStation--;
+            }
+            if (isCyclist) {
+                if (shm_->operational.cyclistsOnBikeTrailExit > 0) {
+                    shm_->operational.cyclistsOnBikeTrailExit--;
+                }
+            } else {
+                if (shm_->operational.pedestriansOnWalkingExit > 0) {
+                    shm_->operational.pedestriansOnWalkingExit--;
+                }
+            }
+        }
+
+        // Release semaphore
+        if (isCyclist) {
+            sem_.post(Semaphore::Index::EXIT_BIKE_TRAILS, false);
+        } else {
+            sem_.post(Semaphore::Index::EXIT_WALKING_PATH, false);
+        }
+
         changeState(TouristState::ON_TRAIL);
     }
 

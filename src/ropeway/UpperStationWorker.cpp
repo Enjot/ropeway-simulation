@@ -142,17 +142,24 @@ private:
         time_t now = time(nullptr);
         if (now - lastLog >= 5) {
             uint32_t totalRides;
+            uint32_t touristsAtUpper;
+            uint32_t cyclistsExiting;
+            uint32_t pedestriansExiting;
             RopewayState state;
             {
                 Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
                 totalRides = shm_->operational.totalRidesToday;
+                touristsAtUpper = shm_->operational.touristsAtUpperStation;
+                cyclistsExiting = shm_->operational.cyclistsOnBikeTrailExit;
+                pedestriansExiting = shm_->operational.pedestriansOnWalkingExit;
                 state = shm_->operational.state;
             }
 
             if (state == RopewayState::EMERGENCY_STOP) {
-                Logger::warn(TAG, "EMERGENCY STOP - Total rides: %u", totalRides);
+                Logger::warn(TAG, "EMERGENCY STOP - Rides: %u, At upper: %u", totalRides, touristsAtUpper);
             } else {
-                Logger::info(TAG, "Total rides today: %u", totalRides);
+                Logger::info(TAG, "Rides: %u | Upper: %u (bikes: %u, walking: %u)",
+                            totalRides, touristsAtUpper, cyclistsExiting, pedestriansExiting);
             }
             lastLog = now;
         }

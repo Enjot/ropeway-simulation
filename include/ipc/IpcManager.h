@@ -88,6 +88,9 @@ public:
         sem_.initialize(Semaphore::Index::CHAIR_ASSIGNED, 0);
         sem_.initialize(Semaphore::Index::BOARDING_QUEUE_WORK, 0);
         sem_.initialize(Semaphore::Index::ENTRY_QUEUE_WORK, 0);
+        // Upper station exit routes (one-way traffic, operating simultaneously)
+        sem_.initialize(Semaphore::Index::EXIT_BIKE_TRAILS, Constants::Gate::EXIT_ROUTE_CAPACITY);
+        sem_.initialize(Semaphore::Index::EXIT_WALKING_PATH, Constants::Gate::EXIT_ROUTE_CAPACITY);
     }
 
     void initState(time_t openTime, time_t closeTime) {

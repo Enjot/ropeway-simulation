@@ -19,6 +19,7 @@ namespace Constants {
         constexpr uint32_t NUM_ENTRY_GATES{4}; // "4 bramki wstępu"
         constexpr uint32_t NUM_RIDE_GATES{3}; // "3 bramki jazdy"
         constexpr uint32_t MAX_CHILDREN_PER_ADULT{2}; // "maksymalnie 2 takimi dziećmi"
+        constexpr uint32_t EXIT_ROUTE_CAPACITY{4}; // Upper station exit route capacity (concurrent users)
     }
 
     namespace Age {

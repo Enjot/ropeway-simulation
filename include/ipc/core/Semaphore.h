@@ -38,6 +38,8 @@ public:
             CHAIR_ASSIGNED,
             BOARDING_QUEUE_WORK,
             ENTRY_QUEUE_WORK,
+            EXIT_BIKE_TRAILS, // Upper station exit to downhill bike trails (cyclists)
+            EXIT_WALKING_PATH, // Upper station exit to walking paths (pedestrians)
             TOTAL_SEMAPHORES
         };
 

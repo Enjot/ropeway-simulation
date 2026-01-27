@@ -23,7 +23,10 @@ struct SharedOperationalState {
 
     uint32_t touristsInLowerStation; // After entry gate, before platform
     uint32_t touristsOnPlatform; // On chairs, in transit
+    uint32_t touristsAtUpperStation; // Arrived at top, exiting via routes
     uint32_t totalRidesToday; // Cumulative ride count
+    uint32_t cyclistsOnBikeTrailExit; // Cyclists currently exiting to bike trails
+    uint32_t pedestriansOnWalkingExit; // Pedestrians currently exiting to walking path
 
     pid_t lowerWorkerPid; // Lower station controller
     pid_t upperWorkerPid; // Upper station controller
@@ -35,7 +38,10 @@ struct SharedOperationalState {
           closingTime{0}, // Set by initializeState()
           touristsInLowerStation{0},
           touristsOnPlatform{0},
+          touristsAtUpperStation{0},
           totalRidesToday{0},
+          cyclistsOnBikeTrailExit{0},
+          pedestriansOnWalkingExit{0},
           lowerWorkerPid{0},
           upperWorkerPid{0} {
     }
