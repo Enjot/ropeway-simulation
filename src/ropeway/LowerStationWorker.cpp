@@ -132,9 +132,10 @@ private:
             kill(upperWorkerPid, SIGUSR2);
         }
 
-        // Wait for UpperWorker confirmation
-        Logger::info(TAG, "Waiting for UpperWorker confirmation...");
-        auto response = msgQueue_.receive(MSG_TYPE_FROM_UPPER);
+        // Wait for UpperWorker confirmation with timeout (prevents indefinite hang)
+        static constexpr uint32_t HANDSHAKE_TIMEOUT_SEC = 5;
+        Logger::info(TAG, "Waiting for UpperWorker confirmation (timeout: %us)...", HANDSHAKE_TIMEOUT_SEC);
+        auto response = msgQueue_.receiveWithTimeout(MSG_TYPE_FROM_UPPER, HANDSHAKE_TIMEOUT_SEC);
 
         if (response && response->signal == WorkerSignal::READY_TO_START) {
             Logger::info(TAG, "UpperWorker confirmed ready. Resuming operations!");
@@ -146,7 +147,13 @@ private:
 
             isEmergencyStopped_ = false;
         } else {
-            Logger::warn(TAG, "Did not receive confirmation from UpperWorker");
+            Logger::warn(TAG, "Timeout waiting for UpperWorker confirmation - resuming anyway");
+            // Resume anyway to prevent permanent deadlock, but log the issue
+            {
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                shm_->operational.state = RopewayState::RUNNING;
+            }
+            isEmergencyStopped_ = false;
         }
     }
 
