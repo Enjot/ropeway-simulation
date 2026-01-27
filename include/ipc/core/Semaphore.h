@@ -24,26 +24,41 @@ class Semaphore {
 public:
     struct Index {
         enum : uint8_t {
-            ENTRY_GATES = 0,
-            RIDE_GATES,
-            STATION_CAPACITY,
-            CHAIR_ALLOCATION, // TODO remove it
-            SHM_OPERATIONAL,
-            SHM_CHAIRS,
-            SHM_STATS,
-            WORKER_SYNC,
-            CASHIER_READY,
-            LOWER_WORKER_READY,
-            UPPER_WORKER_READY,
-            CHAIR_ASSIGNED, // TODO rename to car
-            BOARDING_QUEUE_WORK,
-            ENTRY_QUEUE_WORK,
-            EXIT_BIKE_TRAILS, // Upper station exit to downhill bike trails (cyclists)
-            EXIT_WALKING_PATH, // Upper station exit to walking paths (pedestrians)
-            CASHIER_QUEUE_SLOTS, // Flow control for cashier message queue
+            // === STARTUP ===
+            CASHIER_READY = 0, // Cashier signals readiness to main process
+            LOWER_WORKER_READY, // Lower station worker signals readiness
+            UPPER_WORKER_READY, // Upper station worker signals readiness
+
+            // === TOURIST FLOW (chronological order) ===
+
+            // 1. Buy ticket at cashier
+            CASHIER_QUEUE_SLOTS, // Flow control for cashier request queue
+
+            // 2. Request entry to station
             ENTRY_QUEUE_VIP_SLOTS, // Reserved entry queue slots for VIPs
             ENTRY_QUEUE_REGULAR_SLOTS, // Entry queue slots for regular tourists
+
+            // 3. Enter lower station
+            STATION_CAPACITY, // Max tourists allowed on lower station (N)
+
+            // 4. Wait for boarding
+            BOARDING_QUEUE_WORK, // Signals LowerWorker to process queues
+
+            // 5. Board chair
+            CHAIRS_AVAILABLE, // Available chairs for dispatch (max 36 concurrent)
+            CHAIR_ASSIGNED, // Signals tourist that chair has been assigned
             CURRENT_CHAIR_SLOTS, // Available slots on current boarding chair (0-4)
+
+            // 6. Exit at upper station
+            EXIT_BIKE_TRAILS, // Capacity for cyclists exiting to downhill trails
+            EXIT_WALKING_PATH, // Capacity for pedestrians exiting to walking paths
+
+            // === SHARED MEMORY LOCKS ===
+            // Lock ordering: SHM_OPERATIONAL -> SHM_CHAIRS -> SHM_STATS
+            SHM_OPERATIONAL, // Protects operational state (ropeway state, counters, PIDs)
+            SHM_CHAIRS, // Protects chair pool and boarding queue
+            SHM_STATS, // Protects statistics and gate passage log
+
             TOTAL_SEMAPHORES
         };
 

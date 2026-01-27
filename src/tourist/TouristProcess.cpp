@@ -496,6 +496,7 @@ private:
 
         usleep(Config::Chair::RIDE_DURATION_US());
 
+        bool lastPassenger = false;
         {
             Semaphore::ScopedLock lockCore(sem_, Semaphore::Index::SHM_OPERATIONAL);
             Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
@@ -504,17 +505,29 @@ private:
 
             if (assignedChairId_ >= 0 && static_cast<uint32_t>(assignedChairId_) < Constants::Chair::QUANTITY) {
                 Chair &chair = shm_->chairPool.chairs[assignedChairId_];
-                chair.isOccupied = false;
-                chair.numPassengers = 0;
-                if (shm_->chairPool.chairsInUse > 0) {
-                    shm_->chairPool.chairsInUse--;
+                if (chair.numPassengers > 0) {
+                    chair.numPassengers--;
+                }
+                // Last passenger releases the chair
+                if (chair.numPassengers == 0) {
+                    chair.isOccupied = false;
+                    if (shm_->chairPool.chairsInUse > 0) {
+                        shm_->chairPool.chairsInUse--;
+                    }
+                    lastPassenger = true;
                 }
             }
         }
 
         sem_.post(Semaphore::Index::STATION_CAPACITY, false);
-        assignedChairId_ = -1;
 
+        // Only last passenger releases chair and wakes worker
+        if (lastPassenger) {
+            sem_.post(Semaphore::Index::CHAIRS_AVAILABLE, false);
+            sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false);
+        }
+
+        assignedChairId_ = -1;
         changeState(TouristState::AT_TOP);
     }
 

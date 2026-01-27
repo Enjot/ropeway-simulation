@@ -74,29 +74,27 @@ public:
     key_t entryGateMsgKey() const { return entryGateMsgKey_; }
 
     void initSemaphores(const uint16_t stationCapacity = Config::Gate::MAX_TOURISTS_ON_STATION()) const {
-        sem_.initialize(Semaphore::Index::ENTRY_GATES, Constants::Gate::NUM_ENTRY_GATES);
-        sem_.initialize(Semaphore::Index::RIDE_GATES, Constants::Gate::NUM_RIDE_GATES);
-        sem_.initialize(Semaphore::Index::STATION_CAPACITY, stationCapacity);
-        sem_.initialize(Semaphore::Index::CHAIR_ALLOCATION, 1);
-        sem_.initialize(Semaphore::Index::SHM_OPERATIONAL, 1);
-        sem_.initialize(Semaphore::Index::SHM_CHAIRS, 1);
-        sem_.initialize(Semaphore::Index::SHM_STATS, 1);
-        sem_.initialize(Semaphore::Index::WORKER_SYNC, 0);
+        // Startup synchronization
         sem_.initialize(Semaphore::Index::CASHIER_READY, 0);
         sem_.initialize(Semaphore::Index::LOWER_WORKER_READY, 0);
         sem_.initialize(Semaphore::Index::UPPER_WORKER_READY, 0);
-        sem_.initialize(Semaphore::Index::CHAIR_ASSIGNED, 0);
-        sem_.initialize(Semaphore::Index::BOARDING_QUEUE_WORK, 0);
-        sem_.initialize(Semaphore::Index::ENTRY_QUEUE_WORK, 0);
-        // Upper station exit routes (one-way traffic, operating simultaneously)
-        sem_.initialize(Semaphore::Index::EXIT_BIKE_TRAILS, Constants::Gate::EXIT_ROUTE_CAPACITY);
-        sem_.initialize(Semaphore::Index::EXIT_WALKING_PATH, Constants::Gate::EXIT_ROUTE_CAPACITY);
-        // Message queue flow control (prevents queue overflow, no usleep retries needed)
+
+        // Tourist flow (chronological order)
         sem_.initialize(Semaphore::Index::CASHIER_QUEUE_SLOTS, Constants::Queue::CASHIER_QUEUE_CAPACITY);
         sem_.initialize(Semaphore::Index::ENTRY_QUEUE_VIP_SLOTS, Constants::Queue::ENTRY_QUEUE_VIP_SLOTS);
         sem_.initialize(Semaphore::Index::ENTRY_QUEUE_REGULAR_SLOTS, Constants::Queue::ENTRY_QUEUE_REGULAR_SLOTS);
-        // Chair boarding: 4 slots available on current chair
+        sem_.initialize(Semaphore::Index::STATION_CAPACITY, stationCapacity);
+        sem_.initialize(Semaphore::Index::BOARDING_QUEUE_WORK, 0);
+        sem_.initialize(Semaphore::Index::CHAIRS_AVAILABLE, Constants::Chair::MAX_CONCURRENT_IN_USE);
+        sem_.initialize(Semaphore::Index::CHAIR_ASSIGNED, 0);
         sem_.initialize(Semaphore::Index::CURRENT_CHAIR_SLOTS, Constants::Chair::SLOTS_PER_CHAIR);
+        sem_.initialize(Semaphore::Index::EXIT_BIKE_TRAILS, Constants::Gate::EXIT_ROUTE_CAPACITY);
+        sem_.initialize(Semaphore::Index::EXIT_WALKING_PATH, Constants::Gate::EXIT_ROUTE_CAPACITY);
+
+        // Shared memory locks
+        sem_.initialize(Semaphore::Index::SHM_OPERATIONAL, 1);
+        sem_.initialize(Semaphore::Index::SHM_CHAIRS, 1);
+        sem_.initialize(Semaphore::Index::SHM_STATS, 1);
     }
 
     void initState(time_t openTime, time_t closeTime) {

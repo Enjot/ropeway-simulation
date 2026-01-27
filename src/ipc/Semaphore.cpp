@@ -7,26 +7,25 @@
 
 const char* Semaphore::Index::toString(const uint8_t index) {
     switch (index) {
-        case ENTRY_GATES: return "ENTRY_GATES";
-        case RIDE_GATES: return "RIDE_GATES";
-        case STATION_CAPACITY: return "STATION_CAPACITY";
-        case CHAIR_ALLOCATION: return "CHAIR_ALLOCATION";
-        case SHM_OPERATIONAL: return "SHM_OPERATIONAL";
-        case SHM_CHAIRS: return "SHM_CHAIRS";
-        case SHM_STATS: return "SHM_STATS";
-        case WORKER_SYNC: return "WORKER_SYNC";
+        // Startup
         case CASHIER_READY: return "CASHIER_READY";
         case LOWER_WORKER_READY: return "LOWER_WORKER_READY";
         case UPPER_WORKER_READY: return "UPPER_WORKER_READY";
-        case CHAIR_ASSIGNED: return "CHAIR_ASSIGNED";
-        case BOARDING_QUEUE_WORK: return "BOARDING_QUEUE_WORK";
-        case ENTRY_QUEUE_WORK: return "ENTRY_QUEUE_WORK";
-        case EXIT_BIKE_TRAILS: return "EXIT_BIKE_TRAILS";
-        case EXIT_WALKING_PATH: return "EXIT_WALKING_PATH";
+        // Tourist flow
         case CASHIER_QUEUE_SLOTS: return "CASHIER_QUEUE_SLOTS";
         case ENTRY_QUEUE_VIP_SLOTS: return "ENTRY_QUEUE_VIP_SLOTS";
         case ENTRY_QUEUE_REGULAR_SLOTS: return "ENTRY_QUEUE_REGULAR_SLOTS";
+        case STATION_CAPACITY: return "STATION_CAPACITY";
+        case BOARDING_QUEUE_WORK: return "BOARDING_QUEUE_WORK";
+        case CHAIRS_AVAILABLE: return "CHAIRS_AVAILABLE";
+        case CHAIR_ASSIGNED: return "CHAIR_ASSIGNED";
         case CURRENT_CHAIR_SLOTS: return "CURRENT_CHAIR_SLOTS";
+        case EXIT_BIKE_TRAILS: return "EXIT_BIKE_TRAILS";
+        case EXIT_WALKING_PATH: return "EXIT_WALKING_PATH";
+        // Shared memory locks
+        case SHM_OPERATIONAL: return "SHM_OPERATIONAL";
+        case SHM_CHAIRS: return "SHM_CHAIRS";
+        case SHM_STATS: return "SHM_STATS";
         default: return "UNKNOWN_SEMAPHORE";
     }
 }

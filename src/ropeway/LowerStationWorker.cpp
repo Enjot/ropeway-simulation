@@ -369,8 +369,9 @@ private:
         BoardingQueue &queue = shm_->chairPool.boardingQueue;
         if (queue.count == 0) return;
 
-        if (shm_->chairPool.chairsInUse >= Constants::Chair::MAX_CONCURRENT_IN_USE) {
-            return;
+        // Check if chairs available (non-blocking, semaphore-based)
+        if (!sem_.tryAcquire(Semaphore::Index::CHAIRS_AVAILABLE, false)) {
+            return; // All 36 chairs in use, wait for tourist to release
         }
 
         // Find available chair
@@ -383,7 +384,10 @@ private:
                 break;
             }
         }
-        if (chairId < 0) return;
+        if (chairId < 0) {
+            sem_.post(Semaphore::Index::CHAIRS_AVAILABLE, false); // Release, no chair dispatched
+            return;
+        }
 
         // Current chair state
         uint32_t slotsUsed = 0;
@@ -450,6 +454,8 @@ private:
         // Dispatch chair if we have passengers
         if (groupCount > 0) {
             dispatchChair(chairId, groupIndices, groupCount, queue, slotsUsed);
+        } else {
+            sem_.post(Semaphore::Index::CHAIRS_AVAILABLE, false); // Release, no passengers
         }
     }
 
