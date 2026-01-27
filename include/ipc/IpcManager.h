@@ -91,6 +91,10 @@ public:
         // Upper station exit routes (one-way traffic, operating simultaneously)
         sem_.initialize(Semaphore::Index::EXIT_BIKE_TRAILS, Constants::Gate::EXIT_ROUTE_CAPACITY);
         sem_.initialize(Semaphore::Index::EXIT_WALKING_PATH, Constants::Gate::EXIT_ROUTE_CAPACITY);
+        // Message queue flow control (prevents queue overflow, no usleep retries needed)
+        sem_.initialize(Semaphore::Index::CASHIER_QUEUE_SLOTS, Constants::Queue::CASHIER_QUEUE_CAPACITY);
+        sem_.initialize(Semaphore::Index::ENTRY_QUEUE_VIP_SLOTS, Constants::Queue::ENTRY_QUEUE_VIP_SLOTS);
+        sem_.initialize(Semaphore::Index::ENTRY_QUEUE_REGULAR_SLOTS, Constants::Queue::ENTRY_QUEUE_REGULAR_SLOTS);
     }
 
     void initState(time_t openTime, time_t closeTime) {

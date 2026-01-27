@@ -46,4 +46,11 @@ namespace Constants {
         // Simulation delays only - NOT for IPC synchronization
         constexpr uint32_t EXIT_ROUTE_TRANSITION_US{100000}; // Tourist walking to trail after exit (100ms)
     }
+
+    namespace Queue {
+        // Message queue flow control capacities
+        constexpr uint32_t CASHIER_QUEUE_CAPACITY{1000}; // Total cashier queue slots
+        constexpr uint32_t ENTRY_QUEUE_VIP_SLOTS{50}; // Reserved slots for VIPs (~5% buffer)
+        constexpr uint32_t ENTRY_QUEUE_REGULAR_SLOTS{950}; // Slots for regular tourists
+    }
 }

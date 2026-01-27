@@ -40,6 +40,9 @@ public:
             ENTRY_QUEUE_WORK,
             EXIT_BIKE_TRAILS, // Upper station exit to downhill bike trails (cyclists)
             EXIT_WALKING_PATH, // Upper station exit to walking paths (pedestrians)
+            CASHIER_QUEUE_SLOTS, // Flow control for cashier message queue
+            ENTRY_QUEUE_VIP_SLOTS, // Reserved entry queue slots for VIPs
+            ENTRY_QUEUE_REGULAR_SLOTS, // Entry queue slots for regular tourists
             TOTAL_SEMAPHORES
         };
 

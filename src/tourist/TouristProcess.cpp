@@ -21,11 +21,6 @@
 
 namespace {
     SignalHelper::Flags g_signals;
-
-    // Retry configuration for message queue operations under load
-    constexpr uint32_t MAX_SEND_RETRIES = 5;
-    constexpr uint32_t INITIAL_RETRY_DELAY_US = 10000; // 10ms
-    constexpr uint32_t MAX_RETRY_DELAY_US = 500000; // 500ms
 }
 
 class TouristProcess {
@@ -118,35 +113,6 @@ private:
         tourist_.state = newState;
     }
 
-    /**
-     * Send message with retry logic for handling queue saturation.
-     * Uses exponential backoff to prevent thundering herd.
-     */
-    template<typename T, typename Q>
-    bool sendWithRetry(Q &queue, const T &message, long type, const char *description) {
-        uint32_t delayUs = INITIAL_RETRY_DELAY_US;
-
-        for (uint32_t attempt = 0; attempt < MAX_SEND_RETRIES; ++attempt) {
-            if (queue.send(message, type)) {
-                return true;
-            }
-
-            if (g_signals.exit) {
-                return false;
-            }
-
-            if (attempt < MAX_SEND_RETRIES - 1) {
-                Logger::debug(tag_, "Queue full, retry %u/%u for %s (delay: %ums)",
-                              attempt + 1, MAX_SEND_RETRIES, description, delayUs / 1000);
-                usleep(delayUs);
-                // Exponential backoff with jitter
-                delayUs = std::min(delayUs * 2 + (rand() % 10000), MAX_RETRY_DELAY_US);
-            }
-        }
-
-        Logger::error(tag_, "Failed to send %s after %u retries", description, MAX_SEND_RETRIES);
-        return false;
-    }
 
     TicketType chooseTicketType() {
         float roll = static_cast<float>(rand()) / RAND_MAX;
@@ -190,7 +156,17 @@ private:
                      toString(request.requestedType),
                      (tourist_.guardianId >= 0) ? " (child discount)" : "");
 
-        if (!sendWithRetry(requestQueue_, request, CashierMsgType::REQUEST, "ticket request")) {
+        // Acquire queue slot (blocks until slot available - no usleep retry needed)
+        if (!sem_.waitInterruptible(Semaphore::Index::CASHIER_QUEUE_SLOTS)) {
+            if (g_signals.exit) {
+                changeState(TouristState::FINISHED);
+                return;
+            }
+        }
+
+        // Slot acquired, send is guaranteed to succeed
+        if (!requestQueue_.send(request, CashierMsgType::REQUEST)) {
+            sem_.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, false); // Release slot on error
             changeState(TouristState::FINISHED);
             return;
         }
@@ -318,15 +294,30 @@ private:
     void enterStation() {
         // Send entry request to LowerStationWorker via message queue
         // VIPs use lower mtype for priority (will be processed first)
+        // VIPs have reserved queue slots, regular tourists have separate slots
         EntryGateRequest request;
         request.touristId = tourist_.id;
         request.touristPid = tourist_.pid;
         request.isVip = tourist_.isVip;
 
         long requestType = tourist_.isVip ? EntryGateMsgType::VIP_REQUEST : EntryGateMsgType::REGULAR_REQUEST;
+        uint8_t queueSlotSem = tourist_.isVip
+            ? Semaphore::Index::ENTRY_QUEUE_VIP_SLOTS
+            : Semaphore::Index::ENTRY_QUEUE_REGULAR_SLOTS;
+
         Logger::info(tag_, "Requesting entry%s...", tourist_.isVip ? " [VIP PRIORITY]" : "");
 
-        if (!sendWithRetry(entryRequestQueue_, request, requestType, "entry request")) {
+        // Acquire queue slot (VIPs have reserved slots, regulars wait for their pool)
+        if (!sem_.waitInterruptible(queueSlotSem)) {
+            if (g_signals.exit) {
+                changeState(TouristState::FINISHED);
+                return;
+            }
+        }
+
+        // Slot acquired, send is guaranteed to succeed
+        if (!entryRequestQueue_.send(request, requestType)) {
+            sem_.post(queueSlotSem, false); // Release slot on error
             changeState(TouristState::FINISHED);
             return;
         }

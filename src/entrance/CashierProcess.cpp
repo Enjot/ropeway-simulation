@@ -48,6 +48,9 @@ public:
             }
 
             processRequest(*request);
+
+            // Release queue slot so another tourist can send request
+            sem_.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, false);
         }
 
         Logger::warn(TAG, "Shutting down");

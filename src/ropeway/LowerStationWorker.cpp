@@ -209,6 +209,11 @@ private:
             return;
         }
 
+        // Determine which queue slot semaphore to release when done
+        uint8_t queueSlotSem = request->isVip
+            ? Semaphore::Index::ENTRY_QUEUE_VIP_SLOTS
+            : Semaphore::Index::ENTRY_QUEUE_REGULAR_SLOTS;
+
         EntryGateResponse response;
         response.touristId = request->touristId;
 
@@ -223,6 +228,7 @@ private:
             response.allowed = false;
             long responseType = EntryGateMsgType::RESPONSE_BASE + request->touristId;
             entryResponseQueue_.send(response, responseType);
+            sem_.post(queueSlotSem, false); // Release queue slot
             Logger::info(TAG, "Entry denied for Tourist %u: closed", request->touristId);
             return;
         }
@@ -231,6 +237,7 @@ private:
         if (!sem_.tryAcquire(Semaphore::Index::STATION_CAPACITY)) {
             // Station full, put request back in queue and try again later
             // Preserve priority: VIP requests get lower mtype
+            // NOTE: Do NOT release queue slot - tourist is still waiting
             long reqType = request->isVip ? EntryGateMsgType::VIP_REQUEST : EntryGateMsgType::REGULAR_REQUEST;
             entryRequestQueue_.send(*request, reqType);
             sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false); // Re-signal unified work queue
@@ -246,6 +253,7 @@ private:
         response.allowed = true;
         long responseType = EntryGateMsgType::RESPONSE_BASE + request->touristId;
         entryResponseQueue_.send(response, responseType);
+        sem_.post(queueSlotSem, false); // Release queue slot
 
         Logger::info(TAG, "Entry granted to Tourist %u%s",
                      request->touristId, request->isVip ? " [VIP]" : "");
