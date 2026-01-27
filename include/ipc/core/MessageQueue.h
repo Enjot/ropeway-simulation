@@ -62,6 +62,14 @@ public:
         return msgsnd(msgId_, &wrapper, sizeof(T), 0) != -1;
     }
 
+    // Non-blocking send - returns false if queue is full (IPC_NOWAIT)
+    bool trySend(const T &message, const long type) {
+        Wrapper wrapper{};
+        wrapper.mtype = type;
+        wrapper.message = message;
+        return msgsnd(msgId_, &wrapper, sizeof(T), IPC_NOWAIT) != -1;
+    }
+
     // Blocking receive - returns nullopt on EINTR (caller should check exit flag)
     std::optional<T> receive(const long type, const int32_t flags = 0) {
         Wrapper wrapper{};

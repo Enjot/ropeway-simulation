@@ -49,6 +49,9 @@ public:
                 continue;
             }
 
+            // Release queue slot (allows another process to send)
+            sem_.post(Semaphore::Index::LOG_QUEUE_SLOTS);
+
             printLog(*msg);
         }
 
@@ -109,6 +112,8 @@ private:
             auto msg = logQueue_.tryReceive(0);
             if (!msg) break;
             remaining.push_back(*msg);
+            // Release queue slot for each drained message
+            sem_.post(Semaphore::Index::LOG_QUEUE_SLOTS);
         }
 
         // Sort by sequence number

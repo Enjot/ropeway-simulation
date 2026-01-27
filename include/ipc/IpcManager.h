@@ -103,6 +103,7 @@ public:
 
         // Logging
         sem_.initialize(Semaphore::Index::LOG_SEQUENCE, 1);
+        sem_.initialize(Semaphore::Index::LOG_QUEUE_SLOTS, Constants::Queue::LOG_QUEUE_CAPACITY);
     }
 
     void initState(time_t openTime, time_t closeTime) {

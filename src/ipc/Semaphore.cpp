@@ -28,6 +28,7 @@ const char* Semaphore::Index::toString(const uint8_t index) {
         case SHM_STATS: return "SHM_STATS";
         // Logging
         case LOG_SEQUENCE: return "LOG_SEQUENCE";
+        case LOG_QUEUE_SLOTS: return "LOG_QUEUE_SLOTS";
         default: return "UNKNOWN_SEMAPHORE";
     }
 }

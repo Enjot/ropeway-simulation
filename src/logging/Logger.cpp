@@ -21,6 +21,13 @@ namespace Logger {
             msg.text[sizeof(msg.text) - 1] = '\0';
             gettimeofday(&msg.timestamp, nullptr);
 
+            // Try to acquire queue slot (non-blocking to avoid deadlock)
+            if (!sem->tryAcquire(Semaphore::Index::LOG_QUEUE_SLOTS)) {
+                // Queue full - fall back to direct logging
+                logDirect(level, tag, "%s", text);
+                return;
+            }
+
             // Get sequence number atomically - use as mtype for ordering
             {
                 Semaphore::ScopedLock lock(*sem, Semaphore::Index::LOG_SEQUENCE);

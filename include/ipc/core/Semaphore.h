@@ -60,7 +60,8 @@ public:
             SHM_STATS, // Protects statistics and gate passage log
 
             // === LOGGING ===
-            LOG_SEQUENCE, // Protects log sequence number increment
+            LOG_SEQUENCE,     // Protects log sequence number increment
+            LOG_QUEUE_SLOTS,  // Available slots in log queue (prevents overflow)
 
             TOTAL_SEMAPHORES
         };

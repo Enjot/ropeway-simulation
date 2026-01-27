@@ -58,5 +58,6 @@ namespace Constants {
         constexpr uint32_t CASHIER_QUEUE_CAPACITY{1000}; // Total cashier queue slots
         constexpr uint32_t ENTRY_QUEUE_VIP_SLOTS{50}; // Reserved slots for VIPs (~5% buffer)
         constexpr uint32_t ENTRY_QUEUE_REGULAR_SLOTS{950}; // Slots for regular tourists
+        constexpr uint32_t LOG_QUEUE_CAPACITY{1000}; // Max pending log messages
     }
 }
