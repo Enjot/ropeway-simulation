@@ -31,6 +31,8 @@ struct SharedOperationalState {
     pid_t lowerWorkerPid; // Lower station controller
     pid_t upperWorkerPid; // Upper station controller
 
+    uint64_t logSequenceNum; // Global log sequence counter for ordering
+
     SharedOperationalState()
         : state{RopewayState::STOPPED},
           acceptingNewTourists{false},
@@ -43,6 +45,7 @@ struct SharedOperationalState {
           cyclistsOnBikeTrailExit{0},
           pedestriansOnWalkingExit{0},
           lowerWorkerPid{0},
-          upperWorkerPid{0} {
+          upperWorkerPid{0},
+          logSequenceNum{0} {
     }
 };

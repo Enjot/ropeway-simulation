@@ -180,8 +180,13 @@ int main(int argc, char *argv[]) {
     SignalHelper::setup(g_signals, true);
 
     try {
+        Config::loadEnvFile();
+        Logger::initCentralized(args.shmKey, args.semKey, args.logMsgKey);
+
         UpperWorkerProcess worker(args);
         worker.run();
+
+        Logger::cleanupCentralized();
     } catch (const std::exception &e) {
         Logger::error(TAG, "Exception: %s", e.what());
         return 1;

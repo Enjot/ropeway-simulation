@@ -10,6 +10,7 @@
 #include "ropeway/worker/WorkerMessage.h"
 #include "entrance/CashierMessage.h"
 #include "ropeway/gate/EntryGateMessage.h"
+#include "logging/LogMessage.h"
 #include "core/Config.h"
 #include "logging/Logger.h"
 
@@ -28,12 +29,14 @@ public:
           workerMsgKey_{ftok(".", 'W')},
           cashierMsgKey_{ftok(".", 'C')},
           entryGateMsgKey_{ftok(".", 'E')},
+          logMsgKey_{ftok(".", 'L')},
           shm_{SharedMemory<SharedRopewayState>::create(shmKey_)},
           sem_{semKey_},
           workerQueue_{workerMsgKey_, "WorkerMessageQueue"},
           cashierQueue_{cashierMsgKey_, "CashierMessageQueue"},
-          entryGateQueue_{entryGateMsgKey_, "EntryGateQueue"} {
-        if (shmKey_ == -1 || semKey_ == -1 || workerMsgKey_ == -1 || cashierMsgKey_ == -1 || entryGateMsgKey_ == -1) {
+          entryGateQueue_{entryGateMsgKey_, "EntryGateQueue"},
+          logQueue_{logMsgKey_, "LogMessageQueue"} {
+        if (shmKey_ == -1 || semKey_ == -1 || workerMsgKey_ == -1 || cashierMsgKey_ == -1 || entryGateMsgKey_ == -1 || logMsgKey_ == -1) {
             throw ipc_exception("ftok failed");
         }
 
@@ -65,6 +68,7 @@ public:
     MessageQueue<WorkerMessage> &workerQueue() { return workerQueue_; }
     MessageQueue<TicketRequest> &cashierQueue() { return cashierQueue_; }
     MessageQueue<EntryGateRequest> &entryGateQueue() { return entryGateQueue_; }
+    MessageQueue<LogMessage> &logQueue() { return logQueue_; }
 
     // Keys for child processes
     key_t shmKey() const { return shmKey_; }
@@ -72,6 +76,7 @@ public:
     key_t workerMsgKey() const { return workerMsgKey_; }
     key_t cashierMsgKey() const { return cashierMsgKey_; }
     key_t entryGateMsgKey() const { return entryGateMsgKey_; }
+    key_t logMsgKey() const { return logMsgKey_; }
 
     void initSemaphores(const uint16_t stationCapacity = Config::Gate::MAX_TOURISTS_ON_STATION()) const {
         // Startup synchronization
@@ -95,6 +100,9 @@ public:
         sem_.initialize(Semaphore::Index::SHM_OPERATIONAL, 1);
         sem_.initialize(Semaphore::Index::SHM_CHAIRS, 1);
         sem_.initialize(Semaphore::Index::SHM_STATS, 1);
+
+        // Logging
+        sem_.initialize(Semaphore::Index::LOG_SEQUENCE, 1);
     }
 
     void initState(time_t openTime, time_t closeTime) {
@@ -114,6 +122,7 @@ public:
         try { workerQueue_.destroy(); } catch (...) {}
         try { cashierQueue_.destroy(); } catch (...) {}
         try { entryGateQueue_.destroy(); } catch (...) {}
+        try { logQueue_.destroy(); } catch (...) {}
         Logger::debug(tag_, "cleanup done");
     }
 
@@ -125,12 +134,14 @@ private:
     key_t workerMsgKey_;
     key_t cashierMsgKey_;
     key_t entryGateMsgKey_;
+    key_t logMsgKey_;
 
     SharedMemory<SharedRopewayState> shm_;
     Semaphore sem_;
     MessageQueue<WorkerMessage> workerQueue_;
     MessageQueue<TicketRequest> cashierQueue_;
     MessageQueue<EntryGateRequest> entryGateQueue_;
+    MessageQueue<LogMessage> logQueue_;
     bool cleanedUp_{false};
 };
 

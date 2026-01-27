@@ -42,6 +42,7 @@ private:
     std::unique_ptr<IpcManager> ipc_;
     SignalHelper::Flags signals_;
 
+    pid_t loggerPid_{-1};
     pid_t cashierPid_{-1};
     pid_t lowerWorkerPid_{-1};
     pid_t upperWorkerPid_{-1};
@@ -63,24 +64,36 @@ private:
         Logger::setSimulationStartTime(startTime_);
 
         Logger::debug(tag_, "Spawning processes...");
+        spawnLogger();
         spawnWorkers();
         spawnCashier();
         waitForReady();
     }
 
+    void spawnLogger() {
+        loggerPid_ = ProcessSpawner::spawnWithKeys("logger_process",
+                                                   ipc_->shmKey(), ipc_->semKey(), ipc_->logMsgKey());
+        Logger::debug(tag_, "Logger spawned: %d", loggerPid_);
+        usleep(50000); // Brief delay to ensure logger is ready
+
+        // Switch to centralized logging (from now on, logs go through the logger process)
+        Logger::initCentralized(ipc_->shmKey(), ipc_->semKey(), ipc_->logMsgKey());
+    }
+
     void spawnWorkers() {
         lowerWorkerPid_ = ProcessSpawner::spawnWithKeys("lower_worker_process",
                                                         ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey(),
-                                                        ipc_->entryGateMsgKey());
+                                                        ipc_->entryGateMsgKey(), ipc_->logMsgKey());
         upperWorkerPid_ = ProcessSpawner::spawnWithKeys("upper_worker_process",
                                                         ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey(),
-                                                        ipc_->entryGateMsgKey());
+                                                        ipc_->entryGateMsgKey(), ipc_->logMsgKey());
         Logger::debug(tag_, "Workers spawned: %d, %d", lowerWorkerPid_, upperWorkerPid_);
     }
 
     void spawnCashier() {
         cashierPid_ = ProcessSpawner::spawnWithKeys("cashier_process",
-                                                    ipc_->shmKey(), ipc_->semKey(), ipc_->cashierMsgKey());
+                                                    ipc_->shmKey(), ipc_->semKey(), ipc_->cashierMsgKey(),
+                                                    ipc_->logMsgKey());
         Logger::debug(tag_, "Cashier spawned: %d", cashierPid_);
     }
 
@@ -215,7 +228,8 @@ private:
                 std::to_string(ipc_->semKey()),
                 std::to_string(ipc_->workerMsgKey()),
                 std::to_string(ipc_->cashierMsgKey()),
-                std::to_string(ipc_->entryGateMsgKey())
+                std::to_string(ipc_->entryGateMsgKey()),
+                std::to_string(ipc_->logMsgKey())
             });
 
             if (pid > 0) touristPids_.push_back(pid);
@@ -231,11 +245,16 @@ private:
         // Generate end-of-day report before cleanup
         generateDailyReport();
 
-        // Terminate processes
+        // Stop using centralized logging before terminating logger
+        Logger::cleanupCentralized();
+
+        // Terminate processes (logger last to capture final messages)
         ProcessSpawner::terminate(cashierPid_, "Cashier");
         ProcessSpawner::terminate(lowerWorkerPid_, "LowerWorker");
         ProcessSpawner::terminate(upperWorkerPid_, "UpperWorker");
         ProcessSpawner::terminateAll(touristPids_);
+        usleep(100000); // Brief delay to let logger process remaining messages
+        ProcessSpawner::terminate(loggerPid_, "Logger");
 
         // Wait for all children
         while (waitpid(-1, nullptr, 0) > 0) {

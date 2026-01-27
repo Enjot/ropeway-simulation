@@ -6,9 +6,17 @@
 #include <cerrno>
 #include <ctime>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <memory>
 
-#include "core/Config.h"
 #include "core/Flags.h"
+#include "logging/LogMessage.h"
+
+// Forward declarations to avoid circular includes
+class Semaphore;
+template<typename T> class MessageQueue;
+struct SharedRopewayState;
+template<typename T> class SharedMemory;
 
 namespace Logger {
     enum class Level { DEBUG, INFO, WARN, ERROR };
@@ -16,6 +24,15 @@ namespace Logger {
     namespace detail {
         constexpr const char *colors[] = {"\033[90m", "\033[36m", "\033[33m", "\033[31m"};
         constexpr const char *names[] = {"DEBUG", "INFO ", "WARN ", "ERROR"};
+
+        // Centralized logging state
+        inline bool centralizedMode = false;
+        inline key_t logQueueKey = -1;
+        inline key_t semKey = -1;
+        inline key_t shmKey = -1;
+        inline MessageQueue<LogMessage>* logQueue = nullptr;
+        inline Semaphore* sem = nullptr;
+        inline SharedMemory<SharedRopewayState>* shm = nullptr;
 
         // Simulation start time with microsecond precision
         inline struct timeval simulationStartTime = {0, 0};
@@ -36,8 +53,11 @@ namespace Logger {
             if (elapsedUs < 0) elapsedUs = 0;
 
             // Convert to simulated seconds: elapsed_us * TIME_SCALE / 1_000_000
-            uint32_t simulatedElapsed = static_cast<uint32_t>(elapsedUs * Config::Simulation::TIME_SCALE() / 1000000);
-            uint32_t simulatedSeconds = Config::Simulation::OPENING_HOUR() * 3600 + simulatedElapsed;
+            // Note: Config not available here in centralized mode, use default scale
+            uint32_t timeScale = 600; // Default, will be overridden
+            uint32_t openingHour = 8;
+            uint32_t simulatedElapsed = static_cast<uint32_t>(elapsedUs * timeScale / 1000000);
+            uint32_t simulatedSeconds = openingHour * 3600 + simulatedElapsed;
 
             if (simulatedSeconds > 24 * 3600 - 1) {
                 simulatedSeconds = 24 * 3600 - 1;
@@ -48,8 +68,9 @@ namespace Logger {
             snprintf(buffer, 8, "[%02u:%02u]", hours, minutes);
         }
 
+        // Direct logging (used when not in centralized mode or by LoggerProcess)
         template<typename... Args>
-        void log(Level level, const char *tag, const char *message, Args... args) {
+        void logDirect(Level level, const char *tag, const char *message, Args... args) {
             char buf[512];
             char timeBuf[8] = "";
             getSimulatedTime(timeBuf);
@@ -71,11 +92,30 @@ namespace Logger {
             buf[n++] = '\n';
             write(STDOUT_FILENO, buf, n);
         }
+
+        void sendToQueue(Level level, const char* tag, const char* text);
+
+        template<typename... Args>
+        void log(Level level, const char *tag, const char *message, Args... args) {
+            if (centralizedMode && logQueue != nullptr) {
+                // Format message
+                char text[256];
+                snprintf(text, sizeof(text), message, args...);
+                sendToQueue(level, tag, text);
+            } else {
+                logDirect(level, tag, message, args...);
+            }
+        }
     }
+
+    /** Initialize centralized logging mode */
+    void initCentralized(key_t shmKey, key_t semKey, key_t logQueueKey);
+
+    /** Cleanup centralized logging resources */
+    void cleanupCentralized();
 
     /** Set simulation start time to enable simulated time in logs */
     inline void setSimulationStartTime(time_t startTime) {
-        // Convert time_t to timeval by calculating offset from current time
         struct timeval now;
         gettimeofday(&now, nullptr);
         time_t offset = now.tv_sec - startTime;
@@ -113,14 +153,12 @@ namespace Logger {
 
     inline void pError(const char *message) { perror(message); }
 
-    // perror with tag (prints errno message)
     inline void perror(const char *tag, const char *message) {
         if constexpr (Flags::Logging::IS_ERROR_ENABLED) {
             detail::log(Level::ERROR, tag, "%s: %s", message, strerror(errno));
         }
     }
 
-    // State change logging
     inline void stateChange(const char *tag, const char *from, const char *to) {
         if constexpr (Flags::Logging::IS_INFO_ENABLED) {
             detail::log(Level::INFO, tag, "%s -> %s", from, to);

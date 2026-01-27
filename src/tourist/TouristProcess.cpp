@@ -648,8 +648,13 @@ int main(int argc, char *argv[]) {
     srand(static_cast<unsigned>(time(nullptr)) ^ static_cast<unsigned>(getpid()) ^ (args.id * 31337));
 
     try {
+        Config::loadEnvFile();
+        Logger::initCentralized(args.shmKey, args.semKey, args.logMsgKey);
+
         TouristProcess process(args);
         process.run();
+
+        Logger::cleanupCentralized();
     } catch (const std::exception &e) {
         Logger::error("Tourist", "Exception: %s", e.what());
         return 1;

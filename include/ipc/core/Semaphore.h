@@ -59,6 +59,9 @@ public:
             SHM_CHAIRS, // Protects chair pool and boarding queue
             SHM_STATS, // Protects statistics and gate passage log
 
+            // === LOGGING ===
+            LOG_SEQUENCE, // Protects log sequence number increment
+
             TOTAL_SEMAPHORES
         };
 

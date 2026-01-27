@@ -46,6 +46,7 @@ set(ROPEWAY_HEADERS
 
 set(LOGGING_HEADERS
     include/logging/Logger.h
+    include/logging/LogMessage.h
     include/logging/GatePassageLogger.h
 )
 
@@ -100,47 +101,64 @@ set(IPC_SOURCES
     src/ipc/Semaphore.cpp
 )
 
+set(LOGGING_SOURCES
+    src/logging/Logger.cpp
+)
+
 # === Executables ===
+
+# Common sources for all executables
+set(COMMON_SOURCES
+    ${IPC_SOURCES}
+    ${LOGGING_SOURCES}
+)
 
 # Tourist process (spawned via fork/exec)
 add_executable(tourist_process
     src/tourist/TouristProcess.cpp
-    ${IPC_SOURCES}
+    ${COMMON_SOURCES}
     ${ALL_HEADERS}
 )
 
 # LowerWorker process - Lower Station Controller (spawned via fork/exec)
 add_executable(lower_worker_process
     src/ropeway/LowerStationWorker.cpp
-    ${IPC_SOURCES}
+    ${COMMON_SOURCES}
     ${ALL_HEADERS}
 )
 
 # UpperWorker process - Upper Station Controller (spawned via fork/exec)
 add_executable(upper_worker_process
     src/ropeway/UpperStationWorker.cpp
-    ${IPC_SOURCES}
+    ${COMMON_SOURCES}
     ${ALL_HEADERS}
 )
 
 # Cashier process - Ticket sales (spawned via fork/exec)
 add_executable(cashier_process
     src/entrance/CashierProcess.cpp
-    ${IPC_SOURCES}
+    ${COMMON_SOURCES}
+    ${ALL_HEADERS}
+)
+
+# Logger process - Centralized log collection (spawned via fork/exec)
+add_executable(logger_process
+    src/logging/LoggerProcess.cpp
+    ${COMMON_SOURCES}
     ${ALL_HEADERS}
 )
 
 # Test runner - Automated test suite
 add_executable(test_runner
     src/tests/TestRunner.cpp
-    ${IPC_SOURCES}
+    ${COMMON_SOURCES}
     ${ALL_HEADERS}
 )
 
 # Main executable - Manual simulation control
 add_executable(main
     src/core/main.cpp
-    ${IPC_SOURCES}
+    ${COMMON_SOURCES}
     ${ALL_HEADERS}
 )
 

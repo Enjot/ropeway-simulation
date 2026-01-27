@@ -144,8 +144,13 @@ int main(int argc, char *argv[]) {
     srand(static_cast<unsigned>(time(nullptr)) ^ static_cast<unsigned>(getpid()));
 
     try {
+        Config::loadEnvFile();
+        Logger::initCentralized(args.shmKey, args.semKey, args.logMsgKey);
+
         CashierProcess cashier(args);
         cashier.run();
+
+        Logger::cleanupCentralized();
     } catch (const std::exception &e) {
         Logger::error(TAG, "Exception: %s", e.what());
         return 1;
