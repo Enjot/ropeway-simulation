@@ -1,8 +1,8 @@
 #pragma once
 
 #include <csignal>
-#include "Logger.hpp"
-#include "ProcessSpawner.hpp"
+#include "logging/Logger.hpp"
+#include "utils/ProcessSpawner.hpp"
 
 namespace SignalHelper {
     inline constexpr auto tag = "SignalHelper";

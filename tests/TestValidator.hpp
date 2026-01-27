@@ -6,9 +6,9 @@
 #include <unistd.h>
 #include <csignal>
 #include "tests/TestConfig.hpp"
-#include "../ipc/model/SharedRopewayState.hpp"
-#include "../ipc/core/Semaphore.hpp"
-#include "../Config.hpp"
+#include "ipc/model/SharedRopewayState.hpp"
+#include "ipc/core/Semaphore.hpp"
+#include "core/Config.hpp"
 
 namespace Test {
 

@@ -6,8 +6,8 @@
 #include <mutex>
 #include <string>
 #include <sstream>
-#include "enums/GateType.hpp"
-#include "structures/GatePassage.hpp"
+#include "ropeway/gate/GateType.hpp"
+#include "stats/GatePassage.hpp"
 
 /**
  * Logger for gate passages

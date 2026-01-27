@@ -2,7 +2,7 @@
 
 #include <sys/types.h>
 #include <ctime>
-#include "enums/RopewayState.hpp"
+#include "core/RopewayState.hpp"
 
 // ============================================================================
 // OPERATIONAL STATE (protected by SHM_OPERATIONAL semaphore)

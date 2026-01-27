@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <ctime>
 #include <cstdio>
-#include "../Config.hpp"
+#include "core/Config.hpp"
 
 /**
  * Helper for simulated time calculations.

@@ -5,7 +5,7 @@
 #include <cerrno>
 #include <optional>
 
-#include "utils/Logger.hpp"
+#include "logging/Logger.hpp"
 #include "IpcException.hpp"
 
 template<typename T>

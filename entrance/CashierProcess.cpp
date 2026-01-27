@@ -6,12 +6,12 @@
 #include "ipc/core/SharedMemory.hpp"
 #include "ipc/core/Semaphore.hpp"
 #include "ipc/core/MessageQueue.hpp"
-#include "../ipc/model/SharedRopewayState.hpp"
-#include "ipc/message/CashierMessage.hpp"
-#include "Config.hpp"
+#include "ipc/model/SharedRopewayState.hpp"
+#include "entrance/CashierMessage.hpp"
+#include "core/Config.hpp"
 #include "utils/SignalHelper.hpp"
 #include "utils/ArgumentParser.hpp"
-#include "utils/Logger.hpp"
+#include "logging/Logger.hpp"
 
 namespace {
     SignalHelper::Flags g_signals;

@@ -1,9 +1,10 @@
 #pragma once
 
-#include "../../Config.hpp"
-#include "structures/Chair.hpp"
-#include "structures/DailyStatistic.hpp"
-#include "ReportingData.hpp"
+#include "core/Config.hpp"
+#include "ropeway/chair/Chair.hpp"
+#include "stats/DailyStatistic.hpp"
+#include "stats/GatePassageLog.hpp"
+#include "stats/TouristRideRecord.hpp"
 
 /**
  * Simulation statistics and reporting data.

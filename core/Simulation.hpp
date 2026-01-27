@@ -8,9 +8,10 @@
 #include <cstdio>
 
 #include "ipc/IpcManager.hpp"
+#include "core/Config.hpp"
 #include "utils/SignalHelper.hpp"
 #include "utils/ProcessSpawner.hpp"
-#include "utils/Logger.hpp"
+#include "logging/Logger.hpp"
 #include "utils/TimeHelper.hpp"
 
 class Simulation {

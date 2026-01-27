@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../Config.hpp"
-#include "structures/Chair.hpp"
-#include "BoardingQueue.hpp"
+#include "core/Config.hpp"
+#include "ropeway/chair/Chair.hpp"
+#include "ropeway/chair/BoardingQueue.hpp"
 
 /**
  * Chair management pool.

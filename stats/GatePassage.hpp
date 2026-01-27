@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <ctime>
-#include "enums/GateType.hpp"
+#include "ropeway/gate/GateType.hpp"
 
 /**
  * Structure for logging gate passages.

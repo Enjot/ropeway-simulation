@@ -5,7 +5,7 @@
 #include <sys/sem.h>
 
 #include "IpcException.hpp"
-#include "utils/Logger.hpp"
+#include "logging/Logger.hpp"
 
 #ifdef _SEM_SEMUN_UNDEFINED
 /**

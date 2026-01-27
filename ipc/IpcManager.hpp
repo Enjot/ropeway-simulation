@@ -1,15 +1,15 @@
 #pragma once
 
-#include "core/SharedMemory.hpp"
-#include "core/Semaphore.hpp"
-#include "core/MessageQueue.hpp"
-#include "core/IpcException.hpp"
-#include "model/SharedRopewayState.hpp"
-#include "message/WorkerMessage.hpp"
-#include "message/CashierMessage.hpp"
-#include "message/EntryGateMessage.hpp"
-#include "../Config.hpp"
-#include "../utils/Logger.hpp"
+#include "ipc/core/SharedMemory.hpp"
+#include "ipc/core/Semaphore.hpp"
+#include "ipc/core/MessageQueue.hpp"
+#include "ipc/core/IpcException.hpp"
+#include "ipc/model/SharedRopewayState.hpp"
+#include "ropeway/worker/WorkerMessage.hpp"
+#include "entrance/CashierMessage.hpp"
+#include "ropeway/gate/EntryGateMessage.hpp"
+#include "core/Config.hpp"
+#include "logging/Logger.hpp"
 
 class IpcManager {
 public:

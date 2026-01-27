@@ -5,7 +5,7 @@
 #include <cerrno>
 
 #include "IpcException.hpp"
-#include "utils/Logger.hpp"
+#include "logging/Logger.hpp"
 
 template<typename T>
 class SharedMemory {

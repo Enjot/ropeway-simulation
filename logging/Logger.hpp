@@ -7,7 +7,7 @@
 #include <ctime>
 #include <sys/time.h>
 
-#include "../Config.hpp"
+#include "core/Config.hpp"
 
 namespace Logger {
     enum class Level { DEBUG, INFO, WARN, ERROR };

@@ -8,51 +8,66 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR})
 
-# Header files list (for IDE integration)
-set(COMMON_HEADERS
-        Config.hpp
-        enums/GateType.hpp
-        enums/RopewayState.hpp
-        enums/StationType.hpp
-        enums/TicketName.hpp
-        enums/TouristType.hpp
-        enums/TrailDifficulty.hpp
-        enums/WorkerSignal.hpp
-        enums/TouristState.hpp
+# === Header files by feature (for IDE integration) ===
+
+set(CORE_HEADERS
+        core/Config.hpp
+        core/RopewayState.hpp
+        core/Simulation.hpp
+)
+
+set(TOURIST_HEADERS
+        tourist/Tourist.hpp
+        tourist/TouristState.hpp
+        tourist/TouristType.hpp
+)
+
+set(ENTRANCE_HEADERS
+        entrance/Ticket.hpp
+        entrance/TicketName.hpp
+        entrance/CashierMessage.hpp
+)
+
+set(ROPEWAY_HEADERS
+        ropeway/StationType.hpp
+        ropeway/TrailDifficulty.hpp
+        ropeway/worker/WorkerMessage.hpp
+        ropeway/worker/WorkerSignal.hpp
+        ropeway/gate/GateType.hpp
+        ropeway/gate/EntryGateMessage.hpp
+        ropeway/chair/Chair.hpp
+        ropeway/chair/BoardingQueue.hpp
+)
+
+set(LOGGING_HEADERS
+        logging/Logger.hpp
+        logging/GatePassageLogger.hpp
 )
 
 set(IPC_HEADERS
-        ipc/model/BoardingQueue.hpp
-        ipc/message/CashierMessage.hpp
+        ipc/IpcManager.hpp
+        ipc/core/SharedMemory.hpp
+        ipc/core/Semaphore.hpp
         ipc/core/MessageQueue.hpp
-        ipc/model/ReportingData.hpp
+        ipc/core/IpcException.hpp
         ipc/model/SharedRopewayState.hpp
         ipc/model/SharedOperationalState.hpp
         ipc/model/SharedChairPoolState.hpp
         ipc/model/SharedStatisticState.hpp
-        ipc/core/SharedMemory.hpp
-        ipc/message/WorkerMessage.hpp
-        ipc/IpcManager.hpp
 )
 
-set(STRUCTURE_HEADERS
-        structures/chair.hpp
-        structures/DailyStatistic.hpp
-        structures/GatePassage.hpp
-        structures/ticket.hpp
-        structures/tourist.hpp
-)
-
-set(GATE_HEADERS
-        ipc/message/EntryGateMessage.hpp
+set(STATS_HEADERS
+        stats/DailyStatistic.hpp
+        stats/GatePassage.hpp
+        stats/GatePassageLog.hpp
+        stats/TouristRideRecord.hpp
 )
 
 set(UTILS_HEADERS
-        utils/GatePassageLogger.hpp
-        utils/Logger.hpp
         utils/SignalHelper.hpp
         utils/ArgumentParser.hpp
         utils/ProcessSpawner.hpp
+        utils/TimeHelper.hpp
 )
 
 set(TEST_HEADERS
@@ -63,29 +78,33 @@ set(TEST_HEADERS
 
 # All headers combined
 set(ALL_HEADERS
-        ${COMMON_HEADERS}
+        ${CORE_HEADERS}
+        ${TOURIST_HEADERS}
+        ${ENTRANCE_HEADERS}
+        ${ROPEWAY_HEADERS}
+        ${LOGGING_HEADERS}
         ${IPC_HEADERS}
-        ${STRUCTURE_HEADERS}
-        ${GATE_HEADERS}
+        ${STATS_HEADERS}
         ${UTILS_HEADERS}
         ${TEST_HEADERS}
 )
 
+# === Executables ===
+
 # Tourist process (spawned via fork/exec)
-add_executable(tourist_process processes/TouristProcess.cpp ${ALL_HEADERS})
+add_executable(tourist_process tourist/TouristProcess.cpp ${ALL_HEADERS})
 
 # LowerWorker process - Lower Station Controller (spawned via fork/exec)
-add_executable(lower_worker_process processes/LowerStationWorker.cpp ${ALL_HEADERS})
+add_executable(lower_worker_process ropeway/worker/LowerStationWorker.cpp ${ALL_HEADERS})
 
 # UpperWorker process - Upper Station Controller (spawned via fork/exec)
-add_executable(upper_worker_process processes/UpperStationWorker.cpp ${ALL_HEADERS})
+add_executable(upper_worker_process ropeway/worker/UpperStationWorker.cpp ${ALL_HEADERS})
 
 # Cashier process - Ticket sales (spawned via fork/exec)
-add_executable(cashier_process processes/CashierProcess.cpp ${ALL_HEADERS}
-        ipc/core/IpcException.hpp)
+add_executable(cashier_process entrance/CashierProcess.cpp ${ALL_HEADERS})
 
-# Test runner - Automated test suite (Phase 10)
+# Test runner - Automated test suite
 add_executable(test_runner tests/TestRunner.cpp ${ALL_HEADERS})
 
 # Main executable - Manual simulation control
-add_executable(main main.cpp ${ALL_HEADERS})
+add_executable(main core/main.cpp ${ALL_HEADERS})

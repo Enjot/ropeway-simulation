@@ -5,9 +5,9 @@
 #include "SharedChairPoolState.hpp"
 #include "SharedOperationalState.hpp"
 #include "SharedStatisticState.hpp"
-#include "../../Config.hpp"
-#include "enums/GateType.hpp"
-#include "ReportingData.hpp"
+#include "core/Config.hpp"
+#include "ropeway/gate/GateType.hpp"
+#include "stats/GatePassage.hpp"
 
 // ============================================================================
 // MAIN SHARED MEMORY STRUCTURE

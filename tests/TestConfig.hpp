@@ -2,8 +2,8 @@
 
 #include <string>
 #include <vector>
-#include "enums/TouristType.hpp"
-#include "enums/TrailDifficulty.hpp"
+#include "tourist/TouristType.hpp"
+#include "ropeway/TrailDifficulty.hpp"
 
 namespace Test {
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "enums/TicketName.hpp"
+#include "entrance/TicketName.hpp"
 
 /**
  * Message types for cashier communication

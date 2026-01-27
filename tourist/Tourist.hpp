@@ -1,11 +1,11 @@
 #pragma once
 
-#include "enums/TouristType.hpp"
-#include "enums/TrailDifficulty.hpp"
-#include "enums/TicketName.hpp"
-#include "../Config.hpp"
+#include "tourist/TouristType.hpp"
+#include "ropeway/TrailDifficulty.hpp"
+#include "entrance/TicketName.hpp"
+#include "core/Config.hpp"
 #include <ctime>
-#include "enums/TouristState.hpp"
+#include "tourist/TouristState.hpp"
 
 
 /**
