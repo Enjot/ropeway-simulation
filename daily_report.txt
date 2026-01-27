@@ -1,0 +1,134 @@
+ROPEWAY DAILY REPORT
+====================
+Operating hours: 08:00 - 18:00
+
+FINANCIAL
+  Revenue:        528.75 PLN
+  Tickets sold:   13
+
+TOURISTS (13 total)
+  Children (<10): 3
+  Adults (10-64): 9
+  Seniors (65+):  1
+  VIP:            0
+
+TYPES
+  Pedestrians:    9
+  Cyclists:       4
+
+RIDES
+  Total rides:    46
+  Gate passages:  92
+
+RIDES PER TOURIST/TICKET
+Tourist    Ticket     Age   Type       VIP    Rides    Guardian
+--------------------------------------------------------------
+1          1          40    Pedestrian No     4        -1      
+11         2          6     Pedestrian No     4        1       
+2          3          49    Pedestrian No     16       -1      
+3          4          37    Cyclist    No     1        -1      
+4          5          52    Cyclist    No     1        -1      
+5          6          32    Pedestrian No     4        -1      
+6          7          74    Pedestrian No     1        -1      
+7          8          41    Pedestrian No     1        -1      
+8          9          32    Pedestrian No     0        -1      
+9          10         33    Cyclist    No     3        -1      
+12         11         6     Pedestrian No     5        9       
+13         12         6     Pedestrian No     5        9       
+10         13         64    Cyclist    No     1        -1      
+
+GATE PASSAGE LOG
+Time     Tourist    Ticket     Gate   Type     Allowed 
+--------------------------------------------------------------
+08:00    1          1          1      Entry    Yes     
+08:00    1          1          0      Ride     Yes     
+08:00    11         2          3      Entry    Yes     
+08:00    11         2          1      Ride     Yes     
+08:00    2          3          2      Entry    Yes     
+08:00    2          3          2      Ride     Yes     
+08:00    3          4          3      Entry    Yes     
+08:00    3          4          0      Ride     Yes     
+08:00    4          5          0      Entry    Yes     
+08:00    4          5          1      Ride     Yes     
+08:00    5          6          1      Entry    Yes     
+08:00    5          6          2      Ride     Yes     
+08:00    6          7          2      Entry    Yes     
+08:00    6          7          0      Ride     Yes     
+08:10    7          8          3      Entry    Yes     
+08:10    7          8          1      Ride     Yes     
+08:10    9          10         1      Entry    Yes     
+08:10    9          10         2      Ride     Yes     
+08:10    12         11         0      Entry    Yes     
+08:10    12         11         0      Ride     Yes     
+08:10    13         12         1      Entry    Yes     
+08:10    13         12         1      Ride     Yes     
+08:10    10         13         2      Entry    Yes     
+08:10    10         13         2      Ride     Yes     
+08:30    11         2          3      Entry    Yes     
+08:30    11         2          0      Ride     Yes     
+08:30    1          1          1      Entry    Yes     
+08:30    1          1          1      Ride     Yes     
+08:30    2          3          2      Entry    Yes     
+08:30    2          3          2      Ride     Yes     
+08:40    5          6          1      Entry    Yes     
+08:40    5          6          0      Ride     Yes     
+08:40    12         11         0      Entry    Yes     
+08:40    12         11         1      Ride     Yes     
+08:40    13         12         1      Entry    Yes     
+08:40    13         12         2      Ride     Yes     
+09:00    11         2          3      Entry    Yes     
+09:00    11         2          0      Ride     Yes     
+09:00    1          1          1      Entry    Yes     
+09:00    1          1          1      Ride     Yes     
+09:00    2          3          2      Entry    Yes     
+09:00    2          3          2      Ride     Yes     
+09:10    5          6          1      Entry    Yes     
+09:10    5          6          0      Ride     Yes     
+09:10    12         11         0      Entry    Yes     
+09:10    12         11         1      Ride     Yes     
+09:10    13         12         1      Entry    Yes     
+09:10    13         12         2      Ride     Yes     
+09:20    9          10         1      Entry    Yes     
+09:20    9          10         0      Ride     Yes     
+09:30    11         2          3      Entry    Yes     
+09:30    11         2          1      Ride     Yes     
+09:30    1          1          1      Entry    Yes     
+09:30    1          1          2      Ride     Yes     
+09:40    2          3          2      Entry    Yes     
+09:40    2          3          0      Ride     Yes     
+09:40    5          6          1      Entry    Yes     
+09:40    5          6          1      Ride     Yes     
+09:40    12         11         0      Entry    Yes     
+09:40    12         11         2      Ride     Yes     
+09:40    13         12         1      Entry    Yes     
+09:40    13         12         0      Ride     Yes     
+12:00    2          3          2      Entry    Yes     
+12:00    12         11         0      Entry    Yes     
+12:00    13         12         1      Entry    Yes     
+12:00    13         12         1      Ride     Yes     
+12:00    2          3          1      Ride     Yes     
+12:00    9          10         1      Entry    Yes     
+12:00    12         11         1      Ride     Yes     
+12:00    9          10         2      Ride     Yes     
+12:30    2          3          2      Entry    Yes     
+12:30    2          3          0      Ride     Yes     
+13:00    2          3          2      Entry    Yes     
+13:00    2          3          1      Ride     Yes     
+13:30    2          3          2      Entry    Yes     
+13:30    2          3          2      Ride     Yes     
+14:00    2          3          2      Entry    Yes     
+14:00    2          3          0      Ride     Yes     
+14:30    2          3          2      Entry    Yes     
+14:30    2          3          1      Ride     Yes     
+15:00    2          3          2      Entry    Yes     
+15:00    2          3          2      Ride     Yes     
+15:30    2          3          2      Entry    Yes     
+15:30    2          3          0      Ride     Yes     
+16:00    2          3          2      Entry    Yes     
+16:00    2          3          1      Ride     Yes     
+16:30    2          3          2      Entry    Yes     
+16:30    2          3          2      Ride     Yes     
+17:00    2          3          2      Entry    Yes     
+17:00    2          3          0      Ride     Yes     
+17:30    2          3          2      Entry    Yes     
+17:30    2          3          1      Ride     Yes     

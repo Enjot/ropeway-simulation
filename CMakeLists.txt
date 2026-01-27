@@ -1,111 +1,148 @@
-cmake_minimum_required(VERSION 4.0)
+cmake_minimum_required(VERSION 3.16)
 project(ropeway_simulation)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Include directories
-include_directories(${CMAKE_SOURCE_DIR})
+include_directories(
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}  # For backward compatibility during transition
+)
 
-# === Header files by feature (for IDE integration) ===
+# === Header files (in include/) ===
 
 set(CORE_HEADERS
-        core/Config.hpp
-        core/Constants.hpp
-        core/RopewayState.hpp
-        core/Simulation.hpp
+    include/core/Config.h
+    include/core/Constants.h
+    include/core/Flags.h
+    include/core/RopewayState.h
+    include/core/Simulation.h
 )
 
 set(TOURIST_HEADERS
-        tourist/Tourist.hpp
-        tourist/TouristState.hpp
-        tourist/TouristType.hpp
+    include/tourist/Tourist.h
+    include/tourist/TouristState.h
+    include/tourist/TouristType.h
 )
 
 set(ENTRANCE_HEADERS
-        entrance/Ticket.hpp
-        entrance/TicketName.hpp
-        entrance/CashierMessage.hpp
+    include/entrance/Ticket.h
+    include/entrance/TicketName.h
+    include/entrance/CashierMessage.h
 )
 
 set(ROPEWAY_HEADERS
-        ropeway/StationType.hpp
-        ropeway/TrailDifficulty.hpp
-        ropeway/worker/WorkerMessage.hpp
-        ropeway/worker/WorkerSignal.hpp
-        ropeway/gate/GateType.hpp
-        ropeway/gate/EntryGateMessage.hpp
-        ropeway/chair/Chair.hpp
-        ropeway/chair/BoardingQueue.hpp
+    include/ropeway/StationType.h
+    include/ropeway/TrailDifficulty.h
+    include/ropeway/worker/WorkerMessage.h
+    include/ropeway/worker/WorkerSignal.h
+    include/ropeway/gate/GateType.h
+    include/ropeway/gate/EntryGateMessage.h
+    include/ropeway/chair/Chair.h
+    include/ropeway/chair/BoardingQueue.h
 )
 
 set(LOGGING_HEADERS
-        logging/Logger.hpp
-        logging/GatePassageLogger.hpp
+    include/logging/Logger.h
+    include/logging/GatePassageLogger.h
 )
 
 set(IPC_HEADERS
-        ipc/IpcManager.hpp
-        ipc/core/SharedMemory.hpp
-        ipc/core/Semaphore.hpp
-        ipc/core/MessageQueue.hpp
-        ipc/core/IpcException.hpp
-        ipc/model/SharedRopewayState.hpp
-        ipc/model/SharedOperationalState.hpp
-        ipc/model/SharedChairPoolState.hpp
-        ipc/model/SharedStatisticState.hpp
+    include/ipc/IpcManager.h
+    include/ipc/core/SharedMemory.h
+    include/ipc/core/Semaphore.h
+    include/ipc/core/MessageQueue.h
+    include/ipc/core/IpcException.h
+    include/ipc/model/SharedRopewayState.h
+    include/ipc/model/SharedOperationalState.h
+    include/ipc/model/SharedChairPoolState.h
+    include/ipc/model/SharedStatisticState.h
 )
 
 set(STATS_HEADERS
-        stats/DailyStatistic.hpp
-        stats/GatePassage.hpp
-        stats/GatePassageLog.hpp
-        stats/TouristRideRecord.hpp
+    include/stats/DailyStatistic.h
+    include/stats/GatePassage.h
+    include/stats/GatePassageLog.h
+    include/stats/TouristRideRecord.h
 )
 
 set(UTILS_HEADERS
-        utils/SignalHelper.hpp
-        utils/ArgumentParser.hpp
-        utils/ProcessSpawner.hpp
-        utils/TimeHelper.hpp
+    include/utils/SignalHelper.h
+    include/utils/ArgumentParser.h
+    include/utils/ProcessSpawner.h
+    include/utils/TimeHelper.h
 )
 
 set(TEST_HEADERS
-        tests/TestConfig.hpp
-        tests/TestValidator.hpp
-        tests/TestRunner.hpp
+    include/tests/TestConfig.h
+    include/tests/TestValidator.h
+    include/tests/TestRunner.h
 )
 
 # All headers combined
 set(ALL_HEADERS
-        ${CORE_HEADERS}
-        ${TOURIST_HEADERS}
-        ${ENTRANCE_HEADERS}
-        ${ROPEWAY_HEADERS}
-        ${LOGGING_HEADERS}
-        ${IPC_HEADERS}
-        ${STATS_HEADERS}
-        ${UTILS_HEADERS}
-        ${TEST_HEADERS}
+    ${CORE_HEADERS}
+    ${TOURIST_HEADERS}
+    ${ENTRANCE_HEADERS}
+    ${ROPEWAY_HEADERS}
+    ${LOGGING_HEADERS}
+    ${IPC_HEADERS}
+    ${STATS_HEADERS}
+    ${UTILS_HEADERS}
+    ${TEST_HEADERS}
+)
+
+# === Source files (in src/) ===
+
+set(IPC_SOURCES
+    src/ipc/Semaphore.cpp
 )
 
 # === Executables ===
 
 # Tourist process (spawned via fork/exec)
-add_executable(tourist_process tourist/TouristProcess.cpp ${ALL_HEADERS})
+add_executable(tourist_process
+    src/tourist/TouristProcess.cpp
+    ${IPC_SOURCES}
+    ${ALL_HEADERS}
+)
 
 # LowerWorker process - Lower Station Controller (spawned via fork/exec)
-add_executable(lower_worker_process ropeway/worker/LowerStationWorker.cpp ${ALL_HEADERS})
+add_executable(lower_worker_process
+    src/ropeway/LowerStationWorker.cpp
+    ${IPC_SOURCES}
+    ${ALL_HEADERS}
+)
 
 # UpperWorker process - Upper Station Controller (spawned via fork/exec)
-add_executable(upper_worker_process ropeway/worker/UpperStationWorker.cpp ${ALL_HEADERS})
+add_executable(upper_worker_process
+    src/ropeway/UpperStationWorker.cpp
+    ${IPC_SOURCES}
+    ${ALL_HEADERS}
+)
 
 # Cashier process - Ticket sales (spawned via fork/exec)
-add_executable(cashier_process entrance/CashierProcess.cpp ${ALL_HEADERS})
+add_executable(cashier_process
+    src/entrance/CashierProcess.cpp
+    ${IPC_SOURCES}
+    ${ALL_HEADERS}
+)
 
 # Test runner - Automated test suite
-add_executable(test_runner tests/TestRunner.cpp ${ALL_HEADERS})
+add_executable(test_runner
+    src/tests/TestRunner.cpp
+    ${IPC_SOURCES}
+    ${ALL_HEADERS}
+)
 
 # Main executable - Manual simulation control
-add_executable(main core/main.cpp ${ALL_HEADERS})
+add_executable(main
+    src/core/main.cpp
+    ${IPC_SOURCES}
+    ${ALL_HEADERS}
+)
+
+# Pass project source directory for .env file loading
+add_compile_definitions(ROPEWAY_PROJECT_DIR="${CMAKE_SOURCE_DIR}")
