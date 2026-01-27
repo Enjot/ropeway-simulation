@@ -107,8 +107,6 @@ private:
         spawnTourists();
 
         Logger::debug(tag_, "Running simulation...");
-        bool emergencyTriggered = false;
-        bool emergencyResumed = false;
         bool closingTimeReached = false;
         time_t drainStartTime = 0;
 
@@ -171,23 +169,8 @@ private:
                 }
             }
 
-            // Trigger emergency stop at simulated 10:00 for testing (disabled during closing)
-            if (!closingTimeReached && !emergencyTriggered && simHour >= 10) {
-                Logger::warn(tag_, ">>> TRIGGERING EMERGENCY STOP <<<");
-                if (lowerWorkerPid_ > 0) {
-                    kill(lowerWorkerPid_, SIGUSR1);
-                }
-                emergencyTriggered = true;
-            }
-
-            // Resume at simulated 12:00
-            if (emergencyTriggered && !emergencyResumed && simHour >= 12) {
-                Logger::info(tag_, ">>> TRIGGERING RESUME <<<");
-                if (lowerWorkerPid_ > 0) {
-                    kill(lowerWorkerPid_, SIGUSR2);
-                }
-                emergencyResumed = true;
-            }
+            // Emergency stop is now handled autonomously by LowerStationWorker
+            // (detects "danger" randomly and initiates stop/resume protocol)
 
             {
                 Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);

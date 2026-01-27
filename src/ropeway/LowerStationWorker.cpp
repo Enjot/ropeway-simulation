@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <ctime>
 #include <csignal>
+#include <cstdlib>
 
 #include "ipc/core/SharedMemory.h"
 #include "ipc/core/Semaphore.h"
@@ -24,13 +25,21 @@ public:
     static constexpr long MSG_TYPE_TO_UPPER = 2;
     static constexpr long MSG_TYPE_FROM_UPPER = 1;
 
+    // Autonomous emergency detection parameters
+    static constexpr uint32_t DANGER_CHECK_INTERVAL_SEC = 5; // Check for danger every N seconds
+    static constexpr double DANGER_DETECTION_CHANCE = 0.05; // 5% chance per check to detect "danger"
+    static constexpr uint32_t EMERGENCY_DURATION_SEC = 10; // Auto-resume after N seconds
+
     LowerWorkerProcess(const ArgumentParser::WorkerArgs &args)
         : shm_{SharedMemory<SharedRopewayState>::attach(args.shmKey)},
           sem_{args.semKey},
           msgQueue_{args.msgKey, "WorkerMsg"},
           entryRequestQueue_{args.entryGateMsgKey, "EntryReq"},
           entryResponseQueue_{args.entryGateMsgKey, "EntryResp"},
-          isEmergencyStopped_{false} {
+          isEmergencyStopped_{false},
+          emergencyStartTime_{0},
+          lastDangerCheckTime_{0},
+          emergencyTriggeredAutonomously_{false} {
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
             shm_->operational.lowerWorkerPid = getpid();
@@ -43,15 +52,16 @@ public:
 
     void run() {
         Logger::info(TAG, "Beginning operations");
+        srand(static_cast<unsigned>(time(nullptr)) ^ static_cast<unsigned>(getpid()));
 
         while (!g_signals.exit) {
-            // Check for emergency signal
+            // Check for emergency signal from external source (backward compatibility)
             if (g_signals.emergency) {
                 g_signals.emergency = 0;
                 triggerEmergencyStop();
             }
 
-            // Check for resume signal
+            // Check for resume signal from external source
             if (g_signals.resume && isEmergencyStopped_) {
                 g_signals.resume = 0;
                 initiateResume();
@@ -59,16 +69,31 @@ public:
 
             // Check current state
             RopewayState currentState;
+            bool isClosing;
             {
                 Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
                 currentState = shm_->operational.state;
+                isClosing = (currentState == RopewayState::CLOSING);
             }
 
             if (currentState == RopewayState::EMERGENCY_STOP) {
-                // During emergency, block waiting for resume signal
-                // waitInterruptible returns false when interrupted by signal
-                sem_.waitInterruptible(Semaphore::Index::WORKER_SYNC);
+                // Check for auto-resume (if triggered autonomously)
+                if (emergencyTriggeredAutonomously_ && emergencyStartTime_ > 0) {
+                    time_t now = time(nullptr);
+                    if (now - emergencyStartTime_ >= EMERGENCY_DURATION_SEC) {
+                        Logger::info(TAG, "Auto-resuming after %u seconds", EMERGENCY_DURATION_SEC);
+                        initiateResume();
+                        continue;
+                    }
+                }
+                // During emergency, brief sleep to check for auto-resume
+                usleep(100000); // 100ms
                 continue;
+            }
+
+            // Autonomous danger detection (only during normal operation, not closing)
+            if (!isClosing && !isEmergencyStopped_) {
+                checkForDanger();
             }
 
             // Block waiting for work (unified signal for both entry and boarding)
@@ -146,6 +171,8 @@ private:
             }
 
             isEmergencyStopped_ = false;
+            emergencyTriggeredAutonomously_ = false;
+            emergencyStartTime_ = 0;
         } else {
             Logger::warn(TAG, "Timeout waiting for UpperWorker confirmation - resuming anyway");
             // Resume anyway to prevent permanent deadlock, but log the issue
@@ -154,6 +181,8 @@ private:
                 shm_->operational.state = RopewayState::RUNNING;
             }
             isEmergencyStopped_ = false;
+            emergencyTriggeredAutonomously_ = false;
+            emergencyStartTime_ = 0;
         }
     }
 
@@ -167,6 +196,36 @@ private:
         msg.messageText[sizeof(msg.messageText) - 1] = '\0';
 
         msgQueue_.send(msg, MSG_TYPE_TO_UPPER);
+    }
+
+    /**
+     * Autonomous danger detection.
+     * Simulates worker detecting a problem (e.g., safety issue, malfunction).
+     * Replaces centralized emergency timing from main process.
+     */
+    void checkForDanger() {
+        time_t now = time(nullptr);
+
+        // Only check periodically, not every iteration
+        if (now - lastDangerCheckTime_ < DANGER_CHECK_INTERVAL_SEC) {
+            return;
+        }
+        lastDangerCheckTime_ = now;
+
+        // Random chance to detect "danger"
+        double roll = static_cast<double>(rand()) / RAND_MAX;
+        if (roll < DANGER_DETECTION_CHANCE) {
+            Logger::warn(TAG, "!!! DANGER DETECTED - Initiating emergency stop !!!");
+            emergencyTriggeredAutonomously_ = true;
+            emergencyStartTime_ = now;
+            triggerEmergencyStop();
+
+            // Update statistics
+            {
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
+                shm_->stats.dailyStats.emergencyStops++;
+            }
+        }
     }
 
     void logStatus() {
@@ -426,6 +485,9 @@ private:
     MessageQueue<EntryGateRequest> entryRequestQueue_;
     MessageQueue<EntryGateResponse> entryResponseQueue_;
     bool isEmergencyStopped_;
+    time_t emergencyStartTime_;
+    time_t lastDangerCheckTime_;
+    bool emergencyTriggeredAutonomously_;
 };
 
 int main(int argc, char *argv[]) {
