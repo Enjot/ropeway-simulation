@@ -258,17 +258,27 @@ private:
         // Stop using centralized logging before terminating logger
         Logger::cleanupCentralized();
 
-        // Terminate processes (logger last to capture final messages)
+        // Restore default SIGCHLD so blocking waitpid works
+        signal(SIGCHLD, SIG_DFL);
+
+        // Terminate all non-logger processes
         ProcessSpawner::terminate(cashierPid_, "Cashier");
         ProcessSpawner::terminate(lowerWorkerPid_, "LowerWorker");
         ProcessSpawner::terminate(upperWorkerPid_, "UpperWorker");
         ProcessSpawner::terminateAll(touristPids_);
-        usleep(100000); // Brief delay to let logger process remaining messages
-        ProcessSpawner::terminate(loggerPid_, "Logger");
 
-        // Wait for all children
-        while (waitpid(-1, nullptr, 0) > 0) {
+        // Wait for all non-logger processes to fully exit
+        // (ensures they've sent their final log messages)
+        ProcessSpawner::waitFor(cashierPid_);
+        ProcessSpawner::waitFor(lowerWorkerPid_);
+        ProcessSpawner::waitFor(upperWorkerPid_);
+        for (const pid_t pid : touristPids_) {
+            ProcessSpawner::waitFor(pid);
         }
+
+        // All message producers are dead — logger can safely drain the queue
+        ProcessSpawner::terminate(loggerPid_, "Logger");
+        ProcessSpawner::waitFor(loggerPid_);
 
         // IpcManager cleans up automatically (isOwner_)
         ipc_.reset();

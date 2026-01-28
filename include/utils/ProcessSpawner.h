@@ -152,6 +152,21 @@ namespace ProcessSpawner {
     }
 
     /**
+     * Wait for a specific process to exit (blocking).
+     * Handles ECHILD (already reaped) and EINTR (interrupted by signal).
+     */
+    inline void waitFor(const pid_t pid) {
+        if (pid <= 0) return;
+        int status;
+        while (waitpid(pid, &status, 0) == -1) {
+            if (errno == ECHILD) return;
+            if (errno == EINTR) continue;
+            perror("waitpid");
+            return;
+        }
+    }
+
+    /**
      * Reap any zombie child processes (non-blocking).
      */
     inline void waitForAll() {
