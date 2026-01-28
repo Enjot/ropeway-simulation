@@ -54,10 +54,17 @@ namespace Constants {
     }
 
     namespace Queue {
-        // Message queue flow control capacities
-        constexpr uint32_t CASHIER_QUEUE_CAPACITY{1000}; // Total cashier queue slots
-        constexpr uint32_t ENTRY_QUEUE_VIP_SLOTS{50}; // Reserved slots for VIPs (~5% buffer)
-        constexpr uint32_t ENTRY_QUEUE_REGULAR_SLOTS{950}; // Slots for regular tourists
-        constexpr uint32_t LOG_QUEUE_CAPACITY{5000}; // Max pending log messages
+        // Message queue flow control capacities.
+        // IMPORTANT: On macOS, System V message queues are severely limited:
+        //   MSGMNB = 2048 bytes max per queue
+        //   msgtql = 40 messages max system-wide (across ALL queues!)
+        // These values MUST ensure:
+        //   1. Per-queue bytes never exceed MSGMNB
+        //   2. Total messages across all queues stay under msgtql
+        // Budget: cashier(~10) + entry(~18) + log(5) + worker(2) = ~35 < 40
+        constexpr uint32_t CASHIER_QUEUE_CAPACITY{5};     // TicketResponse ~176B → 5×176 = 880 < 2048
+        constexpr uint32_t ENTRY_QUEUE_VIP_SLOTS{2};      // EntryGateRequest ~12B, ~1% are VIP
+        constexpr uint32_t ENTRY_QUEUE_REGULAR_SLOTS{7};   // 9 total × ~12B = 108 < 2048
+        constexpr uint32_t LOG_QUEUE_CAPACITY{5};          // LogMessage ~313B → 5×313 = 1565 < 2048
     }
 }

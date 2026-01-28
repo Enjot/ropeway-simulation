@@ -3,6 +3,7 @@
 #include <ctime>
 #include <csignal>
 #include <cstdlib>
+#include <optional>
 
 #include "ipc/core/SharedMemory.h"
 #include "ipc/core/Semaphore.h"
@@ -39,7 +40,8 @@ public:
           isEmergencyStopped_{false},
           emergencyStartTime_{0},
           lastDangerCheckTime_{0},
-          emergencyTriggeredAutonomously_{false} {
+          emergencyTriggeredAutonomously_{false},
+          pendingEntryRequest_{std::nullopt} {
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
             shm_->operational.lowerWorkerPid = getpid();
@@ -112,13 +114,19 @@ public:
             // Block waiting for work (unified signal for both entry and boarding)
             // This is the main blocking point - no CPU spinning
             // Signals (SIGUSR1/SIGUSR2/SIGTERM) will interrupt and return false
+            Logger::debug(TAG, "Waiting for BOARDING_QUEUE_WORK (pending=%s)",
+                          pendingEntryRequest_ ? "yes" : "no");
             if (sem_.waitInterruptible(Semaphore::Index::BOARDING_QUEUE_WORK, false)) {
                 if (!g_signals.exit && !g_signals.emergency) {
+                    Logger::debug(TAG, "Woke up: processing entry then boarding");
                     // Process entry queue first (handles incoming tourists)
                     processEntryQueue();
                     // Then process boarding queue (assigns chairs)
                     processBoardingQueue();
                 }
+            } else {
+                Logger::debug(TAG, "BOARDING_QUEUE_WORK interrupted (exit=%d, emerg=%d)",
+                              g_signals.exit ? 1 : 0, g_signals.emergency ? 1 : 0);
             }
 
             logStatus();
@@ -276,65 +284,101 @@ private:
     }
 
     /**
+     * Send entry response with non-blocking retry.
+     * Uses trySend to avoid blocking on the System V msgtql limit (40 messages
+     * system-wide on macOS). The tourist is blocking on receive, so retrying
+     * briefly always succeeds once the tourist (or any other process) consumes
+     * a message and frees a system-wide slot.
+     */
+    void sendEntryResponse(const EntryGateResponse& response, long responseType) {
+        while (!entryResponseQueue_.trySend(response, responseType)) {
+            usleep(500); // Brief retry — tourist is consuming its response imminently
+        }
+    }
+
+    /**
      * Process entry queue with VIP priority.
      * Uses negative mtype to receive lowest type first (VIP = 1, Regular = 2).
+     *
+     * Processes requests in a loop: handles all pending entries until the station
+     * is full or the queue is empty. When the station is full, the current request
+     * is kept in a local buffer (pendingEntryRequest_) rather than re-queued to
+     * the message queue. This avoids a potential deadlock where msgsnd blocks
+     * because the System V message queue is full and LowerWorker (the only
+     * consumer) cannot drain it.
      */
     void processEntryQueue() {
-        // Receive with negative mtype: gets lowest mtype first = VIP priority
-        auto request = entryRequestQueue_.tryReceive(EntryGateMsgType::PRIORITY_RECEIVE);
-        if (!request) {
-            return;
+        while (true) {
+            // First try the locally buffered pending request, then the message queue
+            EntryGateRequest request;
+            bool fromPending = false;
+
+            if (pendingEntryRequest_) {
+                request = *pendingEntryRequest_;
+                fromPending = true;
+            } else {
+                auto received = entryRequestQueue_.tryReceive(EntryGateMsgType::PRIORITY_RECEIVE);
+                if (!received) {
+                    return; // No more requests
+                }
+                request = *received;
+            }
+
+            uint8_t queueSlotSem = request.isVip
+                ? Semaphore::Index::ENTRY_QUEUE_VIP_SLOTS
+                : Semaphore::Index::ENTRY_QUEUE_REGULAR_SLOTS;
+
+            // Check if ropeway is accepting
+            bool accepting;
+            {
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                accepting = shm_->operational.acceptingNewTourists;
+            }
+
+            if (!accepting) {
+                EntryGateResponse response;
+                response.touristId = request.touristId;
+                response.allowed = false;
+                long responseType = EntryGateMsgType::RESPONSE_BASE + request.touristId;
+                sendEntryResponse(response, responseType);
+                sem_.post(queueSlotSem, false);
+                Logger::info(TAG, "Entry denied for Tourist %u: closed", request.touristId);
+                pendingEntryRequest_.reset();
+                continue; // Process next request
+            }
+
+            // Try to acquire station capacity (non-blocking resource check)
+            // useUndo=false: LowerWorker acquires but Tourist releases in rideChair()
+            if (!sem_.tryAcquire(Semaphore::Index::STATION_CAPACITY, false)) {
+                // Station full - buffer locally instead of re-queueing to avoid
+                // msgsnd deadlock (the message queue may be at capacity and we are
+                // the only consumer). Tourist's BOARDING_QUEUE_WORK from rideChair()
+                // will wake us to retry.
+                if (!fromPending) {
+                    pendingEntryRequest_ = request;
+                }
+                Logger::debug(TAG, "Station full, pending entry for Tourist %u", request.touristId);
+                return;
+            }
+
+            // Station has capacity, allow entry
+            {
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                shm_->operational.touristsInLowerStation++;
+            }
+
+            EntryGateResponse response;
+            response.touristId = request.touristId;
+            response.allowed = true;
+            long responseType = EntryGateMsgType::RESPONSE_BASE + request.touristId;
+            sendEntryResponse(response, responseType);
+            sem_.post(queueSlotSem, false);
+
+            Logger::info(TAG, "Entry granted to Tourist %u%s",
+                         request.touristId, request.isVip ? " [VIP]" : "");
+            pendingEntryRequest_.reset();
+            // Continue loop to process next request
         }
-
-        // Determine which queue slot semaphore to release when done
-        uint8_t queueSlotSem = request->isVip
-            ? Semaphore::Index::ENTRY_QUEUE_VIP_SLOTS
-            : Semaphore::Index::ENTRY_QUEUE_REGULAR_SLOTS;
-
-        EntryGateResponse response;
-        response.touristId = request->touristId;
-
-        // Check if ropeway is accepting
-        bool accepting;
-        {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
-            accepting = shm_->operational.acceptingNewTourists;
-        }
-
-        if (!accepting) {
-            response.allowed = false;
-            long responseType = EntryGateMsgType::RESPONSE_BASE + request->touristId;
-            entryResponseQueue_.send(response, responseType);
-            sem_.post(queueSlotSem, false); // Release queue slot
-            Logger::info(TAG, "Entry denied for Tourist %u: closed", request->touristId);
-            return;
-        }
-
-        // Try to acquire station capacity (non-blocking resource check)
-        // useUndo=false: LowerWorker acquires but Tourist releases in rideChair()
-        if (!sem_.tryAcquire(Semaphore::Index::STATION_CAPACITY, false)) {
-            // Station full, put request back in queue
-            // NOTE: Do NOT release queue slot - tourist is still waiting
-            // NOTE: Do NOT re-post BOARDING_QUEUE_WORK - would cause tight busy loop
-            //       that overflows SEM_UNDO. Tourist releasing STATION_CAPACITY will wake us.
-            long reqType = request->isVip ? EntryGateMsgType::VIP_REQUEST : EntryGateMsgType::REGULAR_REQUEST;
-            entryRequestQueue_.send(*request, reqType);
-            return;
-        }
-
-        // Station has capacity, allow entry
-        {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
-            shm_->operational.touristsInLowerStation++;
-        }
-
-        response.allowed = true;
-        long responseType = EntryGateMsgType::RESPONSE_BASE + request->touristId;
-        entryResponseQueue_.send(response, responseType);
-        sem_.post(queueSlotSem, false); // Release queue slot
-
-        Logger::info(TAG, "Entry granted to Tourist %u%s",
-                     request->touristId, request->isVip ? " [VIP]" : "");
     }
 
     /**
@@ -488,6 +532,7 @@ private:
     time_t emergencyStartTime_;
     time_t lastDangerCheckTime_;
     bool emergencyTriggeredAutonomously_;
+    std::optional<EntryGateRequest> pendingEntryRequest_;
 };
 
 int main(int argc, char *argv[]) {

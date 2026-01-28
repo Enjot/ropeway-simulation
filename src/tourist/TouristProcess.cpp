@@ -276,7 +276,9 @@ private:
         Logger::info(tag_, "Requesting %s ticket...", toString(request.requestedType));
 
         // Acquire queue slot
-        if (!sem_.waitInterruptible(Semaphore::Index::CASHIER_QUEUE_SLOTS)) {
+        // useUndo=false: the Cashier posts the slot back after processing,
+        // not this process. SEM_UNDO would cause double-increment on exit.
+        if (!sem_.waitInterruptible(Semaphore::Index::CASHIER_QUEUE_SLOTS, false)) {
             if (g_signals.exit) {
                 changeState(TouristState::FINISHED);
                 return;
@@ -359,7 +361,9 @@ private:
         Logger::info(tag_, "Requesting entry (group of %u)%s...",
                      tourist_.slots, tourist_.isVip ? " [VIP]" : "");
 
-        if (!sem_.waitInterruptible(queueSlotSem)) {
+        // useUndo=false: the LowerWorker posts the slot back after processing,
+        // not this process. SEM_UNDO would cause double-increment on exit.
+        if (!sem_.waitInterruptible(queueSlotSem, false)) {
             if (g_signals.exit) {
                 changeState(TouristState::FINISHED);
                 return;

@@ -54,12 +54,17 @@ public:
         }
     }
 
-    // Convenience send that returns bool (for process code compatibility)
+    // Convenience send that returns bool (for process code compatibility).
+    // Retries on EINTR (signal interruption) to avoid silent send failures.
     bool send(const T &message, const long type) {
         Wrapper wrapper{};
         wrapper.mtype = type;
         wrapper.message = message;
-        return msgsnd(msgId_, &wrapper, sizeof(T), 0) != -1;
+        while (msgsnd(msgId_, &wrapper, sizeof(T), 0) == -1) {
+            if (errno == EINTR) continue; // Retry on signal interruption
+            return false; // Real error
+        }
+        return true;
     }
 
     // Non-blocking send - returns false if queue is full (IPC_NOWAIT)
