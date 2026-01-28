@@ -39,7 +39,9 @@ public:
             Logger::info("Child", "[Thread %u] age=%u, with parent %u", childId_, age_, parentId_);
             // Child thread just waits until parent finishes
             while (running_.load()) {
-                usleep(100000); // 100ms check interval
+                // Not used for IPC sync — just an idle sleep to avoid busy-waiting
+                // while the thread exists alongside the parent process
+                usleep(100000);
             }
             Logger::debug("Child", "[Thread %u] finished with parent", childId_);
         });
@@ -75,6 +77,8 @@ public:
         thread_ = std::thread([this]() {
             Logger::debug("Bike", "[Thread] bike of tourist %u", ownerId_);
             while (running_.load()) {
+                // Not used for IPC sync — just an idle sleep to avoid busy-waiting
+                // while the thread exists alongside the parent process
                 usleep(100000);
             }
             Logger::debug("Bike", "[Thread] bike stored", ownerId_);

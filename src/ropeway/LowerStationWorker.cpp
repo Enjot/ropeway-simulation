@@ -29,7 +29,6 @@ public:
     // Autonomous emergency detection parameters
     static constexpr uint32_t DANGER_CHECK_INTERVAL_SEC = 5; // Check for danger every N seconds
     static constexpr double DANGER_DETECTION_CHANCE = 0.05; // 5% chance per check to detect "danger"
-    static constexpr uint32_t EMERGENCY_DURATION_SEC = 10; // Auto-resume after N seconds
 
     LowerWorkerProcess(const ArgumentParser::WorkerArgs &args)
         : shm_{SharedMemory<SharedRopewayState>::attach(args.shmKey)},
@@ -38,9 +37,7 @@ public:
           entryRequestQueue_{args.entryGateMsgKey, "EntryReq"},
           entryResponseQueue_{args.entryGateMsgKey, "EntryResp"},
           isEmergencyStopped_{false},
-          emergencyStartTime_{0},
           lastDangerCheckTime_{0},
-          emergencyTriggeredAutonomously_{false},
           pendingEntryRequest_{std::nullopt} {
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
@@ -81,22 +78,9 @@ public:
             // Use local flag for emergency handling - shared state may have been
             // overwritten by Simulation (e.g., CLOSING transition during emergency)
             if (isEmergencyStopped_) {
-                Logger::debug(TAG, "Emergency loop: sharedState=%d, autonomous=%d, elapsed=%ld",
-                              static_cast<int>(currentState),
-                              emergencyTriggeredAutonomously_ ? 1 : 0,
-                              emergencyStartTime_ > 0 ? static_cast<long>(time(nullptr) - emergencyStartTime_) : -1L);
-
-                // Check for auto-resume (if triggered autonomously)
-                if (emergencyTriggeredAutonomously_ && emergencyStartTime_ > 0) {
-                    time_t now = time(nullptr);
-                    if (now - emergencyStartTime_ >= EMERGENCY_DURATION_SEC) {
-                        Logger::info(TAG, "Auto-resuming after %u seconds", EMERGENCY_DURATION_SEC);
-                        initiateResume();
-                        continue;
-                    }
-                }
-                // During emergency, brief sleep to check for auto-resume
-                usleep(100000); // 100ms
+                Logger::debug(TAG, "Emergency loop: sharedState=%d", static_cast<int>(currentState));
+                // Block until a signal (SIGUSR2 for resume) interrupts the wait
+                sem_.waitInterruptible(Semaphore::Index::BOARDING_QUEUE_WORK, false);
                 continue;
             }
 
@@ -208,8 +192,6 @@ private:
             }
         }
         isEmergencyStopped_ = false;
-        emergencyTriggeredAutonomously_ = false;
-        emergencyStartTime_ = 0;
     }
 
     void sendMessage(WorkerSignal signal, const char *text) {
@@ -242,8 +224,6 @@ private:
         double roll = static_cast<double>(rand()) / RAND_MAX;
         if (roll < DANGER_DETECTION_CHANCE) {
             Logger::warn(TAG, "!!! DANGER DETECTED - Initiating emergency stop !!!");
-            emergencyTriggeredAutonomously_ = true;
-            emergencyStartTime_ = now;
             triggerEmergencyStop();
 
             // Update statistics
@@ -529,9 +509,7 @@ private:
     MessageQueue<EntryGateRequest> entryRequestQueue_;
     MessageQueue<EntryGateResponse> entryResponseQueue_;
     bool isEmergencyStopped_;
-    time_t emergencyStartTime_;
     time_t lastDangerCheckTime_;
-    bool emergencyTriggeredAutonomously_;
     std::optional<EntryGateRequest> pendingEntryRequest_;
 };
 
