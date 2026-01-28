@@ -112,7 +112,7 @@ public:
             // Block waiting for work (unified signal for both entry and boarding)
             // This is the main blocking point - no CPU spinning
             // Signals (SIGUSR1/SIGUSR2/SIGTERM) will interrupt and return false
-            if (sem_.waitInterruptible(Semaphore::Index::BOARDING_QUEUE_WORK)) {
+            if (sem_.waitInterruptible(Semaphore::Index::BOARDING_QUEUE_WORK, false)) {
                 if (!g_signals.exit && !g_signals.emergency) {
                     // Process entry queue first (handles incoming tourists)
                     processEntryQueue();
@@ -311,13 +311,14 @@ private:
         }
 
         // Try to acquire station capacity (non-blocking resource check)
-        if (!sem_.tryAcquire(Semaphore::Index::STATION_CAPACITY)) {
-            // Station full, put request back in queue and try again later
-            // Preserve priority: VIP requests get lower mtype
+        // useUndo=false: LowerWorker acquires but Tourist releases in rideChair()
+        if (!sem_.tryAcquire(Semaphore::Index::STATION_CAPACITY, false)) {
+            // Station full, put request back in queue
             // NOTE: Do NOT release queue slot - tourist is still waiting
+            // NOTE: Do NOT re-post BOARDING_QUEUE_WORK - would cause tight busy loop
+            //       that overflows SEM_UNDO. Tourist releasing STATION_CAPACITY will wake us.
             long reqType = request->isVip ? EntryGateMsgType::VIP_REQUEST : EntryGateMsgType::REGULAR_REQUEST;
             entryRequestQueue_.send(*request, reqType);
-            sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false); // Re-signal unified work queue
             return;
         }
 

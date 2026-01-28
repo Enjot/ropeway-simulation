@@ -520,11 +520,14 @@ private:
         }
 
         sem_.post(Semaphore::Index::STATION_CAPACITY, false);
+        // Wake LowerWorker whenever station capacity is freed — pending entry
+        // requests may be waiting for a slot. Previously only the last passenger
+        // posted here, which meant re-queued entry requests could stall.
+        sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false);
 
-        // Only last passenger releases chair and wakes worker
+        // Only last passenger releases the chair itself
         if (lastPassenger) {
             sem_.post(Semaphore::Index::CHAIRS_AVAILABLE, false);
-            sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false);
         }
 
         assignedChairId_ = -1;

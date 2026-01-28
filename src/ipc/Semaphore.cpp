@@ -194,7 +194,9 @@ void Semaphore::destroy() const {
 
 Semaphore::ScopedLock::ScopedLock(const Semaphore& sem, const uint8_t semIndex)
     : sem_(sem), semIndex_(semIndex) {
-    sem_.wait(semIndex_);
+    while (!sem_.wait(semIndex_)) {
+        // Retry on EINTR - signal interrupted the wait, but we must acquire the lock
+    }
 }
 
 Semaphore::ScopedLock::~ScopedLock() {
