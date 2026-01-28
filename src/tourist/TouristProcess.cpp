@@ -468,8 +468,8 @@ private:
                 changeState(TouristState::ON_CHAIR);
                 return;
             }
-
-            sem_.post(Semaphore::Index::CHAIR_ASSIGNED, false);
+            // Do NOT re-post - worker wakes all tourists on each dispatch
+            // Re-posting causes a race where non-assigned tourists starve assigned ones
         }
 
         // Interrupted - cleanup

@@ -50,7 +50,8 @@ public:
             }
 
             // Release queue slot (allows another process to send)
-            sem_.post(Semaphore::Index::LOG_QUEUE_SLOTS);
+            // NOTE: useUndo=false because logger didn't acquire the slot - tourists did
+            sem_.post(Semaphore::Index::LOG_QUEUE_SLOTS, false);
 
             printLog(*msg);
         }
@@ -113,7 +114,8 @@ private:
             if (!msg) break;
             remaining.push_back(*msg);
             // Release queue slot for each drained message
-            sem_.post(Semaphore::Index::LOG_QUEUE_SLOTS);
+            // NOTE: useUndo=false because logger didn't acquire the slot - tourists did
+            sem_.post(Semaphore::Index::LOG_QUEUE_SLOTS, false);
         }
 
         // Sort by sequence number
