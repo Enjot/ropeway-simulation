@@ -292,7 +292,7 @@ private:
         // Acquire queue slot
         // useUndo=false: the Cashier posts the slot back after processing,
         // not this process. SEM_UNDO would cause double-increment on exit.
-        if (!sem_.wait(Semaphore::Index::CASHIER_QUEUE_SLOTS, false)) {
+        if (!sem_.wait(Semaphore::Index::CASHIER_QUEUE_SLOTS, 1, false)) {
             if (g_signals.exit) {
                 changeState(TouristState::FINISHED);
                 return;
@@ -300,7 +300,7 @@ private:
         }
 
         if (!requestQueue_.send(request, CashierMsgType::REQUEST)) {
-            sem_.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, false);
+            sem_.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, 1, false);
             changeState(TouristState::FINISHED);
             return;
         }
@@ -377,7 +377,7 @@ private:
 
         // useUndo=false: the LowerWorker posts the slot back after processing,
         // not this process. SEM_UNDO would cause double-increment on exit.
-        if (!sem_.wait(queueSlotSem, false)) {
+        if (!sem_.wait(queueSlotSem, 1, false)) {
             if (g_signals.exit) {
                 changeState(TouristState::FINISHED);
                 return;
@@ -385,12 +385,12 @@ private:
         }
 
         if (!entryRequestQueue_.send(request, requestType)) {
-            sem_.post(queueSlotSem, false);
+            sem_.post(queueSlotSem, 1, false);
             changeState(TouristState::FINISHED);
             return;
         }
 
-        sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false);
+        sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, 1, false);
 
         long responseType = EntryGateMsgType::RESPONSE_BASE + tourist_.id;
         auto response = entryResponseQueue_.receive(responseType);
@@ -440,18 +440,18 @@ private:
             if (!shm_->chairPool.boardingQueue.addTourist(entry)) {
                 Logger::error(tag_, "Queue full");
                 shm_->operational.touristsInLowerStation--;
-                sem_.post(Semaphore::Index::STATION_CAPACITY, false);
+                sem_.post(Semaphore::Index::STATION_CAPACITY, 1, false);
                 changeState(TouristState::FINISHED);
                 return;
             }
         }
 
-        sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false);
+        sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, 1, false);
 
         Logger::info(tag_, "Waiting for chair (need %u slots)...", tourist_.slots);
 
         while (!g_signals.exit) {
-            sem_.wait(Semaphore::Index::CHAIR_ASSIGNED);
+            sem_.wait(Semaphore::Index::CHAIR_ASSIGNED, 1, true);
 
             bool assigned = false;
             {
@@ -475,7 +475,7 @@ private:
                     }
                 } else {
                     Logger::error(tag_, "Lost from queue");
-                    sem_.post(Semaphore::Index::STATION_CAPACITY, false);
+                    sem_.post(Semaphore::Index::STATION_CAPACITY, 1, false);
                     changeState(TouristState::FINISHED);
                     return;
                 }
@@ -505,7 +505,7 @@ private:
         if (idx >= 0) {
             shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
             shm_->operational.touristsInLowerStation--;
-            sem_.post(Semaphore::Index::STATION_CAPACITY, false);
+            sem_.post(Semaphore::Index::STATION_CAPACITY, 1, false);
         }
     }
 
@@ -537,15 +537,15 @@ private:
             }
         }
 
-        sem_.post(Semaphore::Index::STATION_CAPACITY, false);
+        sem_.post(Semaphore::Index::STATION_CAPACITY, 1, false);
         // Wake LowerWorker whenever station capacity is freed — pending entry
         // requests may be waiting for a slot. Previously only the last passenger
         // posted here, which meant re-queued entry requests could stall.
-        sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, false);
+        sem_.post(Semaphore::Index::BOARDING_QUEUE_WORK, 1, false);
 
         // Only last passenger releases the chair itself
         if (lastPassenger) {
-            sem_.post(Semaphore::Index::CHAIRS_AVAILABLE, false);
+            sem_.post(Semaphore::Index::CHAIRS_AVAILABLE, 1, false);
         }
 
         assignedChairId_ = -1;
@@ -558,14 +558,14 @@ private:
         bool isCyclist = (tourist_.type == TouristType::CYCLIST);
 
         if (isCyclist) {
-            sem_.wait(Semaphore::Index::EXIT_BIKE_TRAILS, false);
+            sem_.wait(Semaphore::Index::EXIT_BIKE_TRAILS, 1, false);
             {
                 Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
                 shm_->operational.cyclistsOnBikeTrailExit++;
             }
             Logger::info(tag_, "Exiting to bike trails");
         } else {
-            sem_.wait(Semaphore::Index::EXIT_WALKING_PATH, false);
+            sem_.wait(Semaphore::Index::EXIT_WALKING_PATH, 1, false);
             {
                 Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
                 shm_->operational.pedestriansOnWalkingExit++;
@@ -588,9 +588,9 @@ private:
         }
 
         if (isCyclist) {
-            sem_.post(Semaphore::Index::EXIT_BIKE_TRAILS, false);
+            sem_.post(Semaphore::Index::EXIT_BIKE_TRAILS, 1, false);
         } else {
-            sem_.post(Semaphore::Index::EXIT_WALKING_PATH, false);
+            sem_.post(Semaphore::Index::EXIT_WALKING_PATH, 1, false);
         }
 
         changeState(TouristState::ON_TRAIL);

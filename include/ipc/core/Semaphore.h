@@ -77,13 +77,9 @@ public:
     Semaphore& operator=(const Semaphore&) = delete;
 
     void initialize(uint8_t semIndex, int32_t value) const;
-    bool wait(uint8_t semIndex, bool useUndo = true) const;
-    bool wait(uint8_t semIndex, int32_t n, bool useUndo = true) const;
-    bool waitInterruptible(uint8_t semIndex, bool useUndo = true) const;
-    bool tryAcquire(uint8_t semIndex, bool useUndo = true) const;
-    bool tryAcquire(uint8_t semIndex, int32_t n, bool useUndo = true) const;
-    void post(uint8_t semIndex, bool useUndo = true) const;
-    void post(uint8_t semIndex, int32_t n, bool useUndo = true) const;
+    bool wait(uint8_t semIndex, int32_t n, bool useUndo) const;
+    bool tryAcquire(uint8_t semIndex, int32_t n, bool useUndo) const;
+    void post(uint8_t semIndex, int32_t n, bool useUndo) const;
     void setValue(uint8_t semIndex, int32_t value) const;
     [[nodiscard]] int32_t getAvailableSpace(uint8_t semIndex) const;
     void destroy() const;

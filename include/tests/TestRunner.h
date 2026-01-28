@@ -62,7 +62,7 @@ namespace Test {
 
                 pid_t cashierPid = ProcessSpawner::spawnWithKeys("cashier_process",
                                                                  ipc.shmKey(), ipc.semKey(), ipc.cashierMsgKey());
-                ipc.sem().wait(Semaphore::Index::CASHIER_READY);
+                ipc.sem().wait(Semaphore::Index::CASHIER_READY, 1, true);
 
                 pid_t lowerWorkerPid = ProcessSpawner::spawnWithKeys("lower_worker_process",
                                                                      ipc.shmKey(), ipc.semKey(), ipc.workerMsgKey(),
@@ -76,8 +76,8 @@ namespace Test {
                     ipc.state()->operational.lowerWorkerPid = lowerWorkerPid;
                     ipc.state()->operational.upperWorkerPid = upperWorkerPid;
                 }
-                ipc.sem().wait(Semaphore::Index::LOWER_WORKER_READY);
-                ipc.sem().wait(Semaphore::Index::UPPER_WORKER_READY);
+                ipc.sem().wait(Semaphore::Index::LOWER_WORKER_READY, 1, true);
+                ipc.sem().wait(Semaphore::Index::UPPER_WORKER_READY, 1, true);
 
                 std::cout << "[Test] Spawning " << scenario.tourists.size() << " tourists...\n";
 

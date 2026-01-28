@@ -35,7 +35,7 @@ public:
         }
 
         Logger::info(TAG, "Started (PID: %d)", getpid());
-        sem_.post(Semaphore::Index::UPPER_WORKER_READY, false);
+        sem_.post(Semaphore::Index::UPPER_WORKER_READY, 1, false);
     }
 
     void run() {

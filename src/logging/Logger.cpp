@@ -25,7 +25,7 @@ namespace Logger {
 
             // Try to acquire queue slot (non-blocking to avoid deadlock)
             // NOTE: useUndo=false to prevent SEM_UNDO accounting issues between senders/receiver
-            if (!sem->tryAcquire(Semaphore::Index::LOG_QUEUE_SLOTS, false)) {
+            if (!sem->tryAcquire(Semaphore::Index::LOG_QUEUE_SLOTS, 1, false)) {
                 // Queue full - fall back to direct logging
                 logDirect(level, tag, "%s", text);
                 return;
@@ -44,7 +44,7 @@ namespace Logger {
             // holding a shared memory lock (e.g., LowerWorker in processBoardingQueue).
             if (!logQueue->trySend(msg, static_cast<long>(msg.sequenceNum))) {
                 // Queue full at kernel level - release slot and fall back
-                sem->post(Semaphore::Index::LOG_QUEUE_SLOTS, false);
+                sem->post(Semaphore::Index::LOG_QUEUE_SLOTS, 1, false);
                 logDirect(level, tag, "%s", text);
             }
         }

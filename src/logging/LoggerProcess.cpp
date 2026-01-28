@@ -36,7 +36,7 @@ public:
             simulationStartTime_ = shm_->operational.openingTime;
         }
 
-        sem_.post(Semaphore::Index::LOGGER_READY, false);
+        sem_.post(Semaphore::Index::LOGGER_READY, 1, false);
         fprintf(stderr, "[%s] Started (PID: %d)\n", TAG, getpid());
     }
 
@@ -49,7 +49,7 @@ public:
 
             // Release queue slot (allows another process to send)
             // NOTE: useUndo=false because logger didn't acquire the slot - tourists did
-            sem_.post(Semaphore::Index::LOG_QUEUE_SLOTS, false);
+            sem_.post(Semaphore::Index::LOG_QUEUE_SLOTS, 1, false);
 
             printLog(*msg);
         }
@@ -113,7 +113,7 @@ private:
             remaining.push_back(*msg);
             // Release queue slot for each drained message
             // NOTE: useUndo=false because logger didn't acquire the slot - tourists did
-            sem_.post(Semaphore::Index::LOG_QUEUE_SLOTS, false);
+            sem_.post(Semaphore::Index::LOG_QUEUE_SLOTS, 1, false);
         }
 
         // Sort by sequence number

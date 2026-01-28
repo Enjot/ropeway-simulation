@@ -35,7 +35,7 @@ public:
         Logger::info(TAG, "Started (PID: %d)", getpid());
 
         // Signal readiness
-        sem_.post(Semaphore::Index::CASHIER_READY, false);
+        sem_.post(Semaphore::Index::CASHIER_READY, 1, false);
     }
 
     void run() {
@@ -50,7 +50,7 @@ public:
             processRequest(*request);
 
             // Release queue slot so another tourist can send request
-            sem_.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, false);
+            sem_.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, 1, false);
         }
 
         Logger::warn(TAG, "Shutting down");

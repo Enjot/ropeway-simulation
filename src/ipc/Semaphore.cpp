@@ -63,35 +63,6 @@ void Semaphore::initialize(const uint8_t semIndex, const int32_t value) const {
     Logger::debug(tag_, "initialized: %s with value: %d", Index::toString(semIndex), value);
 }
 
-bool Semaphore::wait(const uint8_t semIndex, const bool useUndo) const {
-    sembuf operation{};
-    operation.sem_num = semIndex;
-    operation.sem_op = -1;
-    operation.sem_flg = useUndo ? SEM_UNDO : 0;
-
-    if (semop(semId_, &operation, 1) == -1) {
-        if (errno == EINTR) return false;
-        perror("semop wait");
-        throw ipc_exception("Semaphore wait failed");
-    }
-    return true;
-}
-
-bool Semaphore::tryAcquire(const uint8_t semIndex, const bool useUndo) const {
-    sembuf operation{};
-    operation.sem_num = semIndex;
-    operation.sem_op = -1;
-    operation.sem_flg = IPC_NOWAIT | (useUndo ? SEM_UNDO : 0);
-
-    if (semop(semId_, &operation, 1) == -1) {
-        if (errno == EAGAIN) return false;
-        if (errno == EINTR) return false;
-        perror("semop tryAcquire");
-        throw ipc_exception("Semaphore tryAcquire failed");
-    }
-    return true;
-}
-
 bool Semaphore::tryAcquire(const uint8_t semIndex, const int32_t n, const bool useUndo) const {
     if (n <= 0) return true;
 
@@ -123,19 +94,6 @@ bool Semaphore::wait(const uint8_t semIndex, const int32_t n, const bool useUndo
         throw ipc_exception("Semaphore wait failed");
     }
     return true;
-}
-
-void Semaphore::post(const uint8_t semIndex, const bool useUndo) const {
-    sembuf operation{};
-    operation.sem_num = semIndex;
-    operation.sem_op = 1;
-    operation.sem_flg = useUndo ? SEM_UNDO : 0;
-
-    while (semop(semId_, &operation, 1) == -1) {
-        if (errno == EINTR) continue;
-        perror("semop post");
-        throw ipc_exception("Semaphore post failed");
-    }
 }
 
 void Semaphore::post(const uint8_t semIndex, const int32_t n, const bool useUndo) const {
@@ -181,11 +139,11 @@ void Semaphore::destroy() const {
 
 Semaphore::ScopedLock::ScopedLock(const Semaphore& sem, const uint8_t semIndex)
     : sem_(sem), semIndex_(semIndex) {
-    while (!sem_.wait(semIndex_)) {
+    while (!sem_.wait(semIndex_, 1, true)) {
         // Retry on EINTR - signal interrupted the wait, but we must acquire the lock
     }
 }
 
 Semaphore::ScopedLock::~ScopedLock() {
-    sem_.post(semIndex_);
+    sem_.post(semIndex_, 1, true);
 }

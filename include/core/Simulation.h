@@ -76,7 +76,7 @@ private:
                                                    ipc_->shmKey(), ipc_->semKey(), ipc_->logMsgKey());
         Logger::debug(tag_, "Logger spawned: %d", loggerPid_);
         while (!signals_.exit) {
-            if (!ipc_->sem().wait(Semaphore::Index::LOGGER_READY)) continue;
+            if (!ipc_->sem().wait(Semaphore::Index::LOGGER_READY, 1, true)) continue;
             break;
         }
 
@@ -103,15 +103,15 @@ private:
 
     void waitForReady() {
         while (!signals_.exit) {
-            if (!ipc_->sem().wait(Semaphore::Index::CASHIER_READY)) continue;
+            if (!ipc_->sem().wait(Semaphore::Index::CASHIER_READY, 1, true)) continue;
             break;
         }
         while (!signals_.exit) {
-            if (!ipc_->sem().wait(Semaphore::Index::LOWER_WORKER_READY, false)) continue;
+            if (!ipc_->sem().wait(Semaphore::Index::LOWER_WORKER_READY, 1, false)) continue;
             break;
         }
         while (!signals_.exit) {
-            if (!ipc_->sem().wait(Semaphore::Index::UPPER_WORKER_READY)) continue;
+            if (!ipc_->sem().wait(Semaphore::Index::UPPER_WORKER_READY, 1, true)) continue;
             break;
         }
         if (!signals_.exit) {

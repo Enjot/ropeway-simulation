@@ -46,7 +46,7 @@ public:
         }
 
         Logger::info(TAG, "Started (PID: %d)", getpid());
-        sem_.post(Semaphore::Index::LOWER_WORKER_READY, false);
+        sem_.post(Semaphore::Index::LOWER_WORKER_READY, 1, false);
     }
 
     void run() {
@@ -80,7 +80,7 @@ public:
             if (isEmergencyStopped_) {
                 Logger::debug(TAG, "Emergency loop: sharedState=%d", static_cast<int>(currentState));
                 // Block until a signal (SIGUSR2 for resume) interrupts the wait
-                sem_.wait(Semaphore::Index::BOARDING_QUEUE_WORK, false);
+                sem_.wait(Semaphore::Index::BOARDING_QUEUE_WORK, 1, false);
                 continue;
             }
 
@@ -100,7 +100,7 @@ public:
             // Signals (SIGUSR1/SIGUSR2/SIGTERM) will interrupt and return false
             Logger::debug(TAG, "Waiting for BOARDING_QUEUE_WORK (pending=%s)",
                           pendingEntryRequest_ ? "yes" : "no");
-            if (sem_.wait(Semaphore::Index::BOARDING_QUEUE_WORK, false)) {
+            if (sem_.wait(Semaphore::Index::BOARDING_QUEUE_WORK, 1, false)) {
                 if (!g_signals.exit && !g_signals.emergency) {
                     Logger::debug(TAG, "Woke up: processing entry then boarding");
                     // Process entry queue first (handles incoming tourists)
@@ -317,7 +317,7 @@ private:
                 response.allowed = false;
                 long responseType = EntryGateMsgType::RESPONSE_BASE + request.touristId;
                 sendEntryResponse(response, responseType);
-                sem_.post(queueSlotSem, false);
+                sem_.post(queueSlotSem, 1, false);
                 Logger::info(TAG, "Entry denied for Tourist %u: closed", request.touristId);
                 pendingEntryRequest_.reset();
                 continue; // Process next request
@@ -325,7 +325,7 @@ private:
 
             // Try to acquire station capacity (non-blocking resource check)
             // useUndo=false: LowerWorker acquires but Tourist releases in rideChair()
-            if (!sem_.tryAcquire(Semaphore::Index::STATION_CAPACITY, false)) {
+            if (!sem_.tryAcquire(Semaphore::Index::STATION_CAPACITY, 1, false)) {
                 // Station full - buffer locally instead of re-queueing to avoid
                 // msgsnd deadlock (the message queue may be at capacity and we are
                 // the only consumer). Tourist's BOARDING_QUEUE_WORK from rideChair()
@@ -348,7 +348,7 @@ private:
             response.allowed = true;
             long responseType = EntryGateMsgType::RESPONSE_BASE + request.touristId;
             sendEntryResponse(response, responseType);
-            sem_.post(queueSlotSem, false);
+            sem_.post(queueSlotSem, 1, false);
 
             Logger::info(TAG, "Entry granted to Tourist %u%s",
                          request.touristId, request.isVip ? " [VIP]" : "");
@@ -386,7 +386,7 @@ private:
         // Wake up ALL tourists in queue so they can check their assignment
         // This avoids a race condition where non-assigned tourists could starve assigned ones
         for (uint32_t i = 0; i < queue.count; ++i) {
-            sem_.post(Semaphore::Index::CHAIR_ASSIGNED, false);
+            sem_.post(Semaphore::Index::CHAIR_ASSIGNED, 1, false);
         }
 
         // Reset chair slots for next chair
@@ -410,7 +410,7 @@ private:
         if (queue.count == 0) return;
 
         // Check if chairs available (non-blocking, semaphore-based)
-        if (!sem_.tryAcquire(Semaphore::Index::CHAIRS_AVAILABLE, false)) {
+        if (!sem_.tryAcquire(Semaphore::Index::CHAIRS_AVAILABLE, 1, false)) {
             return; // All 36 chairs in use, wait for tourist to release
         }
 
@@ -425,7 +425,7 @@ private:
             }
         }
         if (chairId < 0) {
-            sem_.post(Semaphore::Index::CHAIRS_AVAILABLE, false); // Release, no chair dispatched
+            sem_.post(Semaphore::Index::CHAIRS_AVAILABLE, 1, false); // Release, no chair dispatched
             return;
         }
 
@@ -482,7 +482,7 @@ private:
                     // Remove from queue
                     queue.removeTourist(i);
                     shm_->operational.touristsInLowerStation--;
-                    sem_.post(Semaphore::Index::STATION_CAPACITY, false);
+                    sem_.post(Semaphore::Index::STATION_CAPACITY, 1, false);
                     if (entry.touristPid > 0) {
                         kill(entry.touristPid, SIGTERM);
                     }
@@ -495,7 +495,7 @@ private:
         if (groupCount > 0) {
             dispatchChair(chairId, groupIndices, groupCount, queue, slotsUsed);
         } else {
-            sem_.post(Semaphore::Index::CHAIRS_AVAILABLE, false); // Release, no passengers
+            sem_.post(Semaphore::Index::CHAIRS_AVAILABLE, 1, false); // Release, no passengers
         }
     }
 
