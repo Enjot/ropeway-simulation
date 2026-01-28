@@ -140,7 +140,13 @@ private:
 
                 Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
                 ipc_->state()->operational.acceptingNewTourists = false;
-                ipc_->state()->operational.state = RopewayState::CLOSING;
+                // Don't overwrite EMERGENCY_STOP - LowerWorker will transition
+                // to CLOSING after the emergency is resolved via initiateResume()
+                if (ipc_->state()->operational.state != RopewayState::EMERGENCY_STOP) {
+                    ipc_->state()->operational.state = RopewayState::CLOSING;
+                } else {
+                    Logger::debug(tag_, "Closing time reached during emergency - deferring CLOSING state");
+                }
             }
 
             // After closing, wait for tourists to drain then shutdown
@@ -281,8 +287,11 @@ private:
     void generateDailyReport() {
         Logger::info(tag_, "Generating end-of-day report...");
 
+        // Place report next to the executable (in the build folder)
+        const std::string reportPath = ProcessSpawner::getExecutablePath("daily_report.txt");
+
         // POSIX file operations: open(), write(), close()
-        int fd = open("daily_report.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        int fd = open(reportPath.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd == -1) {
             perror("open daily_report.txt");
             Logger::error(tag_, "Failed to create report file");
@@ -361,6 +370,6 @@ private:
         }
 
         close(fd);
-        Logger::info(tag_, "Report saved to daily_report.txt");
+        Logger::info(tag_, "Report saved to %s", reportPath.c_str());
     }
 };

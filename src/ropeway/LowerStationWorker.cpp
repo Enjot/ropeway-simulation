@@ -76,7 +76,14 @@ public:
                 isClosing = (currentState == RopewayState::CLOSING);
             }
 
-            if (currentState == RopewayState::EMERGENCY_STOP) {
+            // Use local flag for emergency handling - shared state may have been
+            // overwritten by Simulation (e.g., CLOSING transition during emergency)
+            if (isEmergencyStopped_) {
+                Logger::debug(TAG, "Emergency loop: sharedState=%d, autonomous=%d, elapsed=%ld",
+                              static_cast<int>(currentState),
+                              emergencyTriggeredAutonomously_ ? 1 : 0,
+                              emergencyStartTime_ > 0 ? static_cast<long>(time(nullptr) - emergencyStartTime_) : -1L);
+
                 // Check for auto-resume (if triggered autonomously)
                 if (emergencyTriggeredAutonomously_ && emergencyStartTime_ > 0) {
                     time_t now = time(nullptr);
@@ -92,8 +99,14 @@ public:
             }
 
             // Autonomous danger detection (only during normal operation, not closing)
-            if (!isClosing && !isEmergencyStopped_) {
+            if (!isClosing) {
                 checkForDanger();
+            }
+
+            // If emergency was just triggered by checkForDanger(), skip blocking wait
+            if (isEmergencyStopped_) {
+                Logger::debug(TAG, "Emergency just triggered, skipping blocking wait");
+                continue;
             }
 
             // Block waiting for work (unified signal for both entry and boarding)
@@ -120,6 +133,9 @@ private:
 
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            Logger::debug(TAG, "triggerEmergencyStop: prevState=%d, accepting=%d",
+                          static_cast<int>(shm_->operational.state),
+                          shm_->operational.acceptingNewTourists ? 1 : 0);
             shm_->operational.state = RopewayState::EMERGENCY_STOP;
         }
 
@@ -157,33 +173,35 @@ private:
             kill(upperWorkerPid, SIGUSR2);
         }
 
-        // Wait for UpperWorker confirmation with timeout (prevents indefinite hang)
-        static constexpr uint32_t HANDSHAKE_TIMEOUT_SEC = 5;
-        Logger::info(TAG, "Waiting for UpperWorker confirmation (timeout: %us)...", HANDSHAKE_TIMEOUT_SEC);
-        auto response = msgQueue_.receiveWithTimeout(MSG_TYPE_FROM_UPPER, HANDSHAKE_TIMEOUT_SEC);
+        // Wait for UpperWorker confirmation (both workers must confirm to resume)
+        Logger::info(TAG, "Waiting for UpperWorker confirmation...");
+        std::optional<WorkerMessage> response;
+        while (!g_signals.exit) {
+            response = msgQueue_.receiveInterruptible(MSG_TYPE_FROM_UPPER);
+            if (response) break;
+            // Signal interrupted - loop back and retry unless exiting
+        }
 
         if (response && response->signal == WorkerSignal::READY_TO_START) {
             Logger::info(TAG, "UpperWorker confirmed ready. Resuming operations!");
-
-            {
-                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
-                shm_->operational.state = RopewayState::RUNNING;
-            }
-
-            isEmergencyStopped_ = false;
-            emergencyTriggeredAutonomously_ = false;
-            emergencyStartTime_ = 0;
         } else {
-            Logger::warn(TAG, "Timeout waiting for UpperWorker confirmation - resuming anyway");
-            // Resume anyway to prevent permanent deadlock, but log the issue
-            {
-                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
-                shm_->operational.state = RopewayState::RUNNING;
-            }
-            isEmergencyStopped_ = false;
-            emergencyTriggeredAutonomously_ = false;
-            emergencyStartTime_ = 0;
+            Logger::debug(TAG, "Resume: no READY_TO_START response (exit=%d)", g_signals.exit ? 1 : 0);
         }
+
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            // If closing time was reached during emergency, go to CLOSING instead of RUNNING
+            if (shm_->operational.acceptingNewTourists) {
+                shm_->operational.state = RopewayState::RUNNING;
+                Logger::debug(TAG, "Resume: state -> RUNNING");
+            } else {
+                shm_->operational.state = RopewayState::CLOSING;
+                Logger::debug(TAG, "Resume: state -> CLOSING (closing time reached during emergency)");
+            }
+        }
+        isEmergencyStopped_ = false;
+        emergencyTriggeredAutonomously_ = false;
+        emergencyStartTime_ = 0;
     }
 
     void sendMessage(WorkerSignal signal, const char *text) {
