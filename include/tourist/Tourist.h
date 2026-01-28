@@ -12,7 +12,8 @@
  * Structure representing a tourist and their group (children, bike).
  * Children and bikes are threads within the tourist process, not separate processes.
  */
-struct Tourist {
+struct
+Tourist {
     uint32_t id;
     pid_t pid;
     uint32_t age;

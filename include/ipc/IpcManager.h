@@ -80,6 +80,7 @@ public:
 
     void initSemaphores(const uint16_t stationCapacity = Config::Gate::MAX_TOURISTS_ON_STATION()) const {
         // Startup synchronization
+        sem_.initialize(Semaphore::Index::LOGGER_READY, 0);
         sem_.initialize(Semaphore::Index::CASHIER_READY, 0);
         sem_.initialize(Semaphore::Index::LOWER_WORKER_READY, 0);
         sem_.initialize(Semaphore::Index::UPPER_WORKER_READY, 0);

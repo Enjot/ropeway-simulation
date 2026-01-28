@@ -5,6 +5,7 @@
 #include <memory>
 #include <sys/wait.h>
 #include <csignal>
+#include <cstdarg>
 #include <cstdio>
 #include <fcntl.h>
 #include <unistd.h>
@@ -74,7 +75,10 @@ private:
         loggerPid_ = ProcessSpawner::spawnWithKeys("logger_process",
                                                    ipc_->shmKey(), ipc_->semKey(), ipc_->logMsgKey());
         Logger::debug(tag_, "Logger spawned: %d", loggerPid_);
-        usleep(50000); // Brief delay to ensure logger is ready
+        while (!signals_.exit) {
+            if (!ipc_->sem().wait(Semaphore::Index::LOGGER_READY)) continue;
+            break;
+        }
 
         // Switch to centralized logging (from now on, logs go through the logger process)
         Logger::initCentralized(ipc_->shmKey(), ipc_->semKey(), ipc_->logMsgKey());

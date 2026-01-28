@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(Threads REQUIRED)
+
 # Include directories
 include_directories(
     ${CMAKE_SOURCE_DIR}/include
@@ -161,6 +163,9 @@ add_executable(main
     ${COMMON_SOURCES}
     ${ALL_HEADERS}
 )
+
+# Link pthread (required on Linux for std::thread)
+target_link_libraries(tourist_process Threads::Threads)
 
 # Pass project source directory for .env file loading
 add_compile_definitions(ROPEWAY_PROJECT_DIR="${CMAKE_SOURCE_DIR}")

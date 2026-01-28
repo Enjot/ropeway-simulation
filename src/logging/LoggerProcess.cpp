@@ -4,6 +4,7 @@
 #include <csignal>
 #include <vector>
 #include <algorithm>
+#include <climits>
 
 #include "ipc/core/SharedMemory.h"
 #include "ipc/core/Semaphore.h"
@@ -35,7 +36,7 @@ public:
             simulationStartTime_ = shm_->operational.openingTime;
         }
 
-        // Signal readiness (reuse CASHIER_READY pattern - could add LOGGER_READY)
+        sem_.post(Semaphore::Index::LOGGER_READY, false);
         fprintf(stderr, "[%s] Started (PID: %d)\n", TAG, getpid());
     }
 

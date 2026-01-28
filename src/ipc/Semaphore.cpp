@@ -8,6 +8,7 @@
 const char* Semaphore::Index::toString(const uint8_t index) {
     switch (index) {
         // Startup
+        case LOGGER_READY: return "LOGGER_READY";
         case CASHIER_READY: return "CASHIER_READY";
         case LOWER_WORKER_READY: return "LOWER_WORKER_READY";
         case UPPER_WORKER_READY: return "UPPER_WORKER_READY";

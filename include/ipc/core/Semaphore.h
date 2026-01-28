@@ -25,7 +25,8 @@ public:
     struct Index {
         enum : uint8_t {
             // === STARTUP ===
-            CASHIER_READY = 0, // Cashier signals readiness to main process
+            LOGGER_READY = 0, // Logger signals readiness to main process
+            CASHIER_READY, // Cashier signals readiness to main process
             LOWER_WORKER_READY, // Lower station worker signals readiness
             UPPER_WORKER_READY, // Upper station worker signals readiness
 
