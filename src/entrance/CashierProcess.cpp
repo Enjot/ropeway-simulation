@@ -124,12 +124,9 @@ private:
 
     void sendResponse(const TicketResponse &response, uint32_t touristId) {
         long responseType = CashierMsgType::RESPONSE_BASE + touristId;
-        // Non-blocking send with retry to avoid blocking on the System V
-        // msgtql limit (40 messages system-wide on macOS). The tourist is
-        // blocking on receive, so a brief retry always succeeds.
-        while (!responseQueue_.trySend(response, responseType)) {
-            usleep(500);
-        }
+        // Blocking send — the tourist is waiting on receive, so this
+        // unblocks as soon as the system-wide queue limit has room.
+        responseQueue_.send(response, responseType);
     }
 
     SharedMemory<SharedRopewayState> shm_;
