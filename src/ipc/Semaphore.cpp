@@ -77,20 +77,6 @@ bool Semaphore::wait(const uint8_t semIndex, const bool useUndo) const {
     return true;
 }
 
-bool Semaphore::waitInterruptible(const uint8_t semIndex, const bool useUndo) const {
-    sembuf operation{};
-    operation.sem_num = semIndex;
-    operation.sem_op = -1;
-    operation.sem_flg = useUndo ? SEM_UNDO : 0;
-
-    if (semop(semId_, &operation, 1) == -1) {
-        if (errno == EINTR) return false;
-        perror("semop waitInterruptible");
-        throw ipc_exception("Semaphore waitInterruptible failed");
-    }
-    return true;
-}
-
 bool Semaphore::tryAcquire(const uint8_t semIndex, const bool useUndo) const {
     sembuf operation{};
     operation.sem_num = semIndex;

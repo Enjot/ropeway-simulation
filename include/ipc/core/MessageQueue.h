@@ -4,9 +4,7 @@
 #include <sys/msg.h>
 #include <cerrno>
 #include <cstdio>
-#include <ctime>
 #include <optional>
-#include <unistd.h>
 
 #include "logging/Logger.h"
 #include "IpcException.h"
@@ -96,27 +94,6 @@ public:
             return wrapper.message;
         }
         return std::nullopt; // EINTR or error - caller checks signals
-    }
-
-    // Receive with timeout (polling approach since System V doesn't support native timeout)
-    // Returns nullopt if timeout expires or on error
-    // timeoutSec: maximum seconds to wait (0 = non-blocking single attempt)
-    // pollIntervalUs: microseconds between poll attempts (default 100ms)
-    std::optional<T> receiveWithTimeout(const long type, const uint32_t timeoutSec,
-                                        const uint32_t pollIntervalUs = 100000) {
-        const time_t deadline = time(nullptr) + timeoutSec;
-
-        while (time(nullptr) < deadline) {
-            auto result = tryReceive(type);
-            if (result) {
-                return result;
-            }
-            // Sleep before retry (avoids busy-waiting)
-            usleep(pollIntervalUs);
-        }
-
-        // Final attempt after timeout
-        return tryReceive(type);
     }
 
     void destroy() const {

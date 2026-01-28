@@ -80,7 +80,7 @@ public:
             if (isEmergencyStopped_) {
                 Logger::debug(TAG, "Emergency loop: sharedState=%d", static_cast<int>(currentState));
                 // Block until a signal (SIGUSR2 for resume) interrupts the wait
-                sem_.waitInterruptible(Semaphore::Index::BOARDING_QUEUE_WORK, false);
+                sem_.wait(Semaphore::Index::BOARDING_QUEUE_WORK, false);
                 continue;
             }
 
@@ -100,7 +100,7 @@ public:
             // Signals (SIGUSR1/SIGUSR2/SIGTERM) will interrupt and return false
             Logger::debug(TAG, "Waiting for BOARDING_QUEUE_WORK (pending=%s)",
                           pendingEntryRequest_ ? "yes" : "no");
-            if (sem_.waitInterruptible(Semaphore::Index::BOARDING_QUEUE_WORK, false)) {
+            if (sem_.wait(Semaphore::Index::BOARDING_QUEUE_WORK, false)) {
                 if (!g_signals.exit && !g_signals.emergency) {
                     Logger::debug(TAG, "Woke up: processing entry then boarding");
                     // Process entry queue first (handles incoming tourists)
@@ -264,16 +264,12 @@ private:
     }
 
     /**
-     * Send entry response with non-blocking retry.
-     * Uses trySend to avoid blocking on the System V msgtql limit (40 messages
-     * system-wide on macOS). The tourist is blocking on receive, so retrying
-     * briefly always succeeds once the tourist (or any other process) consumes
-     * a message and frees a system-wide slot.
+     * Send entry response to tourist (blocking).
+     * The tourist is waiting on receive, so this unblocks as soon as the
+     * system-wide queue limit has room.
      */
     void sendEntryResponse(const EntryGateResponse& response, long responseType) {
-        while (!entryResponseQueue_.trySend(response, responseType)) {
-            usleep(500); // Brief retry — tourist is consuming its response imminently
-        }
+        entryResponseQueue_.send(response, responseType);
     }
 
     /**

@@ -3,7 +3,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <thread>
-#include <atomic>
+#include <mutex>
+#include <condition_variable>
 #include <vector>
 
 #include "ipc/core/SharedMemory.h"
@@ -31,24 +32,26 @@ namespace {
 class ChildThread {
 public:
     ChildThread(uint32_t childId, uint32_t age, uint32_t parentId)
-        : childId_{childId}, age_{age}, parentId_{parentId}, running_{true} {
+        : childId_{childId}, age_{age}, parentId_{parentId} {
     }
 
     void start() {
         thread_ = std::thread([this]() {
             Logger::info("Child", "[Thread %u] age=%u, with parent %u", childId_, age_, parentId_);
-            // Child thread just waits until parent finishes
-            while (running_.load()) {
-                // Not used for IPC sync — just an idle sleep to avoid busy-waiting
-                // while the thread exists alongside the parent process
-                usleep(100000);
+            {
+                std::unique_lock lock(mtx_);
+                cv_.wait(lock, [this]() { return !running_; });
             }
             Logger::debug("Child", "[Thread %u] finished with parent", childId_);
         });
     }
 
     void stop() {
-        running_.store(false);
+        {
+            std::lock_guard<std::mutex> lock(mtx_);
+            running_ = false;
+        }
+        cv_.notify_one();
         if (thread_.joinable()) {
             thread_.join();
         }
@@ -60,7 +63,9 @@ private:
     uint32_t childId_;
     uint32_t age_;
     uint32_t parentId_;
-    std::atomic<bool> running_;
+    bool running_{true};
+    std::mutex mtx_;
+    std::condition_variable cv_;
     std::thread thread_;
 };
 
@@ -70,23 +75,26 @@ private:
  */
 class BikeThread {
 public:
-    explicit BikeThread(uint32_t ownerId) : ownerId_{ownerId}, running_{true} {
+    explicit BikeThread(uint32_t ownerId) : ownerId_{ownerId} {
     }
 
     void start() {
         thread_ = std::thread([this]() {
             Logger::debug("Bike", "[Thread] bike of tourist %u", ownerId_);
-            while (running_.load()) {
-                // Not used for IPC sync — just an idle sleep to avoid busy-waiting
-                // while the thread exists alongside the parent process
-                usleep(100000);
+            {
+                std::unique_lock<std::mutex> lock(mtx_);
+                cv_.wait(lock, [this]() { return !running_; });
             }
             Logger::debug("Bike", "[Thread] bike stored", ownerId_);
         });
     }
 
     void stop() {
-        running_.store(false);
+        {
+            std::lock_guard<std::mutex> lock(mtx_);
+            running_ = false;
+        }
+        cv_.notify_one();
         if (thread_.joinable()) {
             thread_.join();
         }
@@ -94,7 +102,9 @@ public:
 
 private:
     uint32_t ownerId_;
-    std::atomic<bool> running_;
+    bool running_{true};
+    std::mutex mtx_;
+    std::condition_variable cv_;
     std::thread thread_;
 };
 
@@ -282,7 +292,7 @@ private:
         // Acquire queue slot
         // useUndo=false: the Cashier posts the slot back after processing,
         // not this process. SEM_UNDO would cause double-increment on exit.
-        if (!sem_.waitInterruptible(Semaphore::Index::CASHIER_QUEUE_SLOTS, false)) {
+        if (!sem_.wait(Semaphore::Index::CASHIER_QUEUE_SLOTS, false)) {
             if (g_signals.exit) {
                 changeState(TouristState::FINISHED);
                 return;
@@ -367,7 +377,7 @@ private:
 
         // useUndo=false: the LowerWorker posts the slot back after processing,
         // not this process. SEM_UNDO would cause double-increment on exit.
-        if (!sem_.waitInterruptible(queueSlotSem, false)) {
+        if (!sem_.wait(queueSlotSem, false)) {
             if (g_signals.exit) {
                 changeState(TouristState::FINISHED);
                 return;

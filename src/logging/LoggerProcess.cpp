@@ -42,13 +42,10 @@ public:
 
     void run() {
         while (!g_signals.exit) {
-            // Receive log messages in order (negative mtype = get lowest type first)
-            // This ensures messages are printed in sequence number order
-            auto msg = logQueue_.tryReceive(-LONG_MAX);
-            if (!msg) {
-                usleep(1000); // Brief sleep if no message
-                continue;
-            }
+            // Blocking receive in sequence-number order (negative mtype = lowest first).
+            // Blocks until a message arrives; SIGTERM causes EINTR → nullopt → loop checks exit flag.
+            auto msg = logQueue_.receiveInterruptible(-LONG_MAX);
+            if (!msg) continue;
 
             // Release queue slot (allows another process to send)
             // NOTE: useUndo=false because logger didn't acquire the slot - tourists did
