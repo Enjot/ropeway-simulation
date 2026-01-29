@@ -30,6 +30,7 @@ struct SharedOperationalState {
 
     pid_t lowerWorkerPid; // Lower station controller
     pid_t upperWorkerPid; // Upper station controller
+    pid_t dangerDetectorPid; // PID of worker who detected current danger (0 = none)
 
     uint64_t logSequenceNum; // Global log sequence counter for ordering
 
@@ -48,6 +49,7 @@ struct SharedOperationalState {
           pedestriansOnWalkingExit{0},
           lowerWorkerPid{0},
           upperWorkerPid{0},
+          dangerDetectorPid{0},
           logSequenceNum{0},
           totalPausedSeconds{0} {
     }

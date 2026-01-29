@@ -127,13 +127,6 @@ namespace Config {
         }
     }
 
-    namespace Gate {
-        inline uint32_t MAX_TOURISTS_ON_STATION() {
-            static const uint32_t v = Runtime::getEnv("ROPEWAY_MAX_TOURISTS_ON_STATION");
-            return v;
-        }
-    }
-
     namespace Chair {
         inline uint32_t RIDE_DURATION_US() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_RIDE_DURATION_US");
@@ -210,7 +203,6 @@ namespace Config {
         Simulation::OPENING_HOUR();
         Simulation::CLOSING_HOUR();
         Simulation::TIME_SCALE();
-        Gate::MAX_TOURISTS_ON_STATION();
         Chair::RIDE_DURATION_US();
         Trail::DURATION_EASY_US();
         Trail::DURATION_MEDIUM_US();

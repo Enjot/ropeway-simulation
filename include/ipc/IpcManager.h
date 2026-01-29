@@ -80,7 +80,7 @@ public:
     key_t entryGateMsgKey() const { return entryGateMsgKey_; }
     key_t logMsgKey() const { return logMsgKey_; }
 
-    void initSemaphores(const uint16_t stationCapacity = Config::Gate::MAX_TOURISTS_ON_STATION()) const {
+    void initSemaphores(const uint16_t stationCapacity) const {
         // Startup synchronization
         sem_.initialize(Semaphore::Index::LOGGER_READY, 0);
         sem_.initialize(Semaphore::Index::CASHIER_READY, 0);

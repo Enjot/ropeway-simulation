@@ -13,7 +13,6 @@ namespace Test {
      */
     struct TestEnvConfig {
         uint32_t stationCapacity = 20;
-        uint32_t maxTouristsOnStation = 50;
         uint32_t timeScale = 600;
         uint32_t openingHour = 8;
         uint32_t closingHour = 18;
@@ -35,7 +34,6 @@ namespace Test {
 
         void apply() const {
             setenv("ROPEWAY_STATION_CAPACITY", std::to_string(stationCapacity).c_str(), 1);
-            setenv("ROPEWAY_MAX_TOURISTS_ON_STATION", std::to_string(maxTouristsOnStation).c_str(), 1);
             setenv("ROPEWAY_TIME_SCALE", std::to_string(timeScale).c_str(), 1);
             setenv("ROPEWAY_OPENING_HOUR", std::to_string(openingHour).c_str(), 1);
             setenv("ROPEWAY_CLOSING_HOUR", std::to_string(closingHour).c_str(), 1);

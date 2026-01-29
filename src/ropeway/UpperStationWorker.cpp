@@ -66,7 +66,24 @@ public:
             // Check for resume signal from external source
             if (g_signals.resume && isEmergencyStopped_) {
                 g_signals.resume = 0;
-                handleResumeRequest();
+
+                // Check who detected the danger to determine role
+                pid_t detectorPid;
+                {
+                    Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                    detectorPid = shm_->operational.dangerDetectorPid;
+                }
+
+                Logger::debug(SRC, TAG, "Resume check: detectorPid=%d, myPid=%d, isInitiator=%s",
+                              detectorPid, getpid(), (detectorPid == getpid()) ? "yes" : "no");
+
+                if (detectorPid == getpid()) {
+                    // We detected the danger - we're already in initiateResume() from checkForDanger()
+                    Logger::debug(SRC, TAG, "Resume signal ignored - we are the initiator");
+                } else {
+                    // Other worker detected danger - we're the responder
+                    handleResumeRequest();
+                }
             }
 
             // Autonomous danger detection (only when not already in emergency)
@@ -115,6 +132,11 @@ private:
         sendMessage(WorkerSignal::READY_TO_START, "UpperWorker ready to resume");
         Logger::info(SRC, TAG, "Confirmation sent to LowerWorker");
 
+        // Update state and clear danger detector
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            shm_->operational.dangerDetectorPid = 0;
+        }
         isEmergencyStopped_ = false;
     }
 
@@ -207,9 +229,13 @@ private:
     void triggerEmergencyStop() {
         Logger::warn(SRC, TAG, "!!! EMERGENCY STOP TRIGGERED !!!");
 
+        pid_t lowerWorkerPid;
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
             shm_->operational.state = RopewayState::EMERGENCY_STOP;
+            shm_->operational.dangerDetectorPid = getpid();
+            lowerWorkerPid = shm_->operational.lowerWorkerPid;
+            Logger::debug(SRC, TAG, "triggerEmergencyStop: set dangerDetectorPid=%d", getpid());
         }
 
         isEmergencyStopped_ = true;
@@ -218,11 +244,6 @@ private:
         sendMessage(WorkerSignal::EMERGENCY_STOP, "Emergency stop by UpperWorker");
 
         // Also send signal to LowerWorker
-        pid_t lowerWorkerPid;
-        {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
-            lowerWorkerPid = shm_->operational.lowerWorkerPid;
-        }
         if (lowerWorkerPid > 0) {
             kill(lowerWorkerPid, SIGUSR1);
         }
@@ -262,9 +283,12 @@ private:
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
             if (shm_->operational.acceptingNewTourists) {
                 shm_->operational.state = RopewayState::RUNNING;
+                Logger::debug(SRC, TAG, "initiateResume: state -> RUNNING");
             } else {
                 shm_->operational.state = RopewayState::CLOSING;
+                Logger::debug(SRC, TAG, "initiateResume: state -> CLOSING (closing time reached during emergency)");
             }
+            shm_->operational.dangerDetectorPid = 0; // Clear danger detector
         }
         isEmergencyStopped_ = false;
     }
