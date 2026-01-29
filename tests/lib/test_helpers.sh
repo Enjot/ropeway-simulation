@@ -384,3 +384,4 @@ export -f report_log_excerpts
 export -f report_finish
 export -f generate_summary
 export -f get_report_stat
+export -f strip_ansi
