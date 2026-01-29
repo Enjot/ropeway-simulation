@@ -6,9 +6,12 @@
  * Message types for cashier communication
  */
 namespace CashierMsgType {
-    constexpr long REQUEST = 1; // Tourist -> Cashier requests
+    constexpr long REQUEST = 1;        // Tourist -> Cashier requests
     constexpr long RESPONSE_BASE = 1000; // Cashier -> Tourist responses (+ touristId)
 }
+
+// Sentinel value for closing notification (sent as REQUEST with this touristId)
+constexpr uint32_t CASHIER_CLOSING_SENTINEL = 0;
 
 /**
  * Ticket request from Tourist to Cashier

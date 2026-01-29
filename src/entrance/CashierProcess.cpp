@@ -26,7 +26,8 @@ public:
           sem_{args.semKey},
           requestQueue_{args.cashierMsgKey, "CashierReq"},
           responseQueue_{args.cashierMsgKey, "CashierResp"},
-          nextTicketId_{1} {
+          nextTicketId_{1},
+          isClosed_{false} {
         // Set simulation start time for logger
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
@@ -48,13 +49,20 @@ public:
                 continue;
             }
 
+            // Check for closing notification (sentinel touristId = 0)
+            if (request->touristId == CASHIER_CLOSING_SENTINEL) {
+                isClosed_ = true;
+                Logger::warn(SRC, TAG, "Cashier closing - no longer accepting ticket requests");
+                continue;
+            }
+
             processRequest(*request);
 
             // Release queue slot so another tourist can send request
             sem_.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, 1, false);
         }
 
-        Logger::warn(SRC, TAG, "Cashier closing - no longer accepting ticket requests");
+        Logger::debug(SRC, TAG, "Cashier process exiting");
     }
 
 private:
@@ -64,14 +72,8 @@ private:
         TicketResponse response;
         response.touristId = request.touristId;
 
-        // Check if accepting
-        bool accepting;
-        {
-            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
-            accepting = shm_->operational.acceptingNewTourists;
-        }
-
-        if (!accepting) {
+        // Check if closed (using internal flag set by CLOSING message)
+        if (isClosed_) {
             response.success = false;
             strcpy(response.message, "Ropeway closed");
             sendResponse(response, request.touristId);
@@ -144,6 +146,7 @@ private:
     MessageQueue<TicketRequest> requestQueue_;
     MessageQueue<TicketResponse> responseQueue_;
     uint32_t nextTicketId_;
+    bool isClosed_;
 };
 
 int main(int argc, char *argv[]) {

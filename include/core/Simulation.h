@@ -11,6 +11,8 @@
 #include <unistd.h>
 
 #include "ipc/IpcManager.h"
+#include "ipc/core/MessageQueue.h"
+#include "entrance/CashierMessage.h"
 #include "core/Config.h"
 #include "utils/SignalHelper.h"
 #include "utils/ProcessSpawner.h"
@@ -145,16 +147,24 @@ private:
                              ">>> CLOSING TIME REACHED (Tk=%u:00) - Gates stop accepting <<<",
                              Config::Simulation::CLOSING_HOUR());
 
-                Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
-                ipc_->state()->operational.acceptingNewTourists = false;
-                // Don't overwrite EMERGENCY_STOP - LowerWorker will transition
-                // to CLOSING after the emergency is resolved via initiateResume()
-                if (ipc_->state()->operational.state != RopewayState::EMERGENCY_STOP) {
-                    ipc_->state()->operational.state = RopewayState::CLOSING;
-                } else {
-                    Logger::debug(Logger::Source::Other, tag_,
-                                  "Closing time reached during emergency - deferring CLOSING state");
+                {
+                    Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
+                    ipc_->state()->operational.acceptingNewTourists = false;
+                    // Don't overwrite EMERGENCY_STOP - LowerWorker will transition
+                    // to CLOSING after the emergency is resolved via initiateResume()
+                    if (ipc_->state()->operational.state != RopewayState::EMERGENCY_STOP) {
+                        ipc_->state()->operational.state = RopewayState::CLOSING;
+                    } else {
+                        Logger::debug(Logger::Source::Other, tag_,
+                                      "Closing time reached during emergency - deferring CLOSING state");
+                    }
                 }
+
+                // Send closing notification to Cashier via message queue (sentinel touristId = 0)
+                MessageQueue<TicketRequest> cashierQueue(ipc_->cashierMsgKey(), "CashierReq");
+                TicketRequest closingMsg{};
+                closingMsg.touristId = CASHIER_CLOSING_SENTINEL;
+                cashierQueue.send(closingMsg, CashierMsgType::REQUEST);
             }
 
             // After closing, wait for tourists to drain then shutdown
