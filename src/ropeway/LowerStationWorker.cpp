@@ -19,6 +19,7 @@
 namespace {
     SignalHelper::Flags g_signals;
     constexpr const char *TAG = "LowerWorker";
+    constexpr auto SRC = Logger::Source::LowerWorker;
 }
 
 class LowerWorkerProcess {
@@ -45,12 +46,12 @@ public:
             Logger::setSimulationStartTime(shm_->operational.openingTime);
         }
 
-        Logger::info(TAG, "Started (PID: %d)", getpid());
+        Logger::info(SRC, TAG, "Started (PID: %d)", getpid());
         sem_.post(Semaphore::Index::LOWER_WORKER_READY, 1, false);
     }
 
     void run() {
-        Logger::info(TAG, "Beginning operations");
+        Logger::info(SRC, TAG, "Beginning operations");
         srand(static_cast<unsigned>(time(nullptr)) ^ static_cast<unsigned>(getpid()));
 
         while (!g_signals.exit) {
@@ -78,7 +79,7 @@ public:
             // Use local flag for emergency handling - shared state may have been
             // overwritten by Simulation (e.g., CLOSING transition during emergency)
             if (isEmergencyStopped_) {
-                Logger::debug(TAG, "Emergency loop: sharedState=%d", static_cast<int>(currentState));
+                Logger::debug(SRC, TAG, "Emergency loop: sharedState=%d", static_cast<int>(currentState));
                 // Block until a signal (SIGUSR2 for resume) interrupts the wait
                 sem_.wait(Semaphore::Index::BOARDING_QUEUE_WORK, 1, false);
                 continue;
@@ -91,41 +92,41 @@ public:
 
             // If emergency was just triggered by checkForDanger(), skip blocking wait
             if (isEmergencyStopped_) {
-                Logger::debug(TAG, "Emergency just triggered, skipping blocking wait");
+                Logger::debug(SRC, TAG, "Emergency just triggered, skipping blocking wait");
                 continue;
             }
 
             // Block waiting for work (unified signal for both entry and boarding)
             // This is the main blocking point - no CPU spinning
             // Signals (SIGUSR1/SIGUSR2/SIGTERM) will interrupt and return false
-            Logger::debug(TAG, "Waiting for BOARDING_QUEUE_WORK (pending=%s)",
+            Logger::debug(SRC, TAG, "Waiting for BOARDING_QUEUE_WORK (pending=%s)",
                           pendingEntryRequest_ ? "yes" : "no");
             if (sem_.wait(Semaphore::Index::BOARDING_QUEUE_WORK, 1, false)) {
                 if (!g_signals.exit && !g_signals.emergency) {
-                    Logger::debug(TAG, "Woke up: processing entry then boarding");
+                    Logger::debug(SRC, TAG, "Woke up: processing entry then boarding");
                     // Process entry queue first (handles incoming tourists)
                     processEntryQueue();
                     // Then process boarding queue (assigns chairs)
                     processBoardingQueue();
                 }
             } else {
-                Logger::debug(TAG, "BOARDING_QUEUE_WORK interrupted (exit=%d, emerg=%d)",
+                Logger::debug(SRC, TAG, "BOARDING_QUEUE_WORK interrupted (exit=%d, emerg=%d)",
                               g_signals.exit ? 1 : 0, g_signals.emergency ? 1 : 0);
             }
 
             logStatus();
         }
 
-        Logger::warn(TAG, "Shutting down");
+        Logger::warn(SRC, TAG, "Shutting down");
     }
 
 private:
     void triggerEmergencyStop() {
-        Logger::warn(TAG, "!!! EMERGENCY STOP TRIGGERED !!!");
+        Logger::warn(SRC, TAG, "!!! EMERGENCY STOP TRIGGERED !!!");
 
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
-            Logger::debug(TAG, "triggerEmergencyStop: prevState=%d, accepting=%d",
+            Logger::debug(SRC, TAG, "triggerEmergencyStop: prevState=%d, accepting=%d",
                           static_cast<int>(shm_->operational.state),
                           shm_->operational.acceptingNewTourists ? 1 : 0);
             shm_->operational.state = RopewayState::EMERGENCY_STOP;
@@ -146,11 +147,11 @@ private:
             kill(upperWorkerPid, SIGUSR1);
         }
 
-        Logger::info(TAG, "Emergency stop activated, waiting for resume (SIGUSR2)");
+        Logger::info(SRC, TAG, "Emergency stop activated, waiting for resume (SIGUSR2)");
     }
 
     void initiateResume() {
-        Logger::info(TAG, "Resume requested, checking with UpperWorker...");
+        Logger::info(SRC, TAG, "Resume requested, checking with UpperWorker...");
 
         // Send ready message to UpperWorker
         sendMessage(WorkerSignal::READY_TO_START, "LowerWorker ready to resume");
@@ -166,7 +167,7 @@ private:
         }
 
         // Wait for UpperWorker confirmation (both workers must confirm to resume)
-        Logger::info(TAG, "Waiting for UpperWorker confirmation...");
+        Logger::info(SRC, TAG, "Waiting for UpperWorker confirmation...");
         std::optional<WorkerMessage> response;
         while (!g_signals.exit) {
             response = msgQueue_.receiveInterruptible(MSG_TYPE_FROM_UPPER);
@@ -175,9 +176,9 @@ private:
         }
 
         if (response && response->signal == WorkerSignal::READY_TO_START) {
-            Logger::info(TAG, "UpperWorker confirmed ready. Resuming operations!");
+            Logger::info(SRC, TAG, "UpperWorker confirmed ready. Resuming operations!");
         } else {
-            Logger::debug(TAG, "Resume: no READY_TO_START response (exit=%d)", g_signals.exit ? 1 : 0);
+            Logger::debug(SRC, TAG, "Resume: no READY_TO_START response (exit=%d)", g_signals.exit ? 1 : 0);
         }
 
         {
@@ -185,10 +186,10 @@ private:
             // If closing time was reached during emergency, go to CLOSING instead of RUNNING
             if (shm_->operational.acceptingNewTourists) {
                 shm_->operational.state = RopewayState::RUNNING;
-                Logger::debug(TAG, "Resume: state -> RUNNING");
+                Logger::debug(SRC, TAG, "Resume: state -> RUNNING");
             } else {
                 shm_->operational.state = RopewayState::CLOSING;
-                Logger::debug(TAG, "Resume: state -> CLOSING (closing time reached during emergency)");
+                Logger::debug(SRC, TAG, "Resume: state -> CLOSING (closing time reached during emergency)");
             }
         }
         isEmergencyStopped_ = false;
@@ -223,7 +224,7 @@ private:
         // Random chance to detect "danger"
         double roll = static_cast<double>(rand()) / RAND_MAX;
         if (roll < DANGER_DETECTION_CHANCE) {
-            Logger::warn(TAG, "!!! DANGER DETECTED - Initiating emergency stop !!!");
+            Logger::warn(SRC, TAG, "!!! DANGER DETECTED - Initiating emergency stop !!!");
             triggerEmergencyStop();
 
             // Update statistics
@@ -250,13 +251,13 @@ private:
             }
 
             if (state == RopewayState::EMERGENCY_STOP) {
-                Logger::warn(TAG, "EMERGENCY STOP - Queue=%u, Chairs=%u/%u",
+                Logger::warn(SRC, TAG, "EMERGENCY STOP - Queue=%u, Chairs=%u/%u",
                              queueCount, chairsInUse, Constants::Chair::MAX_CONCURRENT_IN_USE);
             } else if (state == RopewayState::CLOSING) {
-                Logger::info(TAG, "CLOSING - Queue=%u, ChairsInUse=%u/%u (draining)",
+                Logger::info(SRC, TAG, "CLOSING - Queue=%u, ChairsInUse=%u/%u (draining)",
                              queueCount, chairsInUse, Constants::Chair::MAX_CONCURRENT_IN_USE);
             } else {
-                Logger::info(TAG, "Queue=%u, ChairsInUse=%u/%u",
+                Logger::info(SRC, TAG, "Queue=%u, ChairsInUse=%u/%u",
                              queueCount, chairsInUse, Constants::Chair::MAX_CONCURRENT_IN_USE);
             }
             lastLog = now;
@@ -318,7 +319,7 @@ private:
                 long responseType = EntryGateMsgType::RESPONSE_BASE + request.touristId;
                 sendEntryResponse(response, responseType);
                 sem_.post(queueSlotSem, 1, false);
-                Logger::info(TAG, "Entry denied for Tourist %u: closed", request.touristId);
+                Logger::info(SRC, TAG, "Entry denied for Tourist %u: closed", request.touristId);
                 pendingEntryRequest_.reset();
                 continue; // Process next request
             }
@@ -333,7 +334,7 @@ private:
                 if (!fromPending) {
                     pendingEntryRequest_ = request;
                 }
-                Logger::debug(TAG, "Station full, pending entry for Tourist %u", request.touristId);
+                Logger::debug(SRC, TAG, "Station full, pending entry for Tourist %u", request.touristId);
                 return;
             }
 
@@ -350,7 +351,7 @@ private:
             sendEntryResponse(response, responseType);
             sem_.post(queueSlotSem, 1, false);
 
-            Logger::info(TAG, "Entry granted to Tourist %u%s",
+            Logger::info(SRC, TAG, "Entry granted to Tourist %u%s",
                          request.touristId, request.isVip ? " [VIP]" : "");
             pendingEntryRequest_.reset();
             // Continue loop to process next request
@@ -380,7 +381,7 @@ private:
             }
         }
 
-        Logger::info(TAG, "Chair %d departing: %u groups, %u/4 slots",
+        Logger::info(SRC, TAG, "Chair %d departing: %u groups, %u/4 slots",
                      chairId, groupCount, totalSlots);
 
         // Wake up ALL tourists in queue so they can check their assignment
@@ -450,17 +451,17 @@ private:
 
                 // Log group composition
                 if (entry.childCount > 0 && entry.hasBike) {
-                    Logger::info(TAG, "Boarding Tourist %u: %s with bike + %u children (%u slots)",
+                    Logger::info(SRC, TAG, "Boarding Tourist %u: %s with bike + %u children (%u slots)",
                                  entry.touristId,
                                  entry.type == TouristType::CYCLIST ? "cyclist" : "pedestrian",
                                  entry.childCount, entry.slots);
                 } else if (entry.childCount > 0) {
-                    Logger::info(TAG, "Boarding Tourist %u: %s + %u children (%u slots)",
+                    Logger::info(SRC, TAG, "Boarding Tourist %u: %s + %u children (%u slots)",
                                  entry.touristId,
                                  entry.type == TouristType::CYCLIST ? "cyclist" : "pedestrian",
                                  entry.childCount, entry.slots);
                 } else if (entry.hasBike) {
-                    Logger::info(TAG, "Boarding Tourist %u: cyclist with bike (%u slots)",
+                    Logger::info(SRC, TAG, "Boarding Tourist %u: cyclist with bike (%u slots)",
                                  entry.touristId, entry.slots);
                 }
 
@@ -477,7 +478,7 @@ private:
                 // Empty chair but tourist still doesn't fit (slots > 4)?
                 // This shouldn't happen, but handle gracefully
                 if (entry.slots > Constants::Chair::SLOTS_PER_CHAIR) {
-                    Logger::error(TAG, "Tourist %u needs %u slots (max %u) - cannot board!",
+                    Logger::error(SRC, TAG, "Tourist %u needs %u slots (max %u) - cannot board!",
                                   entry.touristId, entry.slots, Constants::Chair::SLOTS_PER_CHAIR);
                     // Remove from queue
                     queue.removeTourist(i);
@@ -526,7 +527,7 @@ int main(int argc, char *argv[]) {
 
         Logger::cleanupCentralized();
     } catch (const std::exception &e) {
-        Logger::error(TAG, "Exception: %s", e.what());
+        Logger::error(SRC, TAG, "Exception: %s", e.what());
         return 1;
     }
 

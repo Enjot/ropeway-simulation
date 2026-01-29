@@ -16,6 +16,7 @@
 namespace {
     SignalHelper::Flags g_signals;
     constexpr const char *TAG = "UpperWorker";
+    constexpr auto SRC = Logger::Source::UpperWorker;
 }
 
 class UpperWorkerProcess {
@@ -34,12 +35,12 @@ public:
             Logger::setSimulationStartTime(shm_->operational.openingTime);
         }
 
-        Logger::info(TAG, "Started (PID: %d)", getpid());
+        Logger::info(SRC, TAG, "Started (PID: %d)", getpid());
         sem_.post(Semaphore::Index::UPPER_WORKER_READY, 1, false);
     }
 
     void run() {
-        Logger::info(TAG, "Monitoring upper station");
+        Logger::info(SRC, TAG, "Monitoring upper station");
 
         // Set up periodic alarm for status logging (every 5 seconds)
         signal(SIGALRM, [](int) {});
@@ -70,12 +71,12 @@ public:
         }
 
         alarm(0);
-        Logger::warn(TAG, "Shutting down");
+        Logger::warn(SRC, TAG, "Shutting down");
     }
 
 private:
     void handleEmergencyStop() {
-        Logger::warn(TAG, "!!! EMERGENCY STOP RECEIVED !!!");
+        Logger::warn(SRC, TAG, "!!! EMERGENCY STOP RECEIVED !!!");
 
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
@@ -83,21 +84,21 @@ private:
         }
 
         isEmergencyStopped_ = true;
-        Logger::info(TAG, "Emergency stop acknowledged");
+        Logger::info(SRC, TAG, "Emergency stop acknowledged");
     }
 
     void handleResumeRequest() {
-        Logger::info(TAG, "Resume signal received, confirming ready...");
+        Logger::info(SRC, TAG, "Resume signal received, confirming ready...");
 
         // Check for ready message from LowerWorker
         auto msg = msgQueue_.tryReceive(MSG_TYPE_FROM_LOWER);
         if (msg && msg->signal == WorkerSignal::READY_TO_START) {
-            Logger::info(TAG, "LowerWorker ready, sending confirmation");
+            Logger::info(SRC, TAG, "LowerWorker ready, sending confirmation");
         }
 
         // Send confirmation back to LowerWorker
         sendMessage(WorkerSignal::READY_TO_START, "UpperWorker ready to resume");
-        Logger::info(TAG, "Confirmation sent to LowerWorker");
+        Logger::info(SRC, TAG, "Confirmation sent to LowerWorker");
 
         isEmergencyStopped_ = false;
     }
@@ -105,21 +106,21 @@ private:
     void handleMessage(const WorkerMessage &msg) {
         switch (msg.signal) {
             case WorkerSignal::EMERGENCY_STOP:
-                Logger::warn(TAG, "Emergency stop message from LowerWorker");
+                Logger::warn(SRC, TAG, "Emergency stop message from LowerWorker");
                 handleEmergencyStop();
                 break;
 
             case WorkerSignal::READY_TO_START:
-                Logger::info(TAG, "LowerWorker ready to resume");
+                Logger::info(SRC, TAG, "LowerWorker ready to resume");
                 // Confirmation will be sent when we receive SIGUSR2
                 break;
 
             case WorkerSignal::STATION_CLEAR:
-                Logger::info(TAG, "Station clear message from LowerWorker");
+                Logger::info(SRC, TAG, "Station clear message from LowerWorker");
                 break;
 
             case WorkerSignal::DANGER_DETECTED:
-                Logger::warn(TAG, "Danger detected by LowerWorker");
+                Logger::warn(SRC, TAG, "Danger detected by LowerWorker");
                 handleEmergencyStop();
                 break;
         }
@@ -156,9 +157,9 @@ private:
             }
 
             if (state == RopewayState::EMERGENCY_STOP) {
-                Logger::warn(TAG, "EMERGENCY STOP - Rides: %u, At upper: %u", totalRides, touristsAtUpper);
+                Logger::warn(SRC, TAG, "EMERGENCY STOP - Rides: %u, At upper: %u", totalRides, touristsAtUpper);
             } else {
-                Logger::info(TAG, "Rides: %u | Upper: %u (bikes: %u, walking: %u)",
+                Logger::info(SRC, TAG, "Rides: %u | Upper: %u (bikes: %u, walking: %u)",
                             totalRides, touristsAtUpper, cyclistsExiting, pedestriansExiting);
             }
             lastLog = now;
@@ -188,7 +189,7 @@ int main(int argc, char *argv[]) {
 
         Logger::cleanupCentralized();
     } catch (const std::exception &e) {
-        Logger::error(TAG, "Exception: %s", e.what());
+        Logger::error(SRC, TAG, "Exception: %s", e.what());
         return 1;
     }
 

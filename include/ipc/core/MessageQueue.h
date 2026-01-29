@@ -21,13 +21,13 @@ public:
                     perror("msgget (connect)");
                     throw ipc_exception("Failed to connect to existing message queue");
                 }
-                Logger::debug(tag_, "Message queue connected");
+                Logger::debug(Logger::Source::Other, tag_, "Message queue connected");
             } else {
                 perror("msgget (create)");
                 throw ipc_exception("Failed to create message queue");
             }
         } else {
-            Logger::debug(tag_, "Message queue created");
+            Logger::debug(Logger::Source::Other, tag_, "Message queue created");
         }
     }
 
@@ -101,7 +101,7 @@ public:
             perror("msgctl IPC_RMID");
             throw ipc_exception("Failed to destroy message queue");
         }
-        Logger::debug(tag_, "destroyed");
+        Logger::debug(Logger::Source::Other, tag_, "destroyed");
     }
 
 private:

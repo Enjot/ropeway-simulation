@@ -96,7 +96,7 @@ public:
             perror("shmctl IPC_RMID");
             throw ipc_exception("failed to destroy shared memory");
         }
-        Logger::debug(tag_, "destroyed");
+        Logger::debug(Logger::Source::Other, tag_, "destroyed");
     }
 
 private:

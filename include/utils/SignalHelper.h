@@ -120,7 +120,7 @@ namespace SignalHelper {
             sigaction(SIGUSR2, &sa, nullptr);
         }
 
-        Logger::debug(tag, "setup done, userSignals=%d", handleUserSignals);
+        Logger::debug(Logger::Source::Other, tag, "setup done, userSignals=%d", handleUserSignals);
     }
 
     // Mode-based setup function

@@ -43,13 +43,13 @@ Semaphore::Semaphore(const key_t key) {
                 perror("semget (connect)");
                 throw ipc_exception("Failed to connect to existing semaphore");
             }
-            Logger::debug(tag_, "connected");
+            Logger::debug(Logger::Source::Other, tag_, "connected");
         } else {
             perror("semget (create)");
             throw ipc_exception("Failed to create semaphore");
         }
     } else {
-        Logger::debug(tag_, "created");
+        Logger::debug(Logger::Source::Other, tag_, "created");
     }
 }
 
@@ -60,7 +60,7 @@ void Semaphore::initialize(const uint8_t semIndex, const int32_t value) const {
         perror("semctl SETVAL");
         throw ipc_exception("Failed to initialize semaphore");
     }
-    Logger::debug(tag_, "initialized: %s with value: %d", Index::toString(semIndex), value);
+    Logger::debug(Logger::Source::Other, tag_, "initialized: %s with value: %d", Index::toString(semIndex), value);
 }
 
 bool Semaphore::tryAcquire(const uint8_t semIndex, const int32_t n, const bool useUndo) const {
@@ -134,7 +134,7 @@ void Semaphore::destroy() const {
         perror("semctl IPC_RMID");
         throw ipc_exception("Failed to destroy semaphore");
     }
-    Logger::debug(tag_, "destroyed");
+    Logger::debug(Logger::Source::Other, tag_, "destroyed");
 }
 
 Semaphore::ScopedLock::ScopedLock(const Semaphore& sem, const uint8_t semIndex)

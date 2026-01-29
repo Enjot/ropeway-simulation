@@ -21,7 +21,7 @@ class Simulation {
 public:
     void run() {
         Logger::separator('=');
-        Logger::info(tag_, "Ropeway Simulation");
+        Logger::info(Logger::Source::Other, tag_, "Ropeway Simulation");
         Logger::separator('=');
 
         SignalHelper::setup(signals_, false);
@@ -31,7 +31,7 @@ public:
             setup();
             mainLoop();
         } catch (const std::exception &e) {
-            Logger::error(tag_, "Exception: %s", e.what());
+            Logger::error(Logger::Source::Other, tag_, "Exception: %s", e.what());
         }
 
         shutdown();
@@ -52,7 +52,7 @@ private:
     time_t startTime_;
 
     void setup() {
-        Logger::info(tag_, "Creating IPC...");
+        Logger::info(Logger::Source::Other, tag_, "Creating IPC...");
         ipc_ = std::make_unique<IpcManager>();
 
         ipc_->initSemaphores(Config::Simulation::STATION_CAPACITY());
@@ -67,7 +67,7 @@ private:
         // Set simulation start time for logger
         Logger::setSimulationStartTime(startTime_);
 
-        Logger::debug(tag_, "Spawning processes...");
+        Logger::debug(Logger::Source::Other, tag_, "Spawning processes...");
         spawnLogger();
         spawnWorkers();
         spawnCashier();
@@ -77,7 +77,7 @@ private:
     void spawnLogger() {
         loggerPid_ = ProcessSpawner::spawnWithKeys("logger_process",
                                                    ipc_->shmKey(), ipc_->semKey(), ipc_->logMsgKey());
-        Logger::debug(tag_, "Logger spawned: %d", loggerPid_);
+        Logger::debug(Logger::Source::Other, tag_, "Logger spawned: %d", loggerPid_);
         while (!signals_.exit) {
             if (!ipc_->sem().wait(Semaphore::Index::LOGGER_READY, 1, true)) continue;
             break;
@@ -94,14 +94,14 @@ private:
         upperWorkerPid_ = ProcessSpawner::spawnWithKeys("upper_worker_process",
                                                         ipc_->shmKey(), ipc_->semKey(), ipc_->workerMsgKey(),
                                                         ipc_->entryGateMsgKey(), ipc_->logMsgKey());
-        Logger::debug(tag_, "Workers spawned: %d, %d", lowerWorkerPid_, upperWorkerPid_);
+        Logger::debug(Logger::Source::Other, tag_, "Workers spawned: %d, %d", lowerWorkerPid_, upperWorkerPid_);
     }
 
     void spawnCashier() {
         cashierPid_ = ProcessSpawner::spawnWithKeys("cashier_process",
                                                     ipc_->shmKey(), ipc_->semKey(), ipc_->cashierMsgKey(),
                                                     ipc_->logMsgKey());
-        Logger::debug(tag_, "Cashier spawned: %d", cashierPid_);
+        Logger::debug(Logger::Source::Other, tag_, "Cashier spawned: %d", cashierPid_);
     }
 
     void waitForReady() {
@@ -118,15 +118,15 @@ private:
             break;
         }
         if (!signals_.exit) {
-            Logger::info(tag_, "All processes ready");
+            Logger::info(Logger::Source::Other, tag_, "All processes ready");
         }
     }
 
     void mainLoop() {
-        Logger::debug(tag_, "Spawning tourists...");
+        Logger::debug(Logger::Source::Other, tag_, "Spawning tourists...");
         spawnTourists();
 
-        Logger::debug(tag_, "Running simulation...");
+        Logger::debug(Logger::Source::Other, tag_, "Running simulation...");
         bool closingTimeReached = false;
         time_t drainStartTime = 0;
 
@@ -141,7 +141,7 @@ private:
             // Check for closing time (Tk)
             if (!closingTimeReached && simHour >= Config::Simulation::CLOSING_HOUR()) {
                 closingTimeReached = true;
-                Logger::warn(tag_, ">>> CLOSING TIME REACHED (Tk=%u:00) - Gates stop accepting <<<",
+                Logger::warn(Logger::Source::Other, tag_, ">>> CLOSING TIME REACHED (Tk=%u:00) - Gates stop accepting <<<",
                              Config::Simulation::CLOSING_HOUR());
 
                 Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
@@ -151,7 +151,7 @@ private:
                 if (ipc_->state()->operational.state != RopewayState::EMERGENCY_STOP) {
                     ipc_->state()->operational.state = RopewayState::CLOSING;
                 } else {
-                    Logger::debug(tag_, "Closing time reached during emergency - deferring CLOSING state");
+                    Logger::debug(Logger::Source::Other, tag_, "Closing time reached during emergency - deferring CLOSING state");
                 }
             }
 
@@ -169,13 +169,13 @@ private:
                 if (touristsInStation == 0 && chairsInUse == 0) {
                     if (drainStartTime == 0) {
                         drainStartTime = now;
-                        Logger::info(tag_, "Station empty, waiting %u seconds before shutdown...",
+                        Logger::info(Logger::Source::Other, tag_, "Station empty, waiting %u seconds before shutdown...",
                                      Constants::Ropeway::SHUTDOWN_DELAY_SEC * Config::Time::ONE_SECOND_US() / Config::Time::ONE_SECOND_US());
                     }
 
                     // Wait 3 seconds after station is empty
                     if (now - drainStartTime >= Constants::Ropeway::SHUTDOWN_DELAY_SEC * Config::Time::ONE_SECOND_US() / Config::Time::ONE_SECOND_US()) {
-                        Logger::info(tag_, "Shutdown delay complete, stopping ropeway");
+                        Logger::info(Logger::Source::Other, tag_, "Shutdown delay complete, stopping ropeway");
                         {
                             Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
                             ipc_->state()->operational.state = RopewayState::STOPPED;
@@ -187,7 +187,7 @@ private:
                     drainStartTime = 0;
                     static time_t lastDrainLog = 0;
                     if (now - lastDrainLog >= 2) {
-                        Logger::info(tag_, "Draining: %u in station, %u chairs in use",
+                        Logger::info(Logger::Source::Other, tag_, "Draining: %u in station, %u chairs in use",
                                      touristsInStation, chairsInUse);
                         lastDrainLog = now;
                     }
@@ -200,7 +200,7 @@ private:
             {
                 Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
                 if (ipc_->state()->operational.state == RopewayState::STOPPED) {
-                    Logger::info(tag_, "Ropeway stopped");
+                    Logger::info(Logger::Source::Other, tag_, "Ropeway stopped");
                     break;
                 }
             }
@@ -248,11 +248,11 @@ private:
 
             usleep(Config::Time::ARRIVAL_DELAY_BASE_US() + (gen() % Config::Time::ARRIVAL_DELAY_RANDOM_US()));
         }
-        Logger::info(tag_, "Spawned %d tourists", static_cast<int>(touristPids_.size()));
+        Logger::info(Logger::Source::Other, tag_, "Spawned %d tourists", static_cast<int>(touristPids_.size()));
     }
 
     void shutdown() {
-        Logger::debug(tag_, "Shutting down...");
+        Logger::debug(Logger::Source::Other, tag_, "Shutting down...");
 
         // Generate end-of-day report before cleanup
         generateDailyReport();
@@ -285,7 +285,7 @@ private:
         // IpcManager cleans up automatically (isOwner_)
         ipc_.reset();
 
-        Logger::debug(tag_, "Done");
+        Logger::debug(Logger::Source::Other, tag_, "Done");
     }
 
     /** Helper: write formatted string to file descriptor using POSIX write() */
@@ -301,7 +301,7 @@ private:
     }
 
     void generateDailyReport() {
-        Logger::info(tag_, "Generating end-of-day report...");
+        Logger::info(Logger::Source::Other, tag_, "Generating end-of-day report...");
 
         // Place report next to the executable (in the build folder)
         const std::string reportPath = ProcessSpawner::getExecutablePath("daily_report.txt");
@@ -310,7 +310,7 @@ private:
         int fd = open(reportPath.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd == -1) {
             perror("open daily_report.txt");
-            Logger::error(tag_, "Failed to create report file");
+            Logger::error(Logger::Source::Other, tag_, "Failed to create report file");
             return;
         }
 
@@ -386,6 +386,6 @@ private:
         }
 
         close(fd);
-        Logger::info(tag_, "Report saved to %s", reportPath.c_str());
+        Logger::info(Logger::Source::Other, tag_, "Report saved to %s", reportPath.c_str());
     }
 };

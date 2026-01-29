@@ -43,7 +43,7 @@ public:
         IpcCleanup::g_instance = this;
         std::atexit(IpcCleanup::atexitHandler);
 
-        Logger::debug(tag_, "created");
+        Logger::debug(Logger::Source::Other, tag_, "created");
     }
 
     ~IpcManager() {
@@ -125,7 +125,7 @@ public:
         try { cashierQueue_.destroy(); } catch (...) {}
         try { entryGateQueue_.destroy(); } catch (...) {}
         try { logQueue_.destroy(); } catch (...) {}
-        Logger::debug(tag_, "cleanup done");
+        Logger::debug(Logger::Source::Other, tag_, "cleanup done");
     }
 
 private:

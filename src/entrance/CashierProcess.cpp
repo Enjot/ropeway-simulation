@@ -16,6 +16,7 @@
 namespace {
     SignalHelper::Flags g_signals;
     constexpr const char *TAG = "Cashier";
+    constexpr auto SRC = Logger::Source::Cashier;
 }
 
 class CashierProcess {
@@ -32,14 +33,14 @@ public:
             Logger::setSimulationStartTime(shm_->operational.openingTime);
         }
 
-        Logger::info(TAG, "Started (PID: %d)", getpid());
+        Logger::info(SRC, TAG, "Started (PID: %d)", getpid());
 
         // Signal readiness
         sem_.post(Semaphore::Index::CASHIER_READY, 1, false);
     }
 
     void run() {
-        Logger::info(TAG, "Ready to serve");
+        Logger::info(SRC, TAG, "Ready to serve");
 
         while (!g_signals.exit) {
             auto request = requestQueue_.receive(CashierMsgType::REQUEST);
@@ -53,12 +54,12 @@ public:
             sem_.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, 1, false);
         }
 
-        Logger::warn(TAG, "Shutting down");
+        Logger::warn(SRC, TAG, "Shutting down");
     }
 
 private:
     void processRequest(const TicketRequest &request) {
-        Logger::info(TAG, "Processing Tourist %u (age %u)", request.touristId, request.touristAge);
+        Logger::info(SRC, TAG, "Processing Tourist %u (age %u)", request.touristId, request.touristAge);
 
         TicketResponse response;
         response.touristId = request.touristId;
@@ -74,7 +75,7 @@ private:
             response.success = false;
             strcpy(response.message, "Ropeway closed");
             sendResponse(response, request.touristId);
-            Logger::info(TAG, "Rejected Tourist %u: closed", request.touristId);
+            Logger::info(SRC, TAG, "Rejected Tourist %u: closed", request.touristId);
             return;
         }
 
@@ -118,7 +119,7 @@ private:
         strcpy(response.message, "Ticket issued");
 
         sendResponse(response, request.touristId);
-        Logger::info(TAG, "Sold %s ticket #%u to Tourist %u",
+        Logger::info(SRC, TAG, "Sold %s ticket #%u to Tourist %u",
                      toString(response.ticketType), response.ticketId, request.touristId);
     }
 
@@ -154,7 +155,7 @@ int main(int argc, char *argv[]) {
 
         Logger::cleanupCentralized();
     } catch (const std::exception &e) {
-        Logger::error(TAG, "Exception: %s", e.what());
+        Logger::error(SRC, TAG, "Exception: %s", e.what());
         return 1;
     }
 

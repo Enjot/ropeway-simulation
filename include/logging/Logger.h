@@ -21,9 +21,27 @@ template<typename T> class SharedMemory;
 namespace Logger {
     enum class Level { DEBUG, INFO, WARN, ERROR };
 
+    enum class Source : uint8_t {
+        LowerWorker,
+        UpperWorker,
+        Cashier,
+        Tourist,
+        Other
+    };
+
     namespace detail {
-        constexpr const char *colors[] = {"\033[90m", "\033[36m", "\033[33m", "\033[31m"};
         constexpr const char *names[] = {"DEBUG", "INFO ", "WARN ", "ERROR"};
+
+        inline const char* getTagColor(Source source, Level level) {
+            if (level == Level::ERROR) return "\033[31m";
+            switch (source) {
+                case Source::LowerWorker: return "\033[36m";
+                case Source::UpperWorker: return "\033[35m";
+                case Source::Cashier:     return "\033[33m";
+                case Source::Tourist:     return "\033[32m";
+                default:                  return "\033[37m";
+            }
+        }
 
         // Centralized logging state
         inline bool centralizedMode = false;
@@ -70,21 +88,22 @@ namespace Logger {
 
         // Direct logging (used when not in centralized mode or by LoggerProcess)
         template<typename... Args>
-        void logDirect(Level level, const char *tag, const char *message, Args... args) {
+        void logDirect(Source source, Level level, const char *tag, const char *message, Args... args) {
             char buf[512];
             char timeBuf[8] = "";
             getSimulatedTime(timeBuf);
 
+            const char* color = getTagColor(source, level);
             int n;
             if (timeBuf[0] != '\0') {
                 n = snprintf(buf, sizeof(buf), "\033[90m%s\033[0m %s[%s] [%s]\033[0m ",
                              timeBuf,
-                             colors[static_cast<int>(level)],
+                             color,
                              names[static_cast<int>(level)],
                              tag);
             } else {
                 n = snprintf(buf, sizeof(buf), "%s[%s] [%s]\033[0m ",
-                             colors[static_cast<int>(level)],
+                             color,
                              names[static_cast<int>(level)],
                              tag);
             }
@@ -93,17 +112,17 @@ namespace Logger {
             write(STDOUT_FILENO, buf, n);
         }
 
-        void sendToQueue(Level level, const char* tag, const char* text);
+        void sendToQueue(Source source, Level level, const char* tag, const char* text);
 
         template<typename... Args>
-        void log(Level level, const char *tag, const char *message, Args... args) {
+        void log(Source source, Level level, const char *tag, const char *message, Args... args) {
             if (centralizedMode && logQueue != nullptr) {
                 // Format message
                 char text[256];
                 snprintf(text, sizeof(text), message, args...);
-                sendToQueue(level, tag, text);
+                sendToQueue(source, level, tag, text);
             } else {
-                logDirect(level, tag, message, args...);
+                logDirect(source, level, tag, message, args...);
             }
         }
     }
@@ -124,44 +143,44 @@ namespace Logger {
     }
 
     template<typename... Args>
-    void debug(const char *tag, const char *message, Args... args) {
+    void debug(Source source, const char *tag, const char *message, Args... args) {
         if constexpr (Flags::Logging::IS_DEBUG_ENABLED) {
-            detail::log(Level::DEBUG, tag, message, args...);
+            detail::log(source, Level::DEBUG, tag, message, args...);
         }
     }
 
     template<typename... Args>
-    void info(const char *tag, const char *message, Args... args) {
+    void info(Source source, const char *tag, const char *message, Args... args) {
         if constexpr (Flags::Logging::IS_INFO_ENABLED) {
-            detail::log(Level::INFO, tag, message, args...);
+            detail::log(source, Level::INFO, tag, message, args...);
         }
     }
 
     template<typename... Args>
-    void warn(const char *tag, const char *message, Args... args) {
+    void warn(Source source, const char *tag, const char *message, Args... args) {
         if constexpr (Flags::Logging::IS_WARN_ENABLED) {
-            detail::log(Level::WARN, tag, message, args...);
+            detail::log(source, Level::WARN, tag, message, args...);
         }
     }
 
     template<typename... Args>
-    void error(const char *tag, const char *message, Args... args) {
+    void error(Source source, const char *tag, const char *message, Args... args) {
         if constexpr (Flags::Logging::IS_ERROR_ENABLED) {
-            detail::log(Level::ERROR, tag, message, args...);
+            detail::log(source, Level::ERROR, tag, message, args...);
         }
     }
 
     inline void pError(const char *message) { perror(message); }
 
-    inline void perror(const char *tag, const char *message) {
+    inline void perror(Source source, const char *tag, const char *message) {
         if constexpr (Flags::Logging::IS_ERROR_ENABLED) {
-            detail::log(Level::ERROR, tag, "%s: %s", message, strerror(errno));
+            detail::log(source, Level::ERROR, tag, "%s: %s", message, strerror(errno));
         }
     }
 
-    inline void stateChange(const char *tag, const char *from, const char *to) {
+    inline void stateChange(Source source, const char *tag, const char *from, const char *to) {
         if constexpr (Flags::Logging::IS_INFO_ENABLED) {
-            detail::log(Level::INFO, tag, "%s -> %s", from, to);
+            detail::log(source, Level::INFO, tag, "%s -> %s", from, to);
         }
     }
 

@@ -19,8 +19,18 @@ namespace {
     SignalHelper::Flags g_signals;
     constexpr const char* TAG = "Logger";
 
-    constexpr const char* colors[] = {"\033[90m", "\033[36m", "\033[33m", "\033[31m"};
     constexpr const char* names[] = {"DEBUG", "INFO ", "WARN ", "ERROR"};
+
+    const char* getTagColor(uint8_t source, uint8_t level) {
+        if (level == LogLevel::ERROR) return "\033[31m";
+        switch (source) {
+            case 0: return "\033[36m";  // LowerWorker - Cyan
+            case 1: return "\033[35m";  // UpperWorker - Magenta
+            case 2: return "\033[33m";  // Cashier - Yellow
+            case 3: return "\033[32m";  // Tourist - Green
+            default: return "\033[37m"; // Other - White
+        }
+    }
 }
 
 class LoggerProcess {
@@ -63,18 +73,19 @@ private:
         char timeBuf[16] = "";
         formatSimulatedTime(msg.timestamp, timeBuf);
 
+        const char* color = getTagColor(msg.source, msg.level);
         char buf[512];
         int n;
         if (timeBuf[0] != '\0') {
             n = snprintf(buf, sizeof(buf), "\033[90m%s\033[0m %s[%s] [%s]\033[0m %s\n",
                          timeBuf,
-                         colors[msg.level],
+                         color,
                          names[msg.level],
                          msg.tag,
                          msg.text);
         } else {
             n = snprintf(buf, sizeof(buf), "%s[%s] [%s]\033[0m %s\n",
-                         colors[msg.level],
+                         color,
                          names[msg.level],
                          msg.tag,
                          msg.text);

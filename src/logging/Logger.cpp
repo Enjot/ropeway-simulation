@@ -8,15 +8,16 @@
 
 namespace Logger {
     namespace detail {
-        void sendToQueue(Level level, const char* tag, const char* text) {
+        void sendToQueue(Source source, Level level, const char* tag, const char* text) {
             if (!centralizedMode || logQueue == nullptr || sem == nullptr || shm == nullptr) {
                 // Fallback to direct logging
-                logDirect(level, tag, "%s", text);
+                logDirect(source, level, tag, "%s", text);
                 return;
             }
 
             LogMessage msg;
             msg.level = static_cast<uint8_t>(level);
+            msg.source = static_cast<uint8_t>(source);
             strncpy(msg.tag, tag, sizeof(msg.tag) - 1);
             msg.tag[sizeof(msg.tag) - 1] = '\0';
             strncpy(msg.text, text, sizeof(msg.text) - 1);
@@ -29,7 +30,7 @@ namespace Logger {
             // NOTE: useUndo=false to prevent SEM_UNDO accounting issues between senders/receiver
             if (!sem->tryAcquire(Semaphore::Index::LOG_QUEUE_SLOTS, 1, false)) {
                 // Queue full - fall back to direct logging
-                logDirect(level, tag, "%s", text);
+                logDirect(source, level, tag, "%s", text);
                 return;
             }
 
@@ -47,7 +48,7 @@ namespace Logger {
             if (!logQueue->trySend(msg, static_cast<long>(msg.sequenceNum))) {
                 // Queue full at kernel level - release slot and fall back
                 sem->post(Semaphore::Index::LOG_QUEUE_SLOTS, 1, false);
-                logDirect(level, tag, "%s", text);
+                logDirect(source, level, tag, "%s", text);
             }
         }
     }

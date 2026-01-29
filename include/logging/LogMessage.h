@@ -15,10 +15,11 @@ struct LogMessage {
 
     // Log content
     uint8_t level;              // Log level (DEBUG=0, INFO=1, WARN=2, ERROR=3)
+    uint8_t source;             // Source process type (matches Logger::Source enum)
     char tag[32];               // Source tag (e.g., "Tourist 5", "LowerWorker")
     char text[256];             // Log message text
 
-    LogMessage() : sequenceNum{0}, timestamp{}, level{1}, tag{}, text{} {}
+    LogMessage() : sequenceNum{0}, timestamp{}, level{1}, source{4}, tag{}, text{} {}
 };
 
 /**
