@@ -152,6 +152,7 @@ add_executable(main
 
 # Link pthread (required on Linux for std::thread)
 target_link_libraries(tourist_process Threads::Threads)
+target_link_libraries(main Threads::Threads)
 
 # Pass project source directory for .env file loading
 add_compile_definitions(ROPEWAY_PROJECT_DIR="${CMAKE_SOURCE_DIR}")

@@ -325,6 +325,16 @@ namespace Config {
             static uint32_t value = Runtime::getEnvOr("ROPEWAY_FORCE_EMERGENCY_AT_SEC", 0);
             return value;
         }
+
+        /**
+         * Percentage of tourists that want to ride (0-100).
+         * Default: 90% (10% of tourists don't want to ride).
+         * Set to 100 for stress testing to ensure all tourists complete full lifecycle.
+         */
+        inline float WANTS_TO_RIDE_PCT() {
+            static float value = Runtime::getEnvFloatOr("ROPEWAY_WANTS_TO_RIDE_PCT");
+            return value;
+        }
     }
 
     /**

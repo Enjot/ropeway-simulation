@@ -3,6 +3,8 @@
 #include <vector>
 #include <random>
 #include <memory>
+#include <thread>
+#include <atomic>
 #include <sys/wait.h>
 #include <csignal>
 #include <cstdarg>
@@ -27,7 +29,9 @@ public:
         Logger::separator('=');
 
         SignalHelper::setup(signals_, false);
-        SignalHelper::ignoreChildren();
+        // Start async zombie reaper thread instead of using SIGCHLD=SIG_IGN
+        // This handles zombie cleanup even when main process is busy spawning
+        startZombieReaper();
 
         try {
             setup();
@@ -36,6 +40,7 @@ public:
             Logger::error(Logger::Source::Other, tag_, "Exception: %s", e.what());
         }
 
+        stopZombieReaper();
         shutdown();
     }
 
@@ -52,6 +57,31 @@ private:
     std::vector<pid_t> touristPids_;
 
     time_t startTime_;
+
+    // Zombie reaper thread - continuously reaps child processes
+    std::thread reaperThread_;
+    std::atomic<bool> reaperRunning_{false};
+
+    void startZombieReaper() {
+        reaperRunning_ = true;
+        reaperThread_ = std::thread([this]() {
+            while (reaperRunning_) {
+                // Non-blocking reap of any finished children
+                while (waitpid(-1, nullptr, WNOHANG) > 0) {}
+                // Sleep briefly to avoid busy-waiting (10ms)
+                usleep(10000);
+            }
+            // Final cleanup on exit
+            while (waitpid(-1, nullptr, WNOHANG) > 0) {}
+        });
+    }
+
+    void stopZombieReaper() {
+        reaperRunning_ = false;
+        if (reaperThread_.joinable()) {
+            reaperThread_.join();
+        }
+    }
 
     void setup() {
         Logger::info(Logger::Source::Other, tag_, "Creating IPC...");
@@ -241,7 +271,9 @@ private:
 
         for (uint32_t id = 1; id <= Config::Simulation::NUM_TOURISTS(); ++id) {
             uint32_t age = ageDist(gen);
-            bool wantsToRide = (rideDist(gen) > 0.1);
+            // Use configurable wants-to-ride percentage (default 90%, set to 100 for stress testing)
+            float rideChance = Config::Test::WANTS_TO_RIDE_PCT() / 100.0f;
+            bool wantsToRide = (rideDist(gen) < rideChance);
 
             // Tourist process handles children/bike internally as threads
             // numChildren omitted - parser defaults to 0 (random generation)
@@ -264,7 +296,9 @@ private:
 
             if (pid > 0) touristPids_.push_back(pid);
 
+            if (Config::Time::ARRIVAL_DELAY_BASE_US() > 0 || Config::Time::ARRIVAL_DELAY_RANDOM_US() > 0) {
             usleep(Config::Time::ARRIVAL_DELAY_BASE_US() + (gen() % Config::Time::ARRIVAL_DELAY_RANDOM_US()));
+            }
         }
         Logger::info(Logger::Source::Other, tag_, "Spawned %d tourists", static_cast<int>(touristPids_.size()));
     }

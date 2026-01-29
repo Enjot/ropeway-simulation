@@ -569,9 +569,10 @@ private:
         Logger::info(SRC, TAG, "Chair %d departing: %u groups, %u/4 slots",
                      chairId, groupCount, totalSlots);
 
-        // Wake up ALL tourists in queue so they can check their assignment
-        // This avoids a race condition where non-assigned tourists could starve assigned ones
-        for (uint32_t i = 0; i < queue.count; ++i) {
+        // Wake up ONLY the newly assigned tourists
+        // Previous implementation woke ALL tourists in queue, causing a race condition:
+        // unassigned tourists would consume semaphore posts meant for assigned ones
+        for (uint32_t i = 0; i < groupCount; ++i) {
             sem_.post(Semaphore::Index::CHAIR_ASSIGNED, 1, false);
         }
 

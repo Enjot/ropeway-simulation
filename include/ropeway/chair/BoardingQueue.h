@@ -57,7 +57,7 @@ struct BoardingQueueEntry {
  * Fixed-size array suitable for shared memory.
  */
 struct BoardingQueue {
-    static constexpr uint32_t MAX_SIZE = 64;
+    static constexpr uint32_t MAX_SIZE = 512;  // Increased from 64 to handle stress testing
 
     BoardingQueueEntry entries[MAX_SIZE];
     uint32_t count;
