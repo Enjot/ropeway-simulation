@@ -33,6 +33,8 @@ struct SharedOperationalState {
 
     uint64_t logSequenceNum; // Global log sequence counter for ordering
 
+    time_t totalPausedSeconds; // Cumulative real seconds the simulation was suspended (Ctrl+Z)
+
     SharedOperationalState()
         : state{RopewayState::STOPPED},
           acceptingNewTourists{false},
@@ -46,6 +48,7 @@ struct SharedOperationalState {
           pedestriansOnWalkingExit{0},
           lowerWorkerPid{0},
           upperWorkerPid{0},
-          logSequenceNum{0} {
+          logSequenceNum{0},
+          totalPausedSeconds{0} {
     }
 };

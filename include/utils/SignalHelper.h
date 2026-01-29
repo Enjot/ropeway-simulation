@@ -26,6 +26,10 @@ namespace SignalHelper {
     namespace detail {
         inline Flags *g_flags = nullptr;
 
+        // Pause tracking (main process only, points into shared memory)
+        inline volatile time_t g_lastPauseStart = 0;
+        inline time_t *g_totalPausedSeconds = nullptr;
+
         inline void handler(const int32_t sig) {
             // IMPORTANT: This handler must be async-signal-safe.
             // Only use signal-safe functions: write(), _exit(), kill(), signal flag assignment.
@@ -47,6 +51,52 @@ namespace SignalHelper {
                 default:
                     break;
             }
+        }
+
+        /**
+         * SIGTSTP handler (Ctrl+Z). Installed only in the main process.
+         *
+         * Flow:
+         * 1. Record wall-clock time as pause start
+         * 2. Reset SIGTSTP to SIG_DFL, raise(SIGTSTP) -> kernel stops the process
+         * 3. On SIGCONT (fg), raise() returns here
+         * 4. Compute paused duration and write to shared memory
+         * 5. Re-install this handler for the next Ctrl+Z
+         *
+         * All functions used are async-signal-safe (POSIX):
+         * time(), sigaction(), raise(), sigemptyset(), sigaddset(), sigprocmask()
+         */
+        inline void sigtstpHandler(int) {
+            g_lastPauseStart = time(nullptr);
+
+            // Reset to default so raise() actually stops the process
+            struct sigaction sa{};
+            sa.sa_handler = SIG_DFL;
+            sigemptyset(&sa.sa_mask);
+            sigaction(SIGTSTP, &sa, nullptr);
+
+            // SIGTSTP is blocked during its own handler — unblock it
+            // so that raise() actually stops the process immediately
+            sigset_t tstp_mask;
+            sigemptyset(&tstp_mask);
+            sigaddset(&tstp_mask, SIGTSTP);
+            sigprocmask(SIG_UNBLOCK, &tstp_mask, nullptr);
+
+            raise(SIGTSTP);
+            // === Process is stopped here by the kernel ===
+            // === SIGCONT resumes execution here ===
+
+            if (g_lastPauseStart > 0 && g_totalPausedSeconds != nullptr) {
+                time_t pauseDuration = time(nullptr) - g_lastPauseStart;
+                if (pauseDuration > 0) {
+                    *g_totalPausedSeconds += pauseDuration;
+                }
+            }
+            g_lastPauseStart = 0;
+
+            // Re-install this handler for next Ctrl+Z
+            sa.sa_handler = sigtstpHandler;
+            sigaction(SIGTSTP, &sa, nullptr);
         }
     }
 
@@ -77,6 +127,19 @@ namespace SignalHelper {
     inline void setup(Flags &flags, Mode mode) {
         bool handleUserSignals = (mode == Mode::WORKER || mode == Mode::TOURIST);
         setup(flags, handleUserSignals);
+    }
+
+    /**
+     * Install SIGTSTP handler for pause tracking (main process only).
+     * @param totalPausedSeconds Pointer to totalPausedSeconds field in shared memory.
+     */
+    inline void setupPauseHandler(time_t *totalPausedSeconds) {
+        detail::g_totalPausedSeconds = totalPausedSeconds;
+
+        struct sigaction sa{};
+        sa.sa_handler = detail::sigtstpHandler;
+        sigemptyset(&sa.sa_mask);
+        sigaction(SIGTSTP, &sa, nullptr);
     }
 
     inline void ignoreChildren() {

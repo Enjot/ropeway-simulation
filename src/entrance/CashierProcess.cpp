@@ -95,7 +95,7 @@ private:
         response.isVip = request.requestVip;
         response.price = basePrice * (1.0 - discount);
         response.discount = discount;
-        response.validFrom = time(nullptr);
+        response.validFrom = time(nullptr) - shm_->operational.totalPausedSeconds;
 
         // Set validity based on ticket type
         switch (request.requestedType) {

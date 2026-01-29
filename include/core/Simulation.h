@@ -61,6 +61,9 @@ private:
         const time_t endTime = startTime_ + Config::Simulation::DURATION_US() / Config::Time::ONE_SECOND_US();
         ipc_->initState(startTime_, endTime);
 
+        // Install SIGTSTP handler so Ctrl+Z pauses simulated time
+        SignalHelper::setupPauseHandler(&ipc_->state()->operational.totalPausedSeconds);
+
         // Set simulation start time for logger
         Logger::setSimulationStartTime(startTime_);
 
@@ -128,12 +131,11 @@ private:
         time_t drainStartTime = 0;
 
         while (!signals_.exit) {
-            time_t now = time(nullptr);
-            time_t elapsed = now - startTime_;
+            const time_t paused = ipc_->state()->operational.totalPausedSeconds;
+            const time_t now = TimeHelper::adjustedNow(paused);
 
-            // Calculate simulated time
-            uint32_t simSeconds = Config::Simulation::OPENING_HOUR() * 3600 +
-                                  static_cast<uint32_t>(elapsed) * Config::Simulation::TIME_SCALE();
+            // Calculate simulated time (pause-aware)
+            uint32_t simSeconds = TimeHelper::getSimulatedSeconds(startTime_, paused);
             uint32_t simHour = simSeconds / 3600;
 
             // Check for closing time (Tk)

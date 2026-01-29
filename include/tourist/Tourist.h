@@ -85,12 +85,13 @@ Tourist {
     }
 
     /**
-     * Check if ticket is still valid (for time-based tickets)
+     * Check if ticket is still valid (for time-based tickets).
+     * @param totalPausedSeconds Cumulative seconds the simulation was suspended (Ctrl+Z)
      */
-    [[nodiscard]] bool isTicketValid() const noexcept {
+    [[nodiscard]] bool isTicketValid(time_t totalPausedSeconds = 0) const noexcept {
         if (!hasTicket) return false;
         if (ticketType == TicketType::SINGLE_USE && ridesCompleted > 0) return false;
-        return time(nullptr) < ticketValidUntil;
+        return (time(nullptr) - totalPausedSeconds) < ticketValidUntil;
     }
 
     /**

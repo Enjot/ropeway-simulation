@@ -399,7 +399,7 @@ private:
             Logger::info(tag_, "Entry denied");
             {
                 Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
-                uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
+                uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_, shm_->operational.totalPausedSeconds);
                 shm_->logGatePassage(tourist_.id, tourist_.ticketId,
                                      GateType::ENTRY, 0, false, simTime);
             }
@@ -409,7 +409,7 @@ private:
 
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
-            uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
+            uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_, shm_->operational.totalPausedSeconds);
             uint32_t gateNum = tourist_.id % Constants::Gate::NUM_ENTRY_GATES;
             shm_->logGatePassage(tourist_.id, tourist_.ticketId,
                                  GateType::ENTRY, gateNum, true, simTime);
@@ -467,7 +467,7 @@ private:
                         shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
                         shm_->operational.touristsInLowerStation--;
 
-                        uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_);
+                        uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_, shm_->operational.totalPausedSeconds);
                         uint32_t gateNum = assignedChairId_ % Constants::Gate::NUM_RIDE_GATES;
                         shm_->logGatePassage(tourist_.id, tourist_.ticketId,
                                              GateType::RIDE, gateNum, true, simTime);
@@ -630,10 +630,11 @@ private:
 
         Logger::info(tag_, "Trail complete (rides: %u)", tourist_.ridesCompleted);
 
-        if (tourist_.canRideAgain() && tourist_.isTicketValid()) {
+        const time_t paused = shm_->operational.totalPausedSeconds;
+        if (tourist_.canRideAgain() && tourist_.isTicketValid(paused)) {
             Logger::info(tag_, "Ticket still valid, going for another ride!");
             changeState(TouristState::WAITING_ENTRY);
-        } else if (tourist_.canRideAgain() && !tourist_.isTicketValid()) {
+        } else if (tourist_.canRideAgain() && !tourist_.isTicketValid(paused)) {
             Logger::info(tag_, "Time ticket expired (completed %u rides)", tourist_.ridesCompleted);
             changeState(TouristState::FINISHED);
         } else {

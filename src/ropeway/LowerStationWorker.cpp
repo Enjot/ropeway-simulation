@@ -212,7 +212,7 @@ private:
      * Replaces centralized emergency timing from main process.
      */
     void checkForDanger() {
-        time_t now = time(nullptr);
+        time_t now = time(nullptr) - shm_->operational.totalPausedSeconds;
 
         // Only check periodically, not every iteration
         if (now - lastDangerCheckTime_ < DANGER_CHECK_INTERVAL_SEC) {
@@ -236,7 +236,7 @@ private:
 
     void logStatus() {
         static time_t lastLog = 0;
-        time_t now = time(nullptr);
+        time_t now = time(nullptr) - shm_->operational.totalPausedSeconds;
         if (now - lastLog >= 3) {
             uint32_t queueCount, chairsInUse;
             RopewayState state;

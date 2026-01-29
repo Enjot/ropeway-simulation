@@ -139,7 +139,7 @@ private:
 
     void logStatus() {
         static time_t lastLog = 0;
-        time_t now = time(nullptr);
+        time_t now = time(nullptr) - shm_->operational.totalPausedSeconds;
         if (now - lastLog >= 5) {
             uint32_t totalRides;
             uint32_t touristsAtUpper;

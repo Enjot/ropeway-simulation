@@ -22,6 +22,8 @@ namespace Logger {
             strncpy(msg.text, text, sizeof(msg.text) - 1);
             msg.text[sizeof(msg.text) - 1] = '\0';
             gettimeofday(&msg.timestamp, nullptr);
+            // Adjust timestamp to exclude time spent suspended (Ctrl+Z)
+            msg.timestamp.tv_sec -= shm->get()->operational.totalPausedSeconds;
 
             // Try to acquire queue slot (non-blocking to avoid deadlock)
             // NOTE: useUndo=false to prevent SEM_UNDO accounting issues between senders/receiver
