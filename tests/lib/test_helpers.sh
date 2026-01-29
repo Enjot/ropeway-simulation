@@ -370,6 +370,13 @@ get_report_stat() {
 export -f find_directories
 export -f cleanup_ipc
 export -f cleanup_processes
+export -f setup_cleanup_trap
+
+# Setup trap for SIGINT/SIGTERM to clean up on interrupt
+# Usage: call setup_cleanup_trap at the start of test scripts
+setup_cleanup_trap() {
+    trap 'echo ""; echo "Interrupted - cleaning up..."; cleanup_processes; cleanup_ipc; exit 130' INT TERM
+}
 export -f setup_test
 export -f run_simulation
 export -f check_no_zombies

@@ -8,6 +8,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/test_helpers.sh"
 
+# Setup cleanup trap for SIGINT/SIGTERM
+setup_cleanup_trap
+
 # Initialize directories
 find_directories "$1" || exit 1
 

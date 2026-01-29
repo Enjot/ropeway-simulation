@@ -10,6 +10,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source helper functions
 source "$SCRIPT_DIR/lib/test_helpers.sh"
 
+# Setup cleanup trap for SIGINT/SIGTERM
+setup_cleanup_trap
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -56,6 +59,17 @@ done
 # Initialize directories
 if ! find_directories "$BUILD_DIR"; then
     exit 1
+fi
+
+# Clean up old report files
+if [[ -n "$SINGLE_TEST" ]]; then
+    # Clean only the specific test's files
+    rm -f "$PROJECT_DIR/tests/reports/test${SINGLE_TEST}_"*.txt
+    rm -f "$PROJECT_DIR/tests/reports/test${SINGLE_TEST}_"*.log
+else
+    # Clean all test reports
+    rm -f "$PROJECT_DIR/tests/reports/"*.txt
+    rm -f "$PROJECT_DIR/tests/reports/"*.log
 fi
 
 echo -e "${BLUE}========================================"
