@@ -29,7 +29,7 @@ public:
 
     // Autonomous emergency detection parameters
     static constexpr uint32_t DANGER_CHECK_INTERVAL_SEC = 5; // Check for danger every N seconds
-    static constexpr double DANGER_DETECTION_CHANCE = 0.05; // 5% chance per check to detect "danger"
+    static constexpr double DANGER_DETECTION_CHANCE = 0.10; // 10% chance per check to detect "danger"
 
     LowerWorkerProcess(const ArgumentParser::WorkerArgs &args)
         : shm_{SharedMemory<SharedRopewayState>::attach(args.shmKey)},
@@ -147,7 +147,7 @@ private:
             kill(upperWorkerPid, SIGUSR1);
         }
 
-        Logger::info(SRC, TAG, "Emergency stop activated, waiting for resume (SIGUSR2)");
+        Logger::info(SRC, TAG, "Emergency stop activated");
     }
 
     void initiateResume() {
@@ -232,6 +232,24 @@ private:
                 Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
                 shm_->stats.dailyStats.emergencyStops++;
             }
+
+            // Simulate time to assess and resolve the danger (3-6 seconds)
+            int resolveTime = 3 + (rand() % 4);
+            Logger::info(SRC, TAG, "Assessing danger... (estimated %d seconds)", resolveTime);
+
+            // Wait using simulation time (respects pause)
+            time_t startSimTime = time(nullptr) - shm_->operational.totalPausedSeconds;
+            while (!g_signals.exit) {
+                time_t currentSimTime = time(nullptr) - shm_->operational.totalPausedSeconds;
+                if (currentSimTime - startSimTime >= resolveTime) {
+                    break;
+                }
+                sleep(1);
+            }
+
+            // Per requirements: worker who stopped the ropeway initiates resume
+            // communication with the other worker
+            initiateResume();
         }
     }
 
