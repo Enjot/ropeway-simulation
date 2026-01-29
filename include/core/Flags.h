@@ -10,7 +10,6 @@
  * - With if constexpr for conditional compilation (logging)
  */
 namespace Flags {
-
     namespace Simulation {
         constexpr uint32_t MAX_TOURIST_RECORDS{1500}; // Shared memory array size
     }
@@ -21,5 +20,4 @@ namespace Flags {
         constexpr bool IS_WARN_ENABLED{true};
         constexpr bool IS_ERROR_ENABLED{true};
     }
-
 }

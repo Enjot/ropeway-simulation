@@ -38,12 +38,12 @@ struct BoardingQueueEntry {
     uint32_t slots;
 
     // Group info (for logging/reporting)
-    uint32_t childCount;    // Number of children with this tourist
-    bool hasBike;           // Has a bike (cyclist)
+    uint32_t childCount; // Number of children with this tourist
+    bool hasBike; // Has a bike (cyclist)
 
     // Chair assignment (set by LowerWorker)
     int32_t assignedChairId; // Assigned chair ID (-1 if waiting)
-    bool readyToBoard;       // True when ready to board
+    bool readyToBoard; // True when ready to board
 
     BoardingQueueEntry()
         : touristId{0}, touristPid{0}, age{0}, type{TouristType::PEDESTRIAN},

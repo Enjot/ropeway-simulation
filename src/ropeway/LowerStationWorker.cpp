@@ -287,7 +287,7 @@ private:
      * The tourist is waiting on receive, so this unblocks as soon as the
      * system-wide queue limit has room.
      */
-    void sendEntryResponse(const EntryGateResponse& response, long responseType) {
+    void sendEntryResponse(const EntryGateResponse &response, long responseType) {
         entryResponseQueue_.send(response, responseType);
     }
 
@@ -320,8 +320,8 @@ private:
             }
 
             uint8_t queueSlotSem = request.isVip
-                ? Semaphore::Index::ENTRY_QUEUE_VIP_SLOTS
-                : Semaphore::Index::ENTRY_QUEUE_REGULAR_SLOTS;
+                                       ? Semaphore::Index::ENTRY_QUEUE_VIP_SLOTS
+                                       : Semaphore::Index::ENTRY_QUEUE_REGULAR_SLOTS;
 
             // Check if ropeway is accepting
             bool accepting;
@@ -379,7 +379,7 @@ private:
     /**
      * Dispatch current chair and notify waiting tourists.
      */
-    void dispatchChair(int32_t chairId, uint32_t* groupIndices, uint32_t groupCount,
+    void dispatchChair(int32_t chairId, uint32_t *groupIndices, uint32_t groupCount,
                        BoardingQueue &queue, uint32_t totalSlots) {
         if (groupCount == 0) return;
 

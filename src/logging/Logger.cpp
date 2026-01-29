@@ -8,7 +8,7 @@
 
 namespace Logger {
     namespace detail {
-        void sendToQueue(Source source, Level level, const char* tag, const char* text) {
+        void sendToQueue(Source source, Level level, const char *tag, const char *text) {
             if (!centralizedMode || logQueue == nullptr || sem == nullptr || shm == nullptr) {
                 // Fallback to direct logging
                 logDirect(source, level, tag, "%s", text);

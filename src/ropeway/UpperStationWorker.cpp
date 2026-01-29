@@ -51,7 +51,8 @@ public:
         srand(static_cast<unsigned>(time(nullptr)) ^ static_cast<unsigned>(getpid()));
 
         // Set up periodic alarm for status logging (every 5 seconds)
-        signal(SIGALRM, [](int) {});
+        signal(SIGALRM, [](int) {
+        });
         alarm(5);
 
         while (!g_signals.exit) {
@@ -282,7 +283,7 @@ private:
                 Logger::warn(SRC, TAG, "EMERGENCY STOP - Rides: %u, At upper: %u", totalRides, touristsAtUpper);
             } else {
                 Logger::info(SRC, TAG, "Rides: %u | Upper: %u (bikes: %u, walking: %u)",
-                            totalRides, touristsAtUpper, cyclistsExiting, pedestriansExiting);
+                             totalRides, touristsAtUpper, cyclistsExiting, pedestriansExiting);
             }
             lastLog = now;
         }

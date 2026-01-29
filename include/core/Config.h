@@ -22,7 +22,6 @@
  * For compile-time flags, see Flags.hpp.
  */
 namespace Config {
-
     inline void loadEnvFile() {
         std::string path = std::string(ROPEWAY_PROJECT_DIR) + "/ropeway.env";
         std::ifstream file(path);
@@ -50,28 +49,28 @@ namespace Config {
             std::string key = line.substr(0, eqPos);
             std::string value = line.substr(eqPos + 1);
 
-            setenv(key.c_str(), value.c_str(), 0);  // 0 = don't overwrite existing
+            setenv(key.c_str(), value.c_str(), 0); // 0 = don't overwrite existing
         }
     }
 
     namespace Runtime {
-        inline uint32_t getEnv(const char* envName) {
-            const char* env = std::getenv(envName);
+        inline uint32_t getEnv(const char *envName) {
+            const char *env = std::getenv(envName);
             if (!env) {
                 throw std::runtime_error(std::string("Missing env: ") + envName);
             }
             return static_cast<uint32_t>(std::stoul(env));
         }
 
-        inline float getEnvFloat(const char* envName) {
-            const char* env = std::getenv(envName);
+        inline float getEnvFloat(const char *envName) {
+            const char *env = std::getenv(envName);
             if (!env) {
                 throw std::runtime_error(std::string("Missing env: ") + envName);
             }
             return std::stof(env);
         }
 
-        inline bool getEnvBool(const char* envName) {
+        inline bool getEnvBool(const char *envName) {
             return getEnv(envName) != 0;
         }
     }
@@ -84,10 +83,12 @@ namespace Config {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_MAIN_LOOP_POLL_US");
             return v;
         }
+
         inline uint32_t ARRIVAL_DELAY_BASE_US() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_ARRIVAL_DELAY_BASE_US");
             return v;
         }
+
         inline uint32_t ARRIVAL_DELAY_RANDOM_US() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_ARRIVAL_DELAY_RANDOM_US");
             return v;
@@ -99,22 +100,27 @@ namespace Config {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_NUM_TOURISTS");
             return v;
         }
+
         inline uint32_t STATION_CAPACITY() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_STATION_CAPACITY");
             return v;
         }
+
         inline uint32_t DURATION_US() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_DURATION_US");
             return v;
         }
+
         inline uint32_t OPENING_HOUR() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_OPENING_HOUR");
             return v;
         }
+
         inline uint32_t CLOSING_HOUR() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_CLOSING_HOUR");
             return v;
         }
+
         inline uint32_t TIME_SCALE() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_TIME_SCALE");
             return v;
@@ -140,10 +146,12 @@ namespace Config {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_TRAIL_EASY_US");
             return v;
         }
+
         inline uint32_t DURATION_MEDIUM_US() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_TRAIL_MEDIUM_US");
             return v;
         }
+
         inline uint32_t DURATION_HARD_US() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_TRAIL_HARD_US");
             return v;
@@ -155,14 +163,17 @@ namespace Config {
             static const float v = Runtime::getEnvFloat("ROPEWAY_TICKET_SINGLE_USE_PCT") / 100.0f;
             return v;
         }
+
         inline float TK1_CHANCE() {
             static const float v = Runtime::getEnvFloat("ROPEWAY_TICKET_TK1_PCT") / 100.0f;
             return v;
         }
+
         inline float TK2_CHANCE() {
             static const float v = Runtime::getEnvFloat("ROPEWAY_TICKET_TK2_PCT") / 100.0f;
             return v;
         }
+
         inline float TK3_CHANCE() {
             static const float v = Runtime::getEnvFloat("ROPEWAY_TICKET_TK3_PCT") / 100.0f;
             return v;
@@ -172,14 +183,17 @@ namespace Config {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_TK1_DURATION_SEC");
             return v;
         }
+
         inline uint32_t TK2_DURATION_SEC() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_TK2_DURATION_SEC");
             return v;
         }
+
         inline uint32_t TK3_DURATION_SEC() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_TK3_DURATION_SEC");
             return v;
         }
+
         inline uint32_t DAILY_DURATION_SEC() {
             static const uint32_t v = Runtime::getEnv("ROPEWAY_DAILY_DURATION_SEC");
             return v;

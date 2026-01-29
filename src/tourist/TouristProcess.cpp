@@ -37,7 +37,8 @@ public:
 
     void start() {
         thread_ = std::thread([this]() {
-            Logger::info(Logger::Source::Tourist, "Child", "[Thread %u] age=%u, with parent %u", childId_, age_, parentId_);
+            Logger::info(Logger::Source::Tourist, "Child", "[Thread %u] age=%u, with parent %u", childId_, age_,
+                         parentId_);
             {
                 std::unique_lock lock(mtx_);
                 cv_.wait(lock, [this]() { return !running_; });
@@ -142,7 +143,7 @@ public:
         tag_ = tagBuf_;
 
         // Log tourist info
-        const char* typeStr = tourist_.type == TouristType::CYCLIST ? "cyclist" : "pedestrian";
+        const char *typeStr = tourist_.type == TouristType::CYCLIST ? "cyclist" : "pedestrian";
         if (tourist_.childCount > 0 && tourist_.hasBike) {
             Logger::info(Logger::Source::Tourist, tag_, "age=%u, %s with bike, %u children (slots=%u)",
                          tourist_.age, typeStr, tourist_.childCount, tourist_.slots);
@@ -160,7 +161,7 @@ public:
 
     ~TouristProcess() {
         // Stop all child threads
-        for (auto& child : childThreads_) {
+        for (auto &child: childThreads_) {
             child->stop();
         }
         // Stop bike thread
@@ -171,7 +172,7 @@ public:
 
     void run() {
         // Start child threads (they just exist alongside parent)
-        for (auto& child : childThreads_) {
+        for (auto &child: childThreads_) {
             child->start();
         }
         // Start bike thread
@@ -369,8 +370,8 @@ private:
 
         long requestType = tourist_.isVip ? EntryGateMsgType::VIP_REQUEST : EntryGateMsgType::REGULAR_REQUEST;
         uint8_t queueSlotSem = tourist_.isVip
-            ? Semaphore::Index::ENTRY_QUEUE_VIP_SLOTS
-            : Semaphore::Index::ENTRY_QUEUE_REGULAR_SLOTS;
+                                   ? Semaphore::Index::ENTRY_QUEUE_VIP_SLOTS
+                                   : Semaphore::Index::ENTRY_QUEUE_REGULAR_SLOTS;
 
         Logger::info(Logger::Source::Tourist, tag_, "Requesting entry (group of %u)%s...",
                      tourist_.slots, tourist_.isVip ? " [VIP]" : "");
@@ -399,7 +400,8 @@ private:
             Logger::info(Logger::Source::Tourist, tag_, "Entry denied");
             {
                 Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
-                uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_, shm_->operational.totalPausedSeconds);
+                uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_,
+                                                                   shm_->operational.totalPausedSeconds);
                 shm_->logGatePassage(tourist_.id, tourist_.ticketId,
                                      GateType::ENTRY, 0, false, simTime);
             }
@@ -409,7 +411,8 @@ private:
 
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
-            uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_, shm_->operational.totalPausedSeconds);
+            uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_,
+                                                               shm_->operational.totalPausedSeconds);
             uint32_t gateNum = tourist_.id % Constants::Gate::NUM_ENTRY_GATES;
             shm_->logGatePassage(tourist_.id, tourist_.ticketId,
                                  GateType::ENTRY, gateNum, true, simTime);
@@ -467,7 +470,8 @@ private:
                         shm_->chairPool.boardingQueue.removeTourist(static_cast<uint32_t>(idx));
                         shm_->operational.touristsInLowerStation--;
 
-                        uint32_t simTime = TimeHelper::getSimulatedSeconds(simulationStartTime_, shm_->operational.totalPausedSeconds);
+                        uint32_t simTime = TimeHelper::getSimulatedSeconds(
+                            simulationStartTime_, shm_->operational.totalPausedSeconds);
                         uint32_t gateNum = assignedChairId_ % Constants::Gate::NUM_RIDE_GATES;
                         shm_->logGatePassage(tourist_.id, tourist_.ticketId,
                                              GateType::RIDE, gateNum, true, simTime);
@@ -482,7 +486,8 @@ private:
             }
 
             if (assigned) {
-                Logger::info(Logger::Source::Tourist, tag_, "Assigned to chair %d (group of %u)", assignedChairId_, tourist_.slots);
+                Logger::info(Logger::Source::Tourist, tag_, "Assigned to chair %d (group of %u)", assignedChairId_,
+                             tourist_.slots);
                 changeState(TouristState::ON_CHAIR);
                 return;
             }
@@ -510,7 +515,8 @@ private:
     }
 
     void rideChair() {
-        Logger::info(Logger::Source::Tourist, tag_, "Riding chair %d (group of %u)...", assignedChairId_, tourist_.slots);
+        Logger::info(Logger::Source::Tourist, tag_, "Riding chair %d (group of %u)...", assignedChairId_,
+                     tourist_.slots);
 
         usleep(Config::Chair::RIDE_DURATION_US());
 
@@ -635,7 +641,8 @@ private:
             Logger::info(Logger::Source::Tourist, tag_, "Ticket still valid, going for another ride!");
             changeState(TouristState::WAITING_ENTRY);
         } else if (tourist_.canRideAgain() && !tourist_.isTicketValid(paused)) {
-            Logger::info(Logger::Source::Tourist, tag_, "Time ticket expired (completed %u rides)", tourist_.ridesCompleted);
+            Logger::info(Logger::Source::Tourist, tag_, "Time ticket expired (completed %u rides)",
+                         tourist_.ridesCompleted);
             changeState(TouristState::FINISHED);
         } else {
             Logger::info(Logger::Source::Tourist, tag_, "Single-use ticket completed");
@@ -656,7 +663,7 @@ private:
     const char *tag_;
 
     // Group threads (children and bike)
-    std::vector<std::unique_ptr<ChildThread>> childThreads_;
+    std::vector<std::unique_ptr<ChildThread> > childThreads_;
     std::unique_ptr<BikeThread> bikeThread_;
 };
 

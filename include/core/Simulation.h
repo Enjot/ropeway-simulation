@@ -141,7 +141,8 @@ private:
             // Check for closing time (Tk)
             if (!closingTimeReached && simHour >= Config::Simulation::CLOSING_HOUR()) {
                 closingTimeReached = true;
-                Logger::warn(Logger::Source::Other, tag_, ">>> CLOSING TIME REACHED (Tk=%u:00) - Gates stop accepting <<<",
+                Logger::warn(Logger::Source::Other, tag_,
+                             ">>> CLOSING TIME REACHED (Tk=%u:00) - Gates stop accepting <<<",
                              Config::Simulation::CLOSING_HOUR());
 
                 Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
@@ -151,7 +152,8 @@ private:
                 if (ipc_->state()->operational.state != RopewayState::EMERGENCY_STOP) {
                     ipc_->state()->operational.state = RopewayState::CLOSING;
                 } else {
-                    Logger::debug(Logger::Source::Other, tag_, "Closing time reached during emergency - deferring CLOSING state");
+                    Logger::debug(Logger::Source::Other, tag_,
+                                  "Closing time reached during emergency - deferring CLOSING state");
                 }
             }
 
@@ -169,12 +171,15 @@ private:
                 if (touristsInStation == 0 && chairsInUse == 0) {
                     if (drainStartTime == 0) {
                         drainStartTime = now;
-                        Logger::info(Logger::Source::Other, tag_, "Station empty, waiting %u seconds before shutdown...",
-                                     Constants::Ropeway::SHUTDOWN_DELAY_SEC * Config::Time::ONE_SECOND_US() / Config::Time::ONE_SECOND_US());
+                        Logger::info(Logger::Source::Other, tag_,
+                                     "Station empty, waiting %u seconds before shutdown...",
+                                     Constants::Ropeway::SHUTDOWN_DELAY_SEC * Config::Time::ONE_SECOND_US() /
+                                     Config::Time::ONE_SECOND_US());
                     }
 
                     // Wait 3 seconds after station is empty
-                    if (now - drainStartTime >= Constants::Ropeway::SHUTDOWN_DELAY_SEC * Config::Time::ONE_SECOND_US() / Config::Time::ONE_SECOND_US()) {
+                    if (now - drainStartTime >= Constants::Ropeway::SHUTDOWN_DELAY_SEC * Config::Time::ONE_SECOND_US() /
+                        Config::Time::ONE_SECOND_US()) {
                         Logger::info(Logger::Source::Other, tag_, "Shutdown delay complete, stopping ropeway");
                         {
                             Semaphore::ScopedLock lock(ipc_->sem(), Semaphore::Index::SHM_OPERATIONAL);
@@ -230,19 +235,19 @@ private:
 
             // Tourist process handles children/bike internally as threads
             pid_t pid = ProcessSpawner::spawn("tourist_process", {
-                std::to_string(id),
-                std::to_string(age),
-                std::to_string(typeDist(gen)),
-                std::to_string(vipDist(gen) < Constants::Vip::VIP_CHANCE ? 1 : 0),
-                std::to_string(wantsToRide ? 1 : 0),
-                std::to_string(trailDist(gen)),
-                std::to_string(ipc_->shmKey()),
-                std::to_string(ipc_->semKey()),
-                std::to_string(ipc_->workerMsgKey()),
-                std::to_string(ipc_->cashierMsgKey()),
-                std::to_string(ipc_->entryGateMsgKey()),
-                std::to_string(ipc_->logMsgKey())
-            });
+                                                  std::to_string(id),
+                                                  std::to_string(age),
+                                                  std::to_string(typeDist(gen)),
+                                                  std::to_string(vipDist(gen) < Constants::Vip::VIP_CHANCE ? 1 : 0),
+                                                  std::to_string(wantsToRide ? 1 : 0),
+                                                  std::to_string(trailDist(gen)),
+                                                  std::to_string(ipc_->shmKey()),
+                                                  std::to_string(ipc_->semKey()),
+                                                  std::to_string(ipc_->workerMsgKey()),
+                                                  std::to_string(ipc_->cashierMsgKey()),
+                                                  std::to_string(ipc_->entryGateMsgKey()),
+                                                  std::to_string(ipc_->logMsgKey())
+                                              });
 
             if (pid > 0) touristPids_.push_back(pid);
 
@@ -274,7 +279,7 @@ private:
         ProcessSpawner::waitFor(cashierPid_);
         ProcessSpawner::waitFor(lowerWorkerPid_);
         ProcessSpawner::waitFor(upperWorkerPid_);
-        for (const pid_t pid : touristPids_) {
+        for (const pid_t pid: touristPids_) {
             ProcessSpawner::waitFor(pid);
         }
 
@@ -289,7 +294,7 @@ private:
     }
 
     /** Helper: write formatted string to file descriptor using POSIX write() */
-    static void writeToFd(int fd, const char* format, ...) {
+    static void writeToFd(int fd, const char *format, ...) {
         char buf[256];
         va_list args;
         va_start(args, format);
@@ -323,7 +328,7 @@ private:
         writeToFd(fd, "ROPEWAY DAILY REPORT\n");
         writeToFd(fd, "====================\n");
         writeToFd(fd, "Operating hours: %02u:00 - %02u:00\n\n",
-                Config::Simulation::OPENING_HOUR(), Config::Simulation::CLOSING_HOUR());
+                  Config::Simulation::OPENING_HOUR(), Config::Simulation::CLOSING_HOUR());
 
         writeToFd(fd, "FINANCIAL\n");
         writeToFd(fd, "  Revenue:        %.2f PLN\n", stats.totalRevenueWithDiscounts);
@@ -351,25 +356,25 @@ private:
         // Per-tourist/ticket ride counts (required by specification)
         writeToFd(fd, "\nRIDES PER TOURIST/TICKET\n");
         writeToFd(fd, "%-10s %-10s %-5s %-10s %-6s %-8s %-8s\n",
-                "Tourist", "Ticket", "Age", "Type", "VIP", "Rides", "Guardian");
+                  "Tourist", "Ticket", "Age", "Type", "VIP", "Rides", "Guardian");
         writeToFd(fd, "--------------------------------------------------------------\n");
 
         for (uint32_t i = 0; i < state.stats.touristRecordCount; ++i) {
             const auto &record = state.stats.touristRecords[i];
             writeToFd(fd, "%-10u %-10u %-5u %-10s %-6s %-8u %-8d\n",
-                    record.touristId,
-                    record.ticketId,
-                    record.age,
-                    record.type == TouristType::CYCLIST ? "Cyclist" : "Pedestrian",
-                    record.isVip ? "Yes" : "No",
-                    record.ridesCompleted,
-                    record.guardianId);
+                      record.touristId,
+                      record.ticketId,
+                      record.age,
+                      record.type == TouristType::CYCLIST ? "Cyclist" : "Pedestrian",
+                      record.isVip ? "Yes" : "No",
+                      record.ridesCompleted,
+                      record.guardianId);
         }
 
         // Gate passage log (required: "przejście przez bramki jest rejestrowane")
         writeToFd(fd, "\nGATE PASSAGE LOG\n");
         writeToFd(fd, "%-8s %-10s %-10s %-6s %-8s %-8s\n",
-                "Time", "Tourist", "Ticket", "Gate", "Type", "Allowed");
+                  "Time", "Tourist", "Ticket", "Gate", "Type", "Allowed");
         writeToFd(fd, "--------------------------------------------------------------\n");
 
         for (uint32_t i = 0; i < state.stats.gateLog.count; ++i) {
@@ -377,12 +382,12 @@ private:
             char timeStr[6];
             passage.formatSimTime(timeStr);
             writeToFd(fd, "%-8s %-10u %-10u %-6u %-8s %-8s\n",
-                    timeStr,
-                    passage.touristId,
-                    passage.ticketId,
-                    passage.gateNumber,
-                    passage.gateType == GateType::ENTRY ? "Entry" : "Ride",
-                    passage.wasAllowed ? "Yes" : "No");
+                      timeStr,
+                      passage.touristId,
+                      passage.ticketId,
+                      passage.gateNumber,
+                      passage.gateType == GateType::ENTRY ? "Entry" : "Ride",
+                      passage.wasAllowed ? "Yes" : "No");
         }
 
         close(fd);

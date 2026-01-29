@@ -13,7 +13,7 @@
  * Children and bikes are threads within the tourist process, not separate processes.
  */
 struct
-Tourist {
+        Tourist {
     uint32_t id;
     pid_t pid;
     uint32_t age;
@@ -33,9 +33,9 @@ Tourist {
     uint32_t ridesCompleted;
 
     // Group composition (children are threads, not processes)
-    uint32_t childCount;        // Number of children (0, 1, or 2)
-    uint32_t childAges[2];      // Ages of children (for ticket pricing)
-    bool hasBike;               // Cyclist has a bike (takes extra slot)
+    uint32_t childCount; // Number of children (0, 1, or 2)
+    uint32_t childAges[2]; // Ages of children (for ticket pricing)
+    bool hasBike; // Cyclist has a bike (takes extra slot)
 
     /**
      * Total slots needed on chair.

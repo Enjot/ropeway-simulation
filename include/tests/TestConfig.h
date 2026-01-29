@@ -7,7 +7,6 @@
 #include "ropeway/TrailDifficulty.h"
 
 namespace Test {
-
     /**
      * Test environment configuration.
      * Sets env vars to override Config values for testing.
@@ -18,10 +17,10 @@ namespace Test {
         uint32_t timeScale = 600;
         uint32_t openingHour = 8;
         uint32_t closingHour = 18;
-        uint32_t mainLoopPollUs = 100000;      // Faster polling for tests
+        uint32_t mainLoopPollUs = 100000; // Faster polling for tests
         uint32_t arrivalDelayBaseUs = 1000;
         uint32_t arrivalDelayRandomUs = 2000;
-        uint32_t rideDurationUs = 500000;      // Faster rides for tests
+        uint32_t rideDurationUs = 500000; // Faster rides for tests
         uint32_t trailEasyUs = 500000;
         uint32_t trailMediumUs = 1000000;
         uint32_t trailHardUs = 1500000;
@@ -60,6 +59,7 @@ namespace Test {
             setenv("ROPEWAY_DURATION_US", "999999999", 1);
         }
     };
+
     /**
      * Configuration for a single tourist in a test scenario
      */

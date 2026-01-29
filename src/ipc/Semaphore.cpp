@@ -5,7 +5,7 @@
 
 #include "logging/Logger.h"
 
-const char* Semaphore::Index::toString(const uint8_t index) {
+const char *Semaphore::Index::toString(const uint8_t index) {
     switch (index) {
         // Startup
         case LOGGER_READY: return "LOGGER_READY";
@@ -137,7 +137,7 @@ void Semaphore::destroy() const {
     Logger::debug(Logger::Source::Other, tag_, "destroyed");
 }
 
-Semaphore::ScopedLock::ScopedLock(const Semaphore& sem, const uint8_t semIndex)
+Semaphore::ScopedLock::ScopedLock(const Semaphore &sem, const uint8_t semIndex)
     : sem_(sem), semIndex_(semIndex) {
     while (!sem_.wait(semIndex_, 1, true)) {
         // Retry on EINTR - signal interrupted the wait, but we must acquire the lock

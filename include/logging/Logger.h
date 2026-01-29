@@ -14,9 +14,11 @@
 
 // Forward declarations to avoid circular includes
 class Semaphore;
-template<typename T> class MessageQueue;
+template<typename T>
+class MessageQueue;
 struct SharedRopewayState;
-template<typename T> class SharedMemory;
+template<typename T>
+class SharedMemory;
 
 namespace Logger {
     enum class Level { DEBUG, INFO, WARN, ERROR };
@@ -32,14 +34,14 @@ namespace Logger {
     namespace detail {
         constexpr const char *names[] = {"DEBUG", "INFO ", "WARN ", "ERROR"};
 
-        inline const char* getTagColor(Source source, Level level) {
+        inline const char *getTagColor(Source source, Level level) {
             if (level == Level::ERROR) return "\033[31m";
             switch (source) {
                 case Source::LowerWorker: return "\033[36m";
                 case Source::UpperWorker: return "\033[35m";
-                case Source::Cashier:     return "\033[33m";
-                case Source::Tourist:     return "\033[32m";
-                default:                  return "\033[37m";
+                case Source::Cashier: return "\033[33m";
+                case Source::Tourist: return "\033[32m";
+                default: return "\033[37m";
             }
         }
 
@@ -48,9 +50,9 @@ namespace Logger {
         inline key_t logQueueKey = -1;
         inline key_t semKey = -1;
         inline key_t shmKey = -1;
-        inline MessageQueue<LogMessage>* logQueue = nullptr;
-        inline Semaphore* sem = nullptr;
-        inline SharedMemory<SharedRopewayState>* shm = nullptr;
+        inline MessageQueue<LogMessage> *logQueue = nullptr;
+        inline Semaphore *sem = nullptr;
+        inline SharedMemory<SharedRopewayState> *shm = nullptr;
 
         // Simulation start time with microsecond precision
         inline struct timeval simulationStartTime = {0, 0};
@@ -88,12 +90,12 @@ namespace Logger {
 
         // Direct logging (used when not in centralized mode or by LoggerProcess)
         template<typename... Args>
-        void logDirect(Source source, Level level, const char *tag, const char *message, Args... args) {
+        void logDirect(const Source source, Level level, const char *tag, const char *message, Args... args) {
             char buf[512];
             char timeBuf[8] = "";
             getSimulatedTime(timeBuf);
 
-            const char* color = getTagColor(source, level);
+            const char *color = getTagColor(source, level);
             int n;
             if (timeBuf[0] != '\0') {
                 n = snprintf(buf, sizeof(buf), "\033[90m%s\033[0m %s[%s] [%s]\033[0m ",
@@ -112,7 +114,7 @@ namespace Logger {
             write(STDOUT_FILENO, buf, n);
         }
 
-        void sendToQueue(Source source, Level level, const char* tag, const char* text);
+        void sendToQueue(Source source, Level level, const char *tag, const char *text);
 
         template<typename... Args>
         void log(Source source, Level level, const char *tag, const char *message, Args... args) {

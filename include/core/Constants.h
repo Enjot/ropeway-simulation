@@ -39,9 +39,9 @@ namespace Constants {
     }
 
     namespace Group {
-        constexpr float CHILD_CHANCE{0.20f};     // 20% chance adult has children
+        constexpr float CHILD_CHANCE{0.20f}; // 20% chance adult has children
         constexpr float TWO_CHILDREN_CHANCE{0.30f}; // 30% of parents have 2 kids (rest have 1)
-        constexpr float BIKE_CHANCE{0.80f};      // 80% of cyclists have a bike
+        constexpr float BIKE_CHANCE{0.80f}; // 80% of cyclists have a bike
     }
 
     namespace Ropeway {
@@ -62,9 +62,9 @@ namespace Constants {
         //   1. Per-queue bytes never exceed MSGMNB
         //   2. Total messages across all queues stay under msgtql
         // Budget: cashier(~10) + entry(~18) + log(5) + worker(2) = ~35 < 40
-        constexpr uint32_t CASHIER_QUEUE_CAPACITY{5};     // TicketResponse ~176B → 5×176 = 880 < 2048
-        constexpr uint32_t ENTRY_QUEUE_VIP_SLOTS{2};      // EntryGateRequest ~12B, ~1% are VIP
-        constexpr uint32_t ENTRY_QUEUE_REGULAR_SLOTS{7};   // 9 total × ~12B = 108 < 2048
-        constexpr uint32_t LOG_QUEUE_CAPACITY{5};          // LogMessage ~313B → 5×313 = 1565 < 2048
+        constexpr uint32_t CASHIER_QUEUE_CAPACITY{5}; // TicketResponse ~176B → 5×176 = 880 < 2048
+        constexpr uint32_t ENTRY_QUEUE_VIP_SLOTS{2}; // EntryGateRequest ~12B, ~1% are VIP
+        constexpr uint32_t ENTRY_QUEUE_REGULAR_SLOTS{7}; // 9 total × ~12B = 108 < 2048
+        constexpr uint32_t LOG_QUEUE_CAPACITY{5}; // LogMessage ~313B → 5×313 = 1565 < 2048
     }
 }

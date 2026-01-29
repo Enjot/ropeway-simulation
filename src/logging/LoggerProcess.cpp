@@ -17,17 +17,17 @@
 
 namespace {
     SignalHelper::Flags g_signals;
-    constexpr const char* TAG = "Logger";
+    constexpr const char *TAG = "Logger";
 
-    constexpr const char* names[] = {"DEBUG", "INFO ", "WARN ", "ERROR"};
+    constexpr const char *names[] = {"DEBUG", "INFO ", "WARN ", "ERROR"};
 
-    const char* getTagColor(uint8_t source, uint8_t level) {
+    const char *getTagColor(uint8_t source, uint8_t level) {
         if (level == LogLevel::ERROR) return "\033[31m";
         switch (source) {
-            case 0: return "\033[36m";  // LowerWorker - Cyan
-            case 1: return "\033[35m";  // UpperWorker - Magenta
-            case 2: return "\033[33m";  // Cashier - Yellow
-            case 3: return "\033[32m";  // Tourist - Green
+            case 0: return "\033[36m"; // LowerWorker - Cyan
+            case 1: return "\033[35m"; // UpperWorker - Magenta
+            case 2: return "\033[33m"; // Cashier - Yellow
+            case 3: return "\033[32m"; // Tourist - Green
             default: return "\033[37m"; // Other - White
         }
     }
@@ -39,7 +39,6 @@ public:
         : shm_{SharedMemory<SharedRopewayState>::attach(shmKey)},
           sem_{semKey},
           logQueue_{logMsgKey, "LogQueue"} {
-
         // Get simulation start time for time display
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
@@ -69,11 +68,11 @@ public:
     }
 
 private:
-    void printLog(const LogMessage& msg) {
+    void printLog(const LogMessage &msg) {
         char timeBuf[16] = "";
         formatSimulatedTime(msg.timestamp, timeBuf);
 
-        const char* color = getTagColor(msg.source, msg.level);
+        const char *color = getTagColor(msg.source, msg.level);
         char buf[512];
         int n;
         if (timeBuf[0] != '\0') {
@@ -93,7 +92,7 @@ private:
         write(STDOUT_FILENO, buf, n);
     }
 
-    void formatSimulatedTime(const struct timeval& timestamp, char* buffer) {
+    void formatSimulatedTime(const struct timeval &timestamp, char *buffer) {
         if (simulationStartTime_ == 0) {
             buffer[0] = '\0';
             return;
@@ -129,12 +128,12 @@ private:
 
         // Sort by sequence number
         std::sort(remaining.begin(), remaining.end(),
-                  [](const LogMessage& a, const LogMessage& b) {
+                  [](const LogMessage &a, const LogMessage &b) {
                       return a.sequenceNum < b.sequenceNum;
                   });
 
         // Print in order
-        for (const auto& msg : remaining) {
+        for (const auto &msg: remaining) {
             printLog(msg);
         }
     }
@@ -145,7 +144,7 @@ private:
     time_t simulationStartTime_{0};
 };
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     if (argc < 4) {
         fprintf(stderr, "Usage: %s <shm_key> <sem_key> <log_msg_key>\n", argv[0]);
         return 1;
@@ -161,7 +160,7 @@ int main(int argc, char* argv[]) {
         Config::loadEnvFile();
         LoggerProcess logger(shmKey, semKey, logMsgKey);
         logger.run();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         fprintf(stderr, "[%s] Exception: %s\n", TAG, e.what());
         return 1;
     }

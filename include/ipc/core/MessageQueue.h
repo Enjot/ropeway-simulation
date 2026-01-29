@@ -41,17 +41,6 @@ public:
 
     MessageQueue &operator=(const MessageQueue &) = delete;
 
-    // Send with explicit type
-    void send(const T &message, const long type, const int32_t flags = 0) const {
-        Wrapper wrapper{};
-        wrapper.mtype = type;
-        wrapper.message = message;
-        if (msgsnd(msgId_, &wrapper, sizeof(T), flags) == -1) {
-            Logger::pError("Failed to send message to queue");
-            throw ipc_exception("Failed to send message");
-        }
-    }
-
     // Convenience send that returns bool (for process code compatibility).
     // Retries on EINTR (signal interruption) to avoid silent send failures.
     bool send(const T &message, const long type) {

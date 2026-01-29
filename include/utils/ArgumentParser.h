@@ -80,10 +80,10 @@ namespace ArgumentParser {
     struct TouristArgs {
         uint32_t id;
         uint32_t age;
-        int type;           // 0 = pedestrian, 1 = cyclist
+        int type; // 0 = pedestrian, 1 = cyclist
         bool isVip;
         bool wantsToRide;
-        int trail;          // 0-2 (easy, medium, hard)
+        int trail; // 0-2 (easy, medium, hard)
         key_t shmKey;
         key_t semKey;
         key_t msgKey;

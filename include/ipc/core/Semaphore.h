@@ -61,38 +61,49 @@ public:
             SHM_STATS, // Protects statistics and gate passage log
 
             // === LOGGING ===
-            LOG_SEQUENCE,     // Protects log sequence number increment
-            LOG_QUEUE_SLOTS,  // Available slots in log queue (prevents overflow)
+            LOG_SEQUENCE, // Protects log sequence number increment
+            LOG_QUEUE_SLOTS, // Available slots in log queue (prevents overflow)
 
             TOTAL_SEMAPHORES
         };
 
-        static const char* toString(uint8_t index);
+        static const char *toString(uint8_t index);
     };
 
     explicit Semaphore(key_t key);
+
     ~Semaphore() = default;
 
-    Semaphore(const Semaphore&) = delete;
-    Semaphore& operator=(const Semaphore&) = delete;
+    Semaphore(const Semaphore &) = delete;
+
+    Semaphore &operator=(const Semaphore &) = delete;
 
     void initialize(uint8_t semIndex, int32_t value) const;
+
     bool wait(uint8_t semIndex, int32_t n, bool useUndo) const;
+
     bool tryAcquire(uint8_t semIndex, int32_t n, bool useUndo) const;
+
     void post(uint8_t semIndex, int32_t n, bool useUndo) const;
+
     void setValue(uint8_t semIndex, int32_t value) const;
+
     [[nodiscard]] int32_t getAvailableSpace(uint8_t semIndex) const;
+
     void destroy() const;
 
     class ScopedLock {
     public:
-        explicit ScopedLock(const Semaphore& sem, uint8_t semIndex);
+        explicit ScopedLock(const Semaphore &sem, uint8_t semIndex);
+
         ~ScopedLock();
-        ScopedLock(const ScopedLock&) = delete;
-        ScopedLock& operator=(const ScopedLock&) = delete;
+
+        ScopedLock(const ScopedLock &) = delete;
+
+        ScopedLock &operator=(const ScopedLock &) = delete;
 
     private:
-        const Semaphore& sem_;
+        const Semaphore &sem_;
         uint8_t semIndex_;
     };
 

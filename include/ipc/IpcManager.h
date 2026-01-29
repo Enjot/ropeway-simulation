@@ -17,7 +17,8 @@
 class IpcManager;
 
 namespace IpcCleanup {
-    inline IpcManager* g_instance = nullptr;
+    inline IpcManager *g_instance = nullptr;
+
     void atexitHandler();
 }
 
@@ -36,7 +37,8 @@ public:
           cashierQueue_{cashierMsgKey_, "CashierMessageQueue"},
           entryGateQueue_{entryGateMsgKey_, "EntryGateQueue"},
           logQueue_{logMsgKey_, "LogMessageQueue"} {
-        if (shmKey_ == -1 || semKey_ == -1 || workerMsgKey_ == -1 || cashierMsgKey_ == -1 || entryGateMsgKey_ == -1 || logMsgKey_ == -1) {
+        if (shmKey_ == -1 || semKey_ == -1 || workerMsgKey_ == -1 || cashierMsgKey_ == -1 || entryGateMsgKey_ == -1 ||
+            logMsgKey_ == -1) {
             throw ipc_exception("ftok failed");
         }
 
@@ -119,12 +121,18 @@ public:
         if (cleanedUp_) return;
         cleanedUp_ = true;
 
-        try { shm_.destroy(); } catch (...) {}
-        try { sem_.destroy(); } catch (...) {}
-        try { workerQueue_.destroy(); } catch (...) {}
-        try { cashierQueue_.destroy(); } catch (...) {}
-        try { entryGateQueue_.destroy(); } catch (...) {}
-        try { logQueue_.destroy(); } catch (...) {}
+        try { shm_.destroy(); } catch (...) {
+        }
+        try { sem_.destroy(); } catch (...) {
+        }
+        try { workerQueue_.destroy(); } catch (...) {
+        }
+        try { cashierQueue_.destroy(); } catch (...) {
+        }
+        try { entryGateQueue_.destroy(); } catch (...) {
+        }
+        try { logQueue_.destroy(); } catch (...) {
+        }
         Logger::debug(Logger::Source::Other, tag_, "cleanup done");
     }
 
