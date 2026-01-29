@@ -103,7 +103,7 @@ public:
         }
 
         alarm(0);
-        Logger::warn(SRC, TAG, "Shutting down");
+        Logger::warn(SRC, TAG, "Upper station worker stopping - ending gondola unloading operations");
     }
 
 private:

@@ -54,7 +54,7 @@ public:
             sem_.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, 1, false);
         }
 
-        Logger::warn(SRC, TAG, "Shutting down");
+        Logger::warn(SRC, TAG, "Cashier closing - no longer accepting ticket requests");
     }
 
 private:

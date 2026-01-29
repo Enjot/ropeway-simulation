@@ -257,7 +257,7 @@ private:
     }
 
     void shutdown() {
-        Logger::debug(Logger::Source::Other, tag_, "Shutting down...");
+        Logger::debug(Logger::Source::Other, tag_, "Beginning simulation cleanup and report generation");
 
         // Generate end-of-day report before cleanup
         generateDailyReport();

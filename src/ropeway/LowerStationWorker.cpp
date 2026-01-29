@@ -135,7 +135,7 @@ public:
             logStatus();
         }
 
-        Logger::warn(SRC, TAG, "Shutting down");
+        Logger::warn(SRC, TAG, "Lower station worker stopping - ending boarding operations");
     }
 
 private:
