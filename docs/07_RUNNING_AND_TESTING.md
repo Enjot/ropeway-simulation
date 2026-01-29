@@ -158,76 +158,172 @@ cd build
 
 ```
 tests/
-├── configs/           # Konfiguracje dla testów
-│   ├── test1_capacity.env
-│   ├── test2_children.env
-│   ├── test3_vip.env
-│   └── test4_emergency.env
-├── reports/           # Raporty z testów
-└── run_tests.sh       # Skrypt uruchamiający
+├── lib/
+│   └── test_helpers.sh       # Funkcje pomocnicze dla testów
+├── reports/                  # Raporty z testów (generowane)
+│   ├── test1_station_capacity_limit.txt
+│   ├── test1_simulation.log
+│   ├── test2_children_guardian.txt
+│   ├── test2_simulation.log
+│   ├── ...
+│   └── test_summary.txt
+├── run_all_tests.sh          # Główny runner testów
+├── test_station_capacity.sh  # Test 1
+├── test_children_guardian.sh # Test 2
+├── test_vip_priority.sh      # Test 3
+└── test_emergency_stop.sh    # Test 4
 ```
+
+### Uruchamianie Testów
+
+```bash
+# Przez make (z katalogu build)
+make test
+
+# Lub bezpośrednio
+cd tests
+./run_all_tests.sh
+
+# Z opcjami
+./run_all_tests.sh -b ../build    # Określ katalog build
+./run_all_tests.sh -v             # Verbose output
+./run_all_tests.sh -t 2           # Uruchom tylko test 2
+
+# Pojedynczy test bezpośrednio
+./test_station_capacity.sh ../build
+```
+
+### Funkcje Pomocnicze (test_helpers.sh)
+
+| Funkcja | Opis |
+|---------|------|
+| `setup_test` | Inicjalizuje środowisko testu, czyści stare pliki |
+| `run_simulation` | Uruchamia symulację z timeoutem |
+| `cleanup_ipc` | Usuwa zasoby IPC (shm, sem, msg) |
+| `cleanup_processes` | Zabija pozostałe procesy symulacji |
+| `setup_cleanup_trap` | Ustawia trap na SIGINT/SIGTERM |
+| `check_log_pattern` | Sprawdza czy wzorzec istnieje w logach |
+| `count_log_pattern` | Zlicza wystąpienia wzorca |
+| `report_header` | Tworzy nagłówek raportu |
+| `report_check` | Dodaje wynik testu (PASS/FAIL) |
+| `report_finish` | Finalizuje raport z końcowym wynikiem |
+| `strip_ansi` | Usuwa kody ANSI z tekstu |
 
 ### Test 1: Limit Pojemności Stacji
 
 **Cel:** Sprawdzić czy limit N osób na stacji nie jest przekraczany.
 
+**Konfiguracja:**
 ```bash
-# Konfiguracja
-ROPEWAY_NUM_TOURISTS=30
+ROPEWAY_NUM_TOURISTS=15
 ROPEWAY_STATION_CAPACITY=5
-ROPEWAY_DURATION_US=60000000
+ROPEWAY_DURATION_US=30000000  # 30 sekund
 ```
 
 **Weryfikacja:**
-- W logach nigdy nie pojawi się więcej niż 5 osób jednocześnie
-- Turyści ponad limit czekają przed bramkami
+- Symulacja zakończyła się poprawnie
+- Brak procesów zombie
+- Liczba osób na stacji nigdy nie przekroczyła N=5
+- Turyści byli kolejkowani gdy stacja pełna
 
 ### Test 2: Dzieci z Opiekunem
 
-**Cel:** Sprawdzić czy dzieci <8 lat jadą tylko z dorosłym.
+**Cel:** Sprawdzić czy dzieci <8 lat jadą tylko z dorosłym (max 2 dzieci na dorosłego).
 
+**Konfiguracja:**
 ```bash
-# Konfiguracja
-ROPEWAY_NUM_TOURISTS=20
-ROPEWAY_CHILD_CHANCE_PCT=100  # Każdy dorosły ma dzieci
-ROPEWAY_DURATION_US=90000000
+ROPEWAY_NUM_TOURISTS=10
+ROPEWAY_STATION_CAPACITY=10
+ROPEWAY_CHILD_CHANCE_PCT=80
+ROPEWAY_DURATION_US=30000000
 ```
 
 **Weryfikacja:**
-- Każde dziecko ma guardianId w raporcie
-- Dorosły ma max 2 dzieci
+- Dzieci zostały wygenerowane (widoczne w daily_report)
+- Wątki dzieci utworzone z rodzicami
+- Każde dziecko ma przypisanego opiekuna
 
 ### Test 3: Priorytet VIP
 
-**Cel:** Sprawdzić czy VIP-y wchodzą pierwsi.
+**Cel:** Sprawdzić czy VIP-y otrzymują priorytetowe wejście.
 
+**Konfiguracja:**
 ```bash
-# Konfiguracja
-ROPEWAY_NUM_TOURISTS=100
-ROPEWAY_VIP_CHANCE_PCT=10
-ROPEWAY_STATION_CAPACITY=15
-ROPEWAY_DURATION_US=120000000
+ROPEWAY_NUM_TOURISTS=20
+ROPEWAY_VIP_CHANCE_PCT=30
+ROPEWAY_STATION_CAPACITY=5
+ROPEWAY_DURATION_US=30000000
 ```
 
 **Weryfikacja:**
-- VIP-y wchodzą przed zwykłymi turystami
+- VIP-y zostały wygenerowane
+- VIP-y wchodzą przed zwykłymi turystami w kolejce
 - Brak zagłodzenia zwykłych turystów
 
 ### Test 4: Zatrzymanie Awaryjne
 
-**Cel:** Sprawdzić protokół emergency stop/resume.
+**Cel:** Sprawdzić protokół emergency stop i wznowienia.
 
+**Konfiguracja:**
 ```bash
-# Konfiguracja
-ROPEWAY_NUM_TOURISTS=20
-ROPEWAY_FORCE_EMERGENCY_AT_SEC=20
-ROPEWAY_DURATION_US=60000000
+ROPEWAY_NUM_TOURISTS=10
+ROPEWAY_FORCE_EMERGENCY_AT_SEC=5
+ROPEWAY_DURATION_US=30000000
 ```
 
 **Weryfikacja:**
-- Kolej zatrzymuje się w ~20 sekundzie
-- Wymiana komunikatów między pracownikami
-- Poprawne wznowienie
+- Emergency stop został wywołany
+- Wznowienie operacji nastąpiło poprawnie
+- Turyści wznowili przejazdy po emergency
+
+### Raporty z Testów
+
+Po uruchomieniu testów generowane są raporty w `tests/reports/`:
+
+```
+================================================================================
+TEST REPORT: Station Capacity Limit (N=5)
+Date: 2026-01-29 17:19:56
+================================================================================
+
+CONFIGURATION:
+  - NUM_TOURISTS: 15
+  - STATION_CAPACITY: 5
+  - DURATION: 30s
+
+RESULTS:
+  [PASS] Simulation completed (exit code: 0)
+  [PASS] No zombie processes found
+  [PASS] Station capacity never exceeded (max observed: 5)
+  [PASS] Tourists were queued (12 waited before entry)
+
+STATISTICS:
+  - Total tourists processed: 15
+  - Max concurrent in station: 5
+  - Tourists queued (waited): 12
+  - Total rides completed: 45
+
+VERIFICATION LOG EXCERPTS:
+  [08:00] [INFO ] [LowerWorker] Entry granted to Tourist 1
+  [08:00] [INFO ] [LowerWorker] Entry granted to Tourist 2
+  ...
+
+RESULT: PASS
+================================================================================
+```
+
+### Cleanup przy SIGINT
+
+Testy ustawiają trap na SIGINT (Ctrl+C) i SIGTERM. Przy przerwaniu:
+1. Wyświetla komunikat "Interrupted - cleaning up..."
+2. Zabija pozostałe procesy symulacji
+3. Usuwa zasoby IPC (shared memory, semafory, kolejki)
+4. Kończy z kodem 130
+
+```bash
+# Przerwanie testu
+^C
+Interrupted - cleaning up...
 
 ---
 

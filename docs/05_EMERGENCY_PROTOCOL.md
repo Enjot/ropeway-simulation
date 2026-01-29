@@ -18,41 +18,41 @@ Protokół awaryjny umożliwia natychmiastowe zatrzymanie kolei linowej w przypa
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                                                                         │
-│   1. WYKRYCIE ZAGROŻENIA (LowerStationWorker)                          │
-│   ─────────────────────────────────────────────                        │
+│   1. WYKRYCIE ZAGROŻENIA (LowerStationWorker)                           │
+│   ─────────────────────────────────────────────                         │
 │                                                                         │
-│   ┌─────────────────┐                                                  │
-│   │ LowerWorker     │ ── Wykrywa "zagrożenie" (losowe lub wymuszone)   │
-│   │ detects danger  │                                                  │
-│   └────────┬────────┘                                                  │
-│            │                                                           │
-│            ▼                                                           │
-│   2. USTAWIENIE STANU EMERGENCY                                        │
-│   ───────────────────────────────                                      │
+│   ┌─────────────────┐                                                   │
+│   │ LowerWorker     │ ── Wykrywa "zagrożenie" (losowe lub wymuszone)    │
+│   │ detects danger  │                                                   │
+│   └────────┬────────┘                                                   │
+│            │                                                            │
+│            ▼                                                            │
+│   2. USTAWIENIE STANU EMERGENCY                                         │
+│   ───────────────────────────────                                       │
 │                                                                         │
-│   ┌─────────────────┐                                                  │
-│   │ Set state =     │                                                  │
-│   │ EMERGENCY_STOP  │ ── state_->operational.state = EMERGENCY_STOP    │
-│   │ in SharedMemory │    state_->operational.dangerDetectorPid = pid   │
-│   └────────┬────────┘                                                  │
-│            │                                                           │
-│            ▼                                                           │
-│   3. WYSŁANIE SIGUSR1 DO TURYSTÓW                                      │
-│   ─────────────────────────────────                                    │
+│   ┌─────────────────┐                                                   │
+│   │ Set state =     │                                                   │
+│   │ EMERGENCY_STOP  │ ── state_->operational.state = EMERGENCY_STOP     │
+│   │ in SharedMemory │    state_->operational.dangerDetectorPid = pid    │
+│   └────────┬────────┘                                                   │
+│            │                                                            │
+│            ▼                                                            │
+│   3. WYSŁANIE SIGUSR1 DO TURYSTÓW                                       │
+│   ─────────────────────────────────                                     │
 │                                                                         │
-│   ┌─────────────────┐     SIGUSR1      ┌─────────────────┐             │
-│   │ LowerWorker     │ ───────────────> │ All Tourists    │             │
-│   │ sends signal    │                  │ set emergency=1 │             │
-│   └────────┬────────┘                  └─────────────────┘             │
-│            │                                                           │
-│            ▼                                                           │
-│   4. POWIADOMIENIE GÓRNEGO PRACOWNIKA                                  │
-│   ───────────────────────────────────                                  │
+│   ┌─────────────────┐     SIGUSR1      ┌─────────────────┐              │
+│   │ LowerWorker     │ ───────────────> │ All Tourists    │              │
+│   │ sends signal    │                  │ set emergency=1 │              │
+│   └────────┬────────┘                  └─────────────────┘              │
+│            │                                                            │
+│            ▼                                                            │
+│   4. POWIADOMIENIE GÓRNEGO PRACOWNIKA                                   │
+│   ───────────────────────────────────                                   │
 │                                                                         │
-│   ┌─────────────────┐  WorkerMessage   ┌─────────────────┐             │
-│   │ LowerWorker     │ ───────────────> │ UpperWorker     │             │
-│   │ DANGER_DETECTED │                  │ receives msg    │             │
-│   └─────────────────┘                  └─────────────────┘             │
+│   ┌─────────────────┐  WorkerMessage   ┌─────────────────┐              │
+│   │ LowerWorker     │ ───────────────> │ UpperWorker     │              │
+│   │ DANGER_DETECTED │                  │ receives msg    │              │
+│   └─────────────────┘                  └─────────────────┘              │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -64,34 +64,34 @@ Protokół awaryjny umożliwia natychmiastowe zatrzymanie kolei linowej w przypa
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                                                                         │
-│   5. GÓRNY PRACOWNIK POTWIERDZA GOTOWOŚĆ                               │
-│   ────────────────────────────────────────                             │
+│   5. GÓRNY PRACOWNIK POTWIERDZA GOTOWOŚĆ                                │
+│   ────────────────────────────────────────                              │
 │                                                                         │
-│   ┌─────────────────┐  WorkerMessage   ┌─────────────────┐             │
-│   │ UpperWorker     │ ───────────────> │ LowerWorker     │             │
-│   │ READY_TO_START  │                  │ receives conf.  │             │
-│   └─────────────────┘                  └────────┬────────┘             │
-│                                                 │                      │
-│            (po pewnym czasie - symulacja naprawy)                      │
-│                                                 │                      │
-│                                                 ▼                      │
-│   6. WZNOWIENIE PRZEZ DOLNEGO PRACOWNIKA                               │
-│   ──────────────────────────────────────                               │
+│   ┌─────────────────┐  WorkerMessage   ┌─────────────────┐              │
+│   │ UpperWorker     │ ───────────────> │ LowerWorker     │              │
+│   │ READY_TO_START  │                  │ receives conf.  │              │
+│   └─────────────────┘                  └────────┬────────┘              │
+│                                                 │                       │
+│            (po pewnym czasie - symulacja naprawy)                       │
+│                                                 │                       │
+│                                                 ▼                       │
+│   6. WZNOWIENIE PRZEZ DOLNEGO PRACOWNIKA                                │
+│   ──────────────────────────────────────                                │
 │                                                                         │
-│   ┌─────────────────┐                                                  │
-│   │ Set state =     │                                                  │
-│   │ RUNNING         │ ── Only if dangerDetectorPid == my pid          │
-│   │ (or CLOSING)    │                                                  │
-│   └────────┬────────┘                                                  │
-│            │                                                           │
-│            ▼                                                           │
-│   7. WYSŁANIE SIGUSR2 DO TURYSTÓW                                      │
-│   ─────────────────────────────────                                    │
+│   ┌─────────────────┐                                                   │
+│   │ Set state =     │                                                   │
+│   │ RUNNING         │ ── Only if dangerDetectorPid == my pid            │
+│   │ (or CLOSING)    │                                                   │
+│   └────────┬────────┘                                                   │
+│            │                                                            │
+│            ▼                                                            │
+│   7. WYSŁANIE SIGUSR2 DO TURYSTÓW                                       │
+│   ─────────────────────────────────                                     │
 │                                                                         │
-│   ┌─────────────────┐     SIGUSR2      ┌─────────────────┐             │
-│   │ LowerWorker     │ ───────────────> │ All Tourists    │             │
-│   │ sends signal    │                  │ set resume=1    │             │
-│   └─────────────────┘                  └─────────────────┘             │
+│   ┌─────────────────┐     SIGUSR2      ┌─────────────────┐              │
+│   │ LowerWorker     │ ───────────────> │ All Tourists    │              │
+│   │ sends signal    │                  │ set resume=1    │              │
+│   └─────────────────┘                  └─────────────────┘              │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -380,10 +380,10 @@ ROPEWAY_FORCE_EMERGENCY_AT_SEC=20  # Wymusi emergency po 20 sekundach
                            │ (lub)
                            │ closingTime reached
                            ▼
-                    ┌──────────────┐
-                    │   CLOSING    │
-                    │ (nie przyjmuje nowych) │
-                    └──────┬───────┘
+                    ┌─────────────────────────┐
+                    │   CLOSING               │
+                    │ (nie przyjmuje nowych)  │
+                    └──────┬──────────────────┘
                            │ station empty
                            ▼
                     ┌──────────────┐
