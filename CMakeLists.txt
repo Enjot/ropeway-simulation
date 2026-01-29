@@ -155,3 +155,12 @@ target_link_libraries(tourist_process Threads::Threads)
 
 # Pass project source directory for .env file loading
 add_compile_definitions(ROPEWAY_PROJECT_DIR="${CMAKE_SOURCE_DIR}")
+
+# === Test target ===
+# Run integration tests using shell scripts
+add_custom_target(test
+    COMMAND ${CMAKE_SOURCE_DIR}/tests/run_all_tests.sh ${CMAKE_BINARY_DIR}
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    DEPENDS main tourist_process cashier_process lower_worker_process upper_worker_process logger_process
+    COMMENT "Running integration tests..."
+)

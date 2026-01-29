@@ -46,9 +46,17 @@ struct SharedRopewayState {
     // ==================== TOURIST TRACKING METHODS ====================
 
     /**
-     * Register a tourist for ride tracking.
-     * Called when tourist buys ticket.
-     * @return Record index or -1 if full
+     * @brief Register a tourist for ride tracking.
+     * @param touristId Unique tourist ID
+     * @param ticketId Assigned ticket ID
+     * @param age Tourist age
+     * @param type Tourist type (PEDESTRIAN or CYCLIST)
+     * @param isVip VIP status
+     * @param guardianId Guardian's tourist ID (-1 if none)
+     * @param childCount Number of children with this tourist
+     * @return Record index in touristRecords array, or -1 if array is full
+     *
+     * Called when tourist purchases ticket to start tracking their rides.
      */
     int32_t registerTourist(uint32_t touristId, uint32_t ticketId, uint32_t age,
                             TouristType type, bool isVip, int32_t guardianId = -1,
@@ -72,8 +80,11 @@ struct SharedRopewayState {
     }
 
     /**
-     * Set guardian ID for a tourist record.
-     * Used when pairing a child with a guardian.
+     * @brief Set guardian ID for a tourist record.
+     * @param touristId Tourist ID to update
+     * @param guardianId Guardian's tourist ID
+     *
+     * Used to link children with their supervising adult.
      */
     void setGuardianId(uint32_t touristId, int32_t guardianId) {
         int32_t idx = findTouristRecord(touristId);
@@ -83,8 +94,9 @@ struct SharedRopewayState {
     }
 
     /**
-     * Find tourist record by ID.
-     * @return Record index or -1 if not found
+     * @brief Find tourist record by ID.
+     * @param touristId Tourist ID to search for
+     * @return Index in touristRecords array, or -1 if not found
      */
     int32_t findTouristRecord(uint32_t touristId) const {
         for (uint32_t i = 0; i < stats.touristRecordCount; ++i) {
@@ -96,8 +108,15 @@ struct SharedRopewayState {
     }
 
     /**
-     * Log a gate passage and update tourist statistics.
+     * @brief Log a gate passage and update tourist statistics.
+     * @param touristId Tourist ID
+     * @param ticketId Ticket ID
+     * @param gateType Type of gate (ENTRY or RIDE)
+     * @param gateNumber Gate number
+     * @param allowed Whether passage was allowed
      * @param simTimeSeconds Simulated time as seconds since midnight
+     *
+     * Records the passage in gateLog and updates the tourist's passage counters.
      */
     void logGatePassage(uint32_t touristId, uint32_t ticketId,
                         GateType gateType, uint32_t gateNumber, bool allowed,
@@ -124,7 +143,10 @@ struct SharedRopewayState {
     }
 
     /**
-     * Record a completed ride for a tourist.
+     * @brief Record a completed ride for a tourist.
+     * @param touristId Tourist ID
+     *
+     * Increments the ridesCompleted counter in the tourist's record.
      */
     void recordRide(uint32_t touristId) {
         int32_t idx = findTouristRecord(touristId);

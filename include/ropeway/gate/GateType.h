@@ -11,6 +11,7 @@ enum class GateType {
 /**
  * @brief Convert GateType enum to string representation.
  * @param type GateType to convert
+ * @return "ENTRY" or "RIDE"
  */
 constexpr const char *toString(const GateType type) {
     switch (type) {

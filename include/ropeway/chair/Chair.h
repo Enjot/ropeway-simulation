@@ -25,6 +25,11 @@ struct Chair {
               arrivalTime{0} {
     }
 
+    /**
+     * @brief Check if chair has enough space for additional passengers.
+     * @param slotsNeeded Number of slots required
+     * @return true if slotsUsed + slotsNeeded <= 4, false otherwise
+     */
     [[nodiscard]] constexpr bool hasEnoughSpace(const uint32_t slotsNeeded) const {
         return slotsUsed + slotsNeeded <= Constants::Chair::SLOTS_PER_CHAIR;
     }

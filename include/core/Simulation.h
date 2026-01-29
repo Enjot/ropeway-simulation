@@ -245,11 +245,13 @@ private:
 
             // Tourist process handles children/bike internally as threads
             // numChildren omitted - parser defaults to 0 (random generation)
+            // Use configurable VIP chance (default: Constants::Vip::VIP_CHANCE)
+            float vipChance = Config::Test::VIP_CHANCE_PCT() / 100.0f;
             pid_t pid = ProcessSpawner::spawn("tourist_process", {
                                                   std::to_string(id),
                                                   std::to_string(age),
                                                   std::to_string(typeDist(gen)),
-                                                  std::to_string(vipDist(gen) < Constants::Vip::VIP_CHANCE ? 1 : 0),
+                                                  std::to_string(vipDist(gen) < vipChance ? 1 : 0),
                                                   std::to_string(wantsToRide ? 1 : 0),
                                                   std::to_string(trailDist(gen)),
                                                   std::to_string(ipc_->shmKey()),

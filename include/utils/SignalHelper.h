@@ -4,23 +4,36 @@
 #include <unistd.h>
 #include "logging/Logger.h"
 
+/**
+ * @brief Signal handling utilities for inter-process communication.
+ *
+ * Provides signal-safe signal handlers for coordinating simulation processes.
+ * All handlers use only async-signal-safe functions.
+ */
 namespace SignalHelper {
     inline constexpr auto tag = "SignalHelper";
 
-    // Alias for backward compatibility
+    /**
+     * @brief Signal state flags structure.
+     *
+     * Uses volatile sig_atomic_t for safe access from signal handlers.
+     * All flags are initially 0 (false).
+     */
     struct Flags {
-        volatile sig_atomic_t emergency{0};
-        volatile sig_atomic_t resume{0};
-        volatile sig_atomic_t exit{0};
+        volatile sig_atomic_t emergency{0}; ///< SIGUSR1 received (emergency stop)
+        volatile sig_atomic_t resume{0};    ///< SIGUSR2 received (resume after emergency)
+        volatile sig_atomic_t exit{0};      ///< SIGTERM/SIGINT received (shutdown)
     };
 
     using SignalFlags = Flags;
 
-    // Mode enum for different process types
+    /**
+     * @brief Signal handler mode for different process types.
+     */
     enum class Mode {
-        BASIC, // Only SIGTERM/SIGINT
-        WORKER, // All signals including SIGUSR1/SIGUSR2
-        TOURIST // All signals including SIGUSR1/SIGUSR2
+        BASIC,   ///< Only SIGTERM/SIGINT handlers
+        WORKER,  ///< All signals including SIGUSR1/SIGUSR2
+        TOURIST  ///< All signals including SIGUSR1/SIGUSR2
     };
 
     namespace detail {
@@ -104,7 +117,14 @@ namespace SignalHelper {
     // not by the signal handler. This ensures proper cleanup order and avoids
     // async-signal-safety issues.
 
-    // Original setup function (bool version)
+    /**
+     * @brief Install signal handlers for a process.
+     * @param flags Reference to Flags structure that will be updated by handlers
+     * @param handleUserSignals If true, also handle SIGUSR1/SIGUSR2 for emergency protocol
+     *
+     * Installs handlers for SIGTERM and SIGINT. If handleUserSignals is true,
+     * also installs handlers for SIGUSR1 (emergency) and SIGUSR2 (resume).
+     */
     inline void setup(Flags &flags, const bool handleUserSignals) {
         detail::g_flags = &flags;
 
@@ -123,7 +143,13 @@ namespace SignalHelper {
         Logger::debug(Logger::Source::Other, tag, "setup done, userSignals=%d", handleUserSignals);
     }
 
-    // Mode-based setup function
+    /**
+     * @brief Install signal handlers based on process mode.
+     * @param flags Reference to Flags structure that will be updated by handlers
+     * @param mode Process mode (BASIC, WORKER, or TOURIST)
+     *
+     * WORKER and TOURIST modes enable SIGUSR1/SIGUSR2 handling.
+     */
     inline void setup(Flags &flags, Mode mode) {
         bool handleUserSignals = (mode == Mode::WORKER || mode == Mode::TOURIST);
         setup(flags, handleUserSignals);
@@ -142,23 +168,47 @@ namespace SignalHelper {
         sigaction(SIGTSTP, &sa, nullptr);
     }
 
+    /**
+     * @brief Set SIGCHLD to SIG_IGN for automatic zombie reaping.
+     *
+     * When SIGCHLD is ignored, terminated children are automatically reaped
+     * by the kernel, preventing zombie processes.
+     */
     inline void ignoreChildren() {
         signal(SIGCHLD, SIG_IGN);
     }
 
-    // Helper functions for checking signal states
+    /**
+     * @brief Check if exit signal was received.
+     * @param flags Reference to Flags structure
+     * @return true if SIGTERM or SIGINT was received
+     */
     inline bool shouldExit(const Flags &flags) {
         return flags.exit != 0;
     }
 
+    /**
+     * @brief Check if emergency signal was received.
+     * @param flags Reference to Flags structure
+     * @return true if SIGUSR1 (emergency stop) was received
+     */
     inline bool isEmergency(const Flags &flags) {
         return flags.emergency != 0;
     }
 
+    /**
+     * @brief Check if resume signal was received.
+     * @param flags Reference to Flags structure
+     * @return true if SIGUSR2 (resume) was received
+     */
     inline bool isResumeRequested(const Flags &flags) {
         return flags.resume != 0;
     }
 
+    /**
+     * @brief Clear a signal flag.
+     * @param flag Reference to the flag to clear
+     */
     inline void clearFlag(volatile sig_atomic_t &flag) {
         flag = 0;
     }

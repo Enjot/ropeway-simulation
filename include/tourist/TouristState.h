@@ -19,6 +19,7 @@ enum class TouristState {
 /**
  * @brief Convert TouristState enum to string representation.
  * @param state TouristState to convert
+ * @return String name of the state
  *
  * Tourist states track lifecycle from arrival to departure.
  */

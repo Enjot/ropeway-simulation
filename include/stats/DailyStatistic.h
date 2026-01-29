@@ -58,8 +58,11 @@ struct DailyStatistics {
     }
 
     /**
-     * Record start of an emergency stop
-     * @return index of the record, or -1 if full
+     * @brief Record the start of an emergency stop.
+     * @param workerId ID of the worker who initiated the stop (1 or 2)
+     * @return Index of the new emergency record, or -1 if record array is full
+     *
+     * Creates a new EmergencyStopRecord with the current time as startTime.
      */
     int32_t recordEmergencyStart(uint32_t workerId) {
         if (emergencyRecordCount >= MAX_EMERGENCY_RECORDS) return -1;
@@ -75,7 +78,11 @@ struct DailyStatistics {
     }
 
     /**
-     * Record end of an emergency stop (resume)
+     * @brief Record the end of an emergency stop (resume).
+     * @param recordIndex Index returned by recordEmergencyStart
+     *
+     * Updates the record with endTime and adds duration to totalEmergencyDuration.
+     * Does nothing if recordIndex is invalid.
      */
     void recordEmergencyEnd(int32_t recordIndex) {
         if (recordIndex < 0 || static_cast<uint32_t>(recordIndex) >= emergencyRecordCount) return;

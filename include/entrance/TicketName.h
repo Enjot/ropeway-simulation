@@ -14,6 +14,7 @@ enum class TicketType {
 /**
  * @brief Convert TicketType enum to string representation.
  * @param type TicketType to convert
+ * @return "SINGLE_USE", "TIME_TK1", "TIME_TK2", "TIME_TK3", or "DAILY"
  */
 constexpr const char *toString(const TicketType type) {
     switch (type) {

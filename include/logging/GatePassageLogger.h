@@ -10,8 +10,10 @@
 #include "stats/GatePassage.h"
 
 /**
- * Logger for gate passages
- * Logs to both shared memory array and file
+ * @brief Logger for gate passages.
+ *
+ * Records gate passage events to both shared memory (for real-time access)
+ * and optionally to a file (for persistence). Thread-safe via external locking.
  */
 class GatePassageLogger {
 public:
@@ -28,6 +30,10 @@ public:
         }
     };
 
+    /**
+     * @brief Construct a gate passage logger.
+     * @param logFilePath Optional path for file logging (empty = no file)
+     */
     explicit GatePassageLogger(const std::string &logFilePath = "")
         : logFilePath_{logFilePath}, logFile_{} {
         if (!logFilePath_.empty()) {
@@ -42,7 +48,11 @@ public:
     }
 
     /**
-     * Log a gate passage to memory and optionally to file
+     * @brief Log a gate passage.
+     * @param logMem Pointer to shared memory log (can be nullptr)
+     * @param passage Gate passage record to log
+     *
+     * Writes to both shared memory and file if configured.
      */
     void log(GatePassageLog *logMem, const GatePassage &passage) {
         if (logMem != nullptr && logMem->count < MAX_LOG_ENTRIES) {
@@ -57,7 +67,12 @@ public:
     }
 
     /**
-     * Log an entry gate passage
+     * @brief Log an entry gate passage.
+     * @param logMem Pointer to shared memory log
+     * @param touristId Tourist ID
+     * @param ticketId Ticket ID
+     * @param gateNumber Gate number (0-3)
+     * @param wasAllowed Whether passage was allowed
      */
     void logEntry(GatePassageLog *logMem, uint32_t touristId, uint32_t ticketId,
                   uint32_t gateNumber, bool wasAllowed) {
@@ -73,7 +88,12 @@ public:
     }
 
     /**
-     * Log a ride gate passage
+     * @brief Log a ride gate passage.
+     * @param logMem Pointer to shared memory log
+     * @param touristId Tourist ID
+     * @param ticketId Ticket ID
+     * @param gateNumber Gate number (0-2)
+     * @param wasAllowed Whether passage was allowed
      */
     void logRide(GatePassageLog *logMem, uint32_t touristId, uint32_t ticketId,
                  uint32_t gateNumber, bool wasAllowed) {
@@ -89,7 +109,7 @@ public:
     }
 
     /**
-     * Get statistics from the log
+     * @brief Statistics calculated from gate passage log.
      */
     struct LogStats {
         uint32_t totalPassages;
@@ -99,6 +119,11 @@ public:
         uint32_t deniedPassages;
     };
 
+    /**
+     * @brief Calculate statistics from gate passage log.
+     * @param logMem Pointer to shared memory log
+     * @return LogStats structure with passage counts
+     */
     static LogStats getStats(const GatePassageLog *logMem) {
         LogStats stats{};
         if (logMem == nullptr) return stats;

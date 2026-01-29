@@ -76,6 +76,11 @@ namespace TicketPricing {
     constexpr uint32_t TK2_DURATION = 2 * 3600; // 2 hours
     constexpr uint32_t TK3_DURATION = 4 * 3600; // 4 hours
 
+    /**
+     * @brief Get base price for a ticket type.
+     * @param type Type of ticket
+     * @return Price in PLN
+     */
     inline double getPrice(TicketType type) {
         switch (type) {
             case TicketType::SINGLE_USE: return SINGLE_USE;
@@ -87,6 +92,11 @@ namespace TicketPricing {
         }
     }
 
+    /**
+     * @brief Get validity duration for a ticket type.
+     * @param type Type of ticket
+     * @return Duration in seconds (0 for single-use and daily tickets)
+     */
     inline uint32_t getDuration(TicketType type) {
         switch (type) {
             case TicketType::TIME_TK1: return TK1_DURATION;

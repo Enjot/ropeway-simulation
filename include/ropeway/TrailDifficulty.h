@@ -15,6 +15,7 @@ enum class TrailDifficulty {
 /**
  * @brief Convert TrailDifficulty enum to string representation.
  * @param trail TrailDifficulty to convert
+ * @return "EASY", "MEDIUM", or "HARD"
  */
 constexpr const char *toString(const TrailDifficulty trail) {
     switch (trail) {
@@ -26,8 +27,9 @@ constexpr const char *toString(const TrailDifficulty trail) {
 }
 
 /**
- * @brief Trail code (T1, T2, T3) for compact output.
+ * @brief Get trail code for compact output.
  * @param trail TrailDifficulty to convert
+ * @return "T1", "T2", or "T3"
  */
 constexpr const char *toTrailCode(const TrailDifficulty trail) {
     switch (trail) {
@@ -38,6 +40,12 @@ constexpr const char *toTrailCode(const TrailDifficulty trail) {
     }
 }
 
+/**
+ * @brief Get trail duration in microseconds.
+ * @param difficulty Trail difficulty level
+ * @return Duration in microseconds from configuration
+ * @throws std::invalid_argument If difficulty is invalid
+ */
 constexpr uint32_t getDurationUs(const TrailDifficulty difficulty) {
     switch (difficulty) {
         case TrailDifficulty::EASY: return Config::Trail::DURATION_EASY_US();

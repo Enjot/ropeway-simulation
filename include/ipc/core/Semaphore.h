@@ -8,6 +8,11 @@
 #include "IpcException.h"
 
 #ifdef _SEM_SEMUN_UNDEFINED
+/**
+ * @brief Union for semaphore control operations.
+ *
+ * Required on some systems where semun is not defined.
+ */
 union semun {
     int val;
     struct semid_ds *buf;
@@ -18,10 +23,21 @@ union semun {
 
 /**
  * @class Semaphore
- * @brief A wrapper class for System V semaphores.
+ * @brief RAII wrapper for System V semaphore sets.
+ *
+ * Provides a safe C++ interface to System V semaphores for inter-process
+ * synchronization. Creates a semaphore set with TOTAL_SEMAPHORES members.
+ *
+ * @note All operations are signal-safe (handle EINTR).
+ * @note Uses SEM_UNDO for automatic cleanup on process termination.
  */
 class Semaphore {
 public:
+    /**
+     * @brief Semaphore indices for the ropeway simulation.
+     *
+     * Defines all semaphores used in the simulation, organized by purpose.
+     */
     struct Index {
         enum : uint8_t {
             // === STARTUP ===
@@ -67,9 +83,19 @@ public:
             TOTAL_SEMAPHORES
         };
 
+        /**
+         * @brief Get human-readable name of a semaphore index.
+         * @param index Semaphore index value
+         * @return String name of the semaphore
+         */
         static const char *toString(uint8_t index);
     };
 
+    /**
+     * @brief Construct semaphore set wrapper.
+     * @param key System V IPC key for the semaphore set
+     * @throws ipc_exception If semget fails
+     */
     explicit Semaphore(key_t key);
 
     ~Semaphore() = default;
@@ -78,24 +104,78 @@ public:
 
     Semaphore &operator=(const Semaphore &) = delete;
 
+    /**
+     * @brief Initialize a semaphore to a specific value.
+     * @param semIndex Index of the semaphore in the set
+     * @param value Initial value to set
+     */
     void initialize(uint8_t semIndex, int32_t value) const;
 
+    /**
+     * @brief Wait (decrement) on a semaphore.
+     * @param semIndex Index of the semaphore in the set
+     * @param n Amount to decrement (typically 1)
+     * @param useUndo If true, uses SEM_UNDO for automatic cleanup on process termination
+     * @return true if successful, false if interrupted by signal
+     *
+     * Blocks until the semaphore value is >= n, then decrements by n.
+     * Handles EINTR for signal safety.
+     */
     bool wait(uint8_t semIndex, int32_t n, bool useUndo) const;
 
+    /**
+     * @brief Try to acquire a semaphore without blocking.
+     * @param semIndex Index of the semaphore in the set
+     * @param n Amount to decrement (typically 1)
+     * @param useUndo If true, uses SEM_UNDO for automatic cleanup
+     * @return true if acquired, false if would block
+     */
     bool tryAcquire(uint8_t semIndex, int32_t n, bool useUndo) const;
 
+    /**
+     * @brief Post (increment) a semaphore.
+     * @param semIndex Index of the semaphore in the set
+     * @param n Amount to increment (typically 1)
+     * @param useUndo If true, uses SEM_UNDO for automatic cleanup
+     */
     void post(uint8_t semIndex, int32_t n, bool useUndo) const;
 
+    /**
+     * @brief Set a semaphore to an absolute value.
+     * @param semIndex Index of the semaphore in the set
+     * @param value Value to set
+     */
     void setValue(uint8_t semIndex, int32_t value) const;
 
+    /**
+     * @brief Get current value of a semaphore.
+     * @param semIndex Index of the semaphore in the set
+     * @return Current semaphore value
+     */
     [[nodiscard]] int32_t getAvailableSpace(uint8_t semIndex) const;
 
+    /**
+     * @brief Destroy the semaphore set.
+     * @throws ipc_exception If semctl IPC_RMID fails
+     */
     void destroy() const;
 
+    /**
+     * @brief RAII lock guard for semaphores.
+     *
+     * Acquires the semaphore on construction and releases on destruction.
+     * Uses SEM_UNDO for safety.
+     */
     class ScopedLock {
     public:
+        /**
+         * @brief Acquire the semaphore.
+         * @param sem Reference to the Semaphore wrapper
+         * @param semIndex Index of the semaphore to lock
+         */
         explicit ScopedLock(const Semaphore &sem, uint8_t semIndex);
 
+        /** @brief Release the semaphore. */
         ~ScopedLock();
 
         ScopedLock(const ScopedLock &) = delete;

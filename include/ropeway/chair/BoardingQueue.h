@@ -66,7 +66,11 @@ struct BoardingQueue {
     BoardingQueue() : entries{}, count{0}, nextChairId{0} {
     }
 
-    /** Find tourist by ID. Returns index or -1 if not found. */
+    /**
+     * @brief Find tourist in queue by ID.
+     * @param touristId Tourist ID to search for
+     * @return Index in entries array, or -1 if not found
+     */
     int32_t findTourist(uint32_t touristId) const {
         for (uint32_t i = 0; i < count; ++i) {
             if (entries[i].touristId == touristId) {
@@ -76,7 +80,11 @@ struct BoardingQueue {
         return -1;
     }
 
-    /** Add tourist to queue. Returns false if queue is full. */
+    /**
+     * @brief Add tourist to the boarding queue.
+     * @param entry Boarding queue entry to add
+     * @return true if added successfully, false if queue is full (MAX_SIZE=64)
+     */
     bool addTourist(const BoardingQueueEntry &entry) {
         if (count >= MAX_SIZE) return false;
         entries[count] = entry;
@@ -84,7 +92,13 @@ struct BoardingQueue {
         return true;
     }
 
-    /** Remove tourist at index, shifting remaining entries. */
+    /**
+     * @brief Remove tourist at specified index.
+     * @param index Index in entries array
+     *
+     * Shifts all subsequent entries to fill the gap.
+     * Does nothing if index is out of bounds.
+     */
     void removeTourist(uint32_t index) {
         if (index >= count) return;
         for (uint32_t i = index; i < count - 1; ++i) {

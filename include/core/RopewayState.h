@@ -13,6 +13,7 @@ enum class RopewayState {
 /**
  * @brief Convert RopewayState enum to string representation.
  * @param state RopewayState to convert
+ * @return String name of the state ("STOPPED", "RUNNING", "EMERGENCY_STOP", "CLOSING")
  */
 constexpr const char *toString(const RopewayState state) {
     switch (state) {

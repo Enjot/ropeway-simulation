@@ -9,8 +9,9 @@ enum class TouristType {
 };
 
 /**
- * @breif Convert TouristType enum to string representation.
+ * @brief Convert TouristType enum to string representation.
  * @param type TouristType to convert
+ * @return "PEDESTRIAN" or "CYCLIST"
  */
 constexpr const char *toString(const TouristType type) {
     switch (type) {

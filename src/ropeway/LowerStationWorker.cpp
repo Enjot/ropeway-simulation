@@ -346,6 +346,35 @@ private:
 
         time_t now = time(nullptr) - shm_->operational.totalPausedSeconds;
 
+        // Forced emergency trigger for testing
+        uint32_t forcedSec = Config::Test::FORCE_EMERGENCY_AT_SEC();
+        if (forcedSec > 0) {
+            time_t elapsedSec = now - shm_->operational.openingTime;
+            if (elapsedSec >= static_cast<time_t>(forcedSec)) {
+                Logger::info(SRC, TAG, "[EMERGENCY] triggered=forced elapsed_sec=%ld", elapsedSec);
+                hasDetectedDanger_ = true;
+                triggerEmergencyStop();
+
+                // Simulate shorter resolve time for tests (2 seconds)
+                int resolveTime = 2;
+                Logger::info(SRC, TAG, "[EMERGENCY] state=assessing resolve_time=%d", resolveTime);
+
+                time_t startSimTime = time(nullptr) - shm_->operational.totalPausedSeconds;
+                while (!g_signals.exit) {
+                    time_t currentSimTime = time(nullptr) - shm_->operational.totalPausedSeconds;
+                    if (currentSimTime - startSimTime >= resolveTime) {
+                        break;
+                    }
+                    sleep(1);
+                }
+
+                Logger::info(SRC, TAG, "[EMERGENCY] state=resolved");
+                initiateResume();
+                return;
+            }
+            return; // Don't do random detection when forced mode is enabled
+        }
+
         // Only check periodically, not every iteration
         if (now - lastDangerCheckTime_ < DANGER_CHECK_INTERVAL_SEC) {
             return;
@@ -484,10 +513,16 @@ private:
             }
 
             // Station has capacity, allow entry
+            uint32_t currentCount;
             {
                 Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
                 shm_->operational.touristsInLowerStation++;
+                currentCount = shm_->operational.touristsInLowerStation;
             }
+
+            // Log station count for test verification
+            Logger::debug(SRC, TAG, "[STATION_COUNT] current=%u max=%u",
+                          currentCount, Config::Simulation::STATION_CAPACITY());
 
             EntryGateResponse response;
             response.touristId = request.touristId;
@@ -495,6 +530,11 @@ private:
             long responseType = EntryGateMsgType::RESPONSE_BASE + request.touristId;
             sendEntryResponse(response, responseType);
             sem_.post(queueSlotSem, 1, false);
+
+            // Log VIP entry for test verification
+            if (request.isVip) {
+                Logger::debug(SRC, TAG, "[VIP_ENTRY] tourist=%u queue_position=priority", request.touristId);
+            }
 
             Logger::info(SRC, TAG, "Entry granted to Tourist %u%s",
                          request.touristId, request.isVip ? " [VIP]" : "");

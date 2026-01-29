@@ -13,6 +13,7 @@ enum class WorkerSignal {
 /**
  * @brief Convert WorkerSignal enum to string representation.
  * @param signal WorkerSignal to convert
+ * @return String name of the signal
  */
 constexpr const char *toString(const WorkerSignal signal) {
     switch (signal) {

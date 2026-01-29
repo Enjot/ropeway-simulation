@@ -223,9 +223,10 @@ private:
                 childCount = forcedChildCount_;
             }
         } else if (tourist_.isAdult()) {
-            // Normal mode: random generation
+            // Normal mode: random generation with configurable chance
+            float childChance = Config::Test::CHILD_CHANCE_PCT() / 100.0f;
             float childRoll = static_cast<float>(rand()) / RAND_MAX;
-            if (childRoll < Constants::Group::CHILD_CHANCE) {
+            if (childRoll < childChance) {
                 // Determine number of children (1 or 2)
                 float twoChildRoll = static_cast<float>(rand()) / RAND_MAX;
                 childCount = (twoChildRoll < Constants::Group::TWO_CHILDREN_CHANCE) ? 2 : 1;
@@ -241,6 +242,12 @@ private:
             childThreads_.push_back(
                 std::make_unique<ChildThread>(tourist_.id * 100 + i, childAge, tourist_.id)
             );
+        }
+
+        // Log guardian info for test verification (if adult with children)
+        if (tourist_.childCount > 0) {
+            Logger::debug(Logger::Source::Tourist, "Tourist", "[CHILD_GUARDIAN] adult=%u children=%u",
+                          tourist_.id, tourist_.childCount);
         }
 
         // Cyclists may have a bike (takes extra slot)

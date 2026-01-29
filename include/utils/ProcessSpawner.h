@@ -13,7 +13,22 @@
 #include <mach-o/dyld.h>
 #endif
 
+/**
+ * @brief Process lifecycle management utilities.
+ *
+ * Provides functions for spawning, terminating, and waiting for child processes
+ * using fork/exec. All functions are signal-safe and handle EINTR.
+ */
 namespace ProcessSpawner {
+    /**
+     * @brief Get the full path to an executable in the same directory as current process.
+     * @param processName Name of the target executable
+     * @return Full path to the executable
+     *
+     * Uses platform-specific methods:
+     * - macOS: _NSGetExecutablePath
+     * - Linux: /proc/self/exe symlink
+     */
     inline std::string getExecutablePath(const char *processName) {
         char path[1024];
         uint32_t size = sizeof(path);

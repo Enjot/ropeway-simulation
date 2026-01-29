@@ -16,14 +16,41 @@
 
 class IpcManager;
 
+/**
+ * @brief Cleanup handler namespace for IpcManager.
+ *
+ * Registers an atexit handler to ensure IPC resources are cleaned up
+ * even on abnormal termination.
+ */
 namespace IpcCleanup {
     inline IpcManager *g_instance = nullptr;
 
+    /**
+     * @brief atexit handler for IPC cleanup.
+     *
+     * Called automatically at program exit to release IPC resources.
+     */
     void atexitHandler();
 }
 
+/**
+ * @brief Central manager for all IPC resources.
+ *
+ * Creates and manages shared memory, semaphores, and message queues
+ * used by the simulation. Provides RAII cleanup of all resources.
+ *
+ * Only the main orchestrator process should create an IpcManager.
+ * Child processes should attach to resources using individual wrappers.
+ */
 class IpcManager {
 public:
+    /**
+     * @brief Create all IPC resources for the simulation.
+     * @throws ipc_exception If any IPC creation fails
+     *
+     * Creates shared memory, semaphore set, and all message queues.
+     * Registers cleanup handler for automatic resource release.
+     */
     IpcManager()
         : shmKey_{ftok(".", 'S')},
           semKey_{ftok(".", 'M')},
@@ -61,25 +88,41 @@ public:
 
     IpcManager &operator=(IpcManager &&) = delete;
 
-    // State access
+    /** @brief Get pointer to shared ropeway state. */
     SharedRopewayState *state() { return shm_.get(); }
+    /** @brief Access shared state via pointer operator. */
     SharedRopewayState *operator->() { return shm_.get(); }
 
-    // Resource access
+    /** @brief Get reference to semaphore set wrapper. */
     Semaphore &sem() { return sem_; }
+    /** @brief Get reference to worker message queue. */
     MessageQueue<WorkerMessage> &workerQueue() { return workerQueue_; }
+    /** @brief Get reference to cashier message queue. */
     MessageQueue<TicketRequest> &cashierQueue() { return cashierQueue_; }
+    /** @brief Get reference to entry gate message queue. */
     MessageQueue<EntryGateRequest> &entryGateQueue() { return entryGateQueue_; }
+    /** @brief Get reference to log message queue. */
     MessageQueue<LogMessage> &logQueue() { return logQueue_; }
 
-    // Keys for child processes
+    /** @brief Get shared memory key for child processes. */
     key_t shmKey() const { return shmKey_; }
+    /** @brief Get semaphore set key for child processes. */
     key_t semKey() const { return semKey_; }
+    /** @brief Get worker message queue key for child processes. */
     key_t workerMsgKey() const { return workerMsgKey_; }
+    /** @brief Get cashier message queue key for child processes. */
     key_t cashierMsgKey() const { return cashierMsgKey_; }
+    /** @brief Get entry gate message queue key for child processes. */
     key_t entryGateMsgKey() const { return entryGateMsgKey_; }
+    /** @brief Get log message queue key for child processes. */
     key_t logMsgKey() const { return logMsgKey_; }
 
+    /**
+     * @brief Initialize all semaphores to their starting values.
+     * @param stationCapacity Maximum tourists allowed in lower station
+     *
+     * Must be called after construction and before starting simulation.
+     */
     void initSemaphores(const uint16_t stationCapacity) const {
         // Startup synchronization
         sem_.initialize(Semaphore::Index::LOGGER_READY, 0);
@@ -109,6 +152,11 @@ public:
         sem_.initialize(Semaphore::Index::LOG_QUEUE_SLOTS, Constants::Queue::LOG_QUEUE_CAPACITY);
     }
 
+    /**
+     * @brief Initialize shared state with simulation timing.
+     * @param openTime Real time when simulation starts
+     * @param closeTime Real time when simulation should end
+     */
     void initState(time_t openTime, time_t closeTime) {
         state()->operational.state = RopewayState::RUNNING;
         state()->operational.acceptingNewTourists = true;
@@ -117,6 +165,12 @@ public:
         state()->stats.dailyStats.simulationStartTime = openTime;
     }
 
+    /**
+     * @brief Clean up all IPC resources.
+     *
+     * Safe to call multiple times. Destroys shared memory, semaphores,
+     * and all message queues. Called automatically by destructor.
+     */
     void cleanup() noexcept {
         if (cleanedUp_) return;
         cleanedUp_ = true;

@@ -20,15 +20,33 @@ struct SharedRopewayState;
 template<typename T>
 class SharedMemory;
 
+/**
+ * @brief Centralized and decentralized logging system.
+ *
+ * Provides logging with support for both direct output and centralized
+ * logging through a message queue to a dedicated logger process.
+ * Logs include simulated time, color-coded sources, and log levels.
+ */
 namespace Logger {
-    enum class Level { DEBUG, INFO, WARN, ERROR };
+    /**
+     * @brief Log severity levels.
+     */
+    enum class Level {
+        DEBUG, ///< Detailed technical information
+        INFO,  ///< Business logic events
+        WARN,  ///< Warning conditions
+        ERROR  ///< Error conditions
+    };
 
+    /**
+     * @brief Log message source identifiers.
+     */
     enum class Source : uint8_t {
-        LowerWorker,
-        UpperWorker,
-        Cashier,
-        Tourist,
-        Other
+        LowerWorker, ///< Lower station controller
+        UpperWorker, ///< Upper station controller
+        Cashier,     ///< Ticket sales process
+        Tourist,     ///< Tourist process
+        Other        ///< Main orchestrator and utilities
     };
 
     namespace detail {
@@ -137,13 +155,30 @@ namespace Logger {
         }
     }
 
-    /** Initialize centralized logging mode */
+    /**
+     * @brief Initialize centralized logging mode.
+     * @param shmKey Shared memory key for accessing state
+     * @param semKey Semaphore key for synchronization
+     * @param logQueueKey Message queue key for log messages
+     *
+     * After calling this, all log messages are sent to the logger process
+     * via message queue instead of being printed directly.
+     */
     void initCentralized(key_t shmKey, key_t semKey, key_t logQueueKey);
 
-    /** Cleanup centralized logging resources */
+    /**
+     * @brief Cleanup centralized logging resources.
+     *
+     * Switches back to direct logging mode and releases IPC resources.
+     */
     void cleanupCentralized();
 
-    /** Set simulation start time to enable simulated time in logs */
+    /**
+     * @brief Set simulation start time for log timestamps.
+     * @param startTime Real time when simulation started
+     *
+     * Enables simulated time display in log messages (e.g., [08:15]).
+     */
     inline void setSimulationStartTime(time_t startTime) {
         struct timeval now;
         gettimeofday(&now, nullptr);
@@ -152,6 +187,15 @@ namespace Logger {
         detail::simulationStartTime.tv_usec = now.tv_usec;
     }
 
+    /**
+     * @brief Log a debug message.
+     * @param source Source process identifier
+     * @param tag Short identifier (e.g., "Tourist 5")
+     * @param message Format string (printf-style)
+     * @param args Format arguments
+     *
+     * Debug messages are for technical details, disabled by default in production.
+     */
     template<typename... Args>
     void debug(Source source, const char *tag, const char *message, Args... args) {
         if constexpr (Flags::Logging::IS_DEBUG_ENABLED) {
@@ -159,6 +203,15 @@ namespace Logger {
         }
     }
 
+    /**
+     * @brief Log an info message.
+     * @param source Source process identifier
+     * @param tag Short identifier (e.g., "Tourist 5")
+     * @param message Format string (printf-style)
+     * @param args Format arguments
+     *
+     * Info messages are for business logic events.
+     */
     template<typename... Args>
     void info(Source source, const char *tag, const char *message, Args... args) {
         if constexpr (Flags::Logging::IS_INFO_ENABLED) {
@@ -166,6 +219,15 @@ namespace Logger {
         }
     }
 
+    /**
+     * @brief Log a warning message.
+     * @param source Source process identifier
+     * @param tag Short identifier (e.g., "Tourist 5")
+     * @param message Format string (printf-style)
+     * @param args Format arguments
+     *
+     * Warning messages indicate potential issues.
+     */
     template<typename... Args>
     void warn(Source source, const char *tag, const char *message, Args... args) {
         if constexpr (Flags::Logging::IS_WARN_ENABLED) {
@@ -173,6 +235,15 @@ namespace Logger {
         }
     }
 
+    /**
+     * @brief Log an error message.
+     * @param source Source process identifier
+     * @param tag Short identifier (e.g., "Tourist 5")
+     * @param message Format string (printf-style)
+     * @param args Format arguments
+     *
+     * Error messages indicate failures that need attention.
+     */
     template<typename... Args>
     void error(Source source, const char *tag, const char *message, Args... args) {
         if constexpr (Flags::Logging::IS_ERROR_ENABLED) {
@@ -180,20 +251,44 @@ namespace Logger {
         }
     }
 
+    /**
+     * @brief Print POSIX error using perror().
+     * @param message Context message to prepend
+     */
     inline void pError(const char *message) { perror(message); }
 
+    /**
+     * @brief Log a POSIX error with errno description.
+     * @param source Source process identifier
+     * @param tag Short identifier
+     * @param message Context message
+     *
+     * Appends strerror(errno) to the message.
+     */
     inline void perror(Source source, const char *tag, const char *message) {
         if constexpr (Flags::Logging::IS_ERROR_ENABLED) {
             detail::log(source, Level::ERROR, tag, "%s: %s", message, strerror(errno));
         }
     }
 
+    /**
+     * @brief Log a state transition.
+     * @param source Source process identifier
+     * @param tag Short identifier
+     * @param from Previous state name
+     * @param to New state name
+     */
     inline void stateChange(Source source, const char *tag, const char *from, const char *to) {
         if constexpr (Flags::Logging::IS_INFO_ENABLED) {
             detail::log(source, Level::INFO, tag, "%s -> %s", from, to);
         }
     }
 
+    /**
+     * @brief Print a visual separator line.
+     * @param ch Character to use for the line
+     * @param count Number of characters in the line
+     */
     inline void separator(char ch = '-', int count = 60) {
         char buf[128];
         int n = (count < 127) ? count : 127;

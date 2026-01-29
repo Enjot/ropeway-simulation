@@ -27,7 +27,12 @@ struct GatePassage {
                     wasAllowed{false} {
     }
 
-    /** Format simulated time as HH:MM string */
+    /**
+     * @brief Format simulated time as HH:MM string.
+     * @param buffer Output buffer (must be at least 6 bytes)
+     *
+     * Converts simTimeSeconds to hours and minutes format.
+     */
     void formatSimTime(char *buffer) const {
         uint32_t hours = simTimeSeconds / 3600;
         uint32_t minutes = (simTimeSeconds % 3600) / 60;

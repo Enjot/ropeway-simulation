@@ -70,7 +70,12 @@ struct
     }
 
     /**
-     * Calculate and set the slots field based on type and children.
+     * @brief Calculate and set the slots field based on type and children.
+     *
+     * Sets the slots field to the total chair capacity needed:
+     * - Base: 1 slot for the tourist
+     * - Cyclist with bike: 2 slots (1 person + 1 bike)
+     * - Plus 1 slot per child
      */
     void calculateSlots() {
         slots = 1; // Base: person takes 1 slot
@@ -85,8 +90,12 @@ struct
     }
 
     /**
-     * Check if ticket is still valid (for time-based tickets).
-     * @param totalPausedSeconds Cumulative seconds the simulation was suspended (Ctrl+Z)
+     * @brief Check if ticket is still valid.
+     * @param totalPausedSeconds Cumulative seconds the simulation was paused (Ctrl+Z)
+     * @return true if ticket is valid, false otherwise
+     *
+     * Single-use tickets are invalid after first ride.
+     * Time-based tickets are invalid after validUntil time.
      */
     [[nodiscard]] bool isTicketValid(time_t totalPausedSeconds = 0) const noexcept {
         if (!hasTicket) return false;
@@ -95,21 +104,26 @@ struct
     }
 
     /**
-     * Check if ticket allows multiple rides
+     * @brief Check if ticket allows multiple rides.
+     * @return true if ticket is not single-use, false otherwise
      */
     [[nodiscard]] constexpr bool canRideAgain() const noexcept {
         return ticketType != TicketType::SINGLE_USE;
     }
 
     /**
-     * Check if tourist is an adult (can have children)
+     * @brief Check if tourist is an adult.
+     * @return true if age >= 18, false otherwise
+     *
+     * Adults can supervise children under 8 years old.
      */
     [[nodiscard]] constexpr bool isAdult() const noexcept {
         return age >= Constants::Age::ADULT_AGE_FROM;
     }
 
     /**
-     * Check if this tourist has a group (children or bike)
+     * @brief Check if this tourist has a group.
+     * @return true if tourist has children or a bike, false otherwise
      */
     [[nodiscard]] constexpr bool hasGroup() const noexcept {
         return childCount > 0 || hasBike;
