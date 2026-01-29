@@ -332,7 +332,7 @@ namespace Config {
          * Set to 100 for stress testing to ensure all tourists complete full lifecycle.
          */
         inline float WANTS_TO_RIDE_PCT() {
-            static float value = Runtime::getEnvFloatOr("ROPEWAY_WANTS_TO_RIDE_PCT");
+            static float value = Runtime::getEnvFloatOr("ROPEWAY_WANTS_TO_RIDE_PCT", 90.0f);
             return value;
         }
     }
