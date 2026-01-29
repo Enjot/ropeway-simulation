@@ -234,6 +234,7 @@ private:
             bool wantsToRide = (rideDist(gen) > 0.1);
 
             // Tourist process handles children/bike internally as threads
+            // numChildren omitted - parser defaults to 0 (random generation)
             pid_t pid = ProcessSpawner::spawn("tourist_process", {
                                                   std::to_string(id),
                                                   std::to_string(age),

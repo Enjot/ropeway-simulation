@@ -148,12 +148,17 @@ namespace ArgumentParser {
     }
 
     inline bool parseTouristArgs(int argc, char *argv[], TouristArgs &args) {
-        if (argc != 14) {
+        // Accept 13 args (no numChildren) or 14 args (with numChildren)
+        if (argc != 13 && argc != 14) {
             detail::usage(
                 argv[0],
-                "<id> <age> <type> <isVip> <wantsToRide> <numChildren> <trail> <shmKey> <semKey> <msgKey> <cashierMsgKey> <entryGateMsgKey> <logMsgKey>");
+                "<id> <age> <type> <isVip> <wantsToRide> [numChildren] <trail> <shmKey> <semKey> <msgKey> <cashierMsgKey> <entryGateMsgKey> <logMsgKey>");
             return false;
         }
+
+        bool hasNumChildren = (argc == 14);
+        int offset = hasNumChildren ? 0 : -1;  // Shift indices if numChildren missing
+
         if (!parseUint32(argv[1], args.id)) {
             detail::err("Invalid id");
             return false;
@@ -174,39 +179,46 @@ namespace ArgumentParser {
             detail::err("Invalid wantsToRide (0-1)");
             return false;
         }
-        if (!parseUint32(argv[6], args.numChildren)) {
-            detail::err("Invalid numChildren");
-            return false;
+
+        // numChildren: parse if present, else default to 0 (random generation)
+        if (hasNumChildren) {
+            if (!parseUint32(argv[6], args.numChildren)) {
+                detail::err("Invalid numChildren");
+                return false;
+            }
+            if (args.numChildren > 2) {
+                detail::err("numChildren must be 0-2");
+                return false;
+            }
+        } else {
+            args.numChildren = 0;  // Default: random generation in TouristProcess
         }
-        if (args.numChildren > 2) {
-            detail::err("numChildren must be 0-2");
-            return false;
-        }
-        if (!parseEnum(argv[7], 0, 2, args.trail)) {
+
+        if (!parseEnum(argv[7 + offset], 0, 2, args.trail)) {
             detail::err("Invalid trail (0-2)");
             return false;
         }
-        if (!parseKeyT(argv[8], args.shmKey)) {
+        if (!parseKeyT(argv[8 + offset], args.shmKey)) {
             detail::err("Invalid shmKey");
             return false;
         }
-        if (!parseKeyT(argv[9], args.semKey)) {
+        if (!parseKeyT(argv[9 + offset], args.semKey)) {
             detail::err("Invalid semKey");
             return false;
         }
-        if (!parseKeyT(argv[10], args.msgKey)) {
+        if (!parseKeyT(argv[10 + offset], args.msgKey)) {
             detail::err("Invalid msgKey");
             return false;
         }
-        if (!parseKeyT(argv[11], args.cashierMsgKey)) {
+        if (!parseKeyT(argv[11 + offset], args.cashierMsgKey)) {
             detail::err("Invalid cashierMsgKey");
             return false;
         }
-        if (!parseKeyT(argv[12], args.entryGateMsgKey)) {
+        if (!parseKeyT(argv[12 + offset], args.entryGateMsgKey)) {
             detail::err("Invalid entryGateMsgKey");
             return false;
         }
-        if (!parseKeyT(argv[13], args.logMsgKey)) {
+        if (!parseKeyT(argv[13 + offset], args.logMsgKey)) {
             detail::err("Invalid logMsgKey");
             return false;
         }

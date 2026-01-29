@@ -535,7 +535,37 @@ private:
         Logger::info(Logger::Source::Tourist, tag_, "Riding chair %d (group of %u)...", assignedChairId_,
                      tourist_.slots);
 
-        usleep(Config::Chair::RIDE_DURATION_US());
+        const uint32_t totalDurationUs = Config::Chair::RIDE_DURATION_US();
+        const uint32_t chunkUs = 100000; // 100ms chunks
+        uint32_t elapsedUs = 0;
+
+        while (elapsedUs < totalDurationUs && !g_signals.exit) {
+            uint32_t toSleep = std::min(chunkUs, totalDurationUs - elapsedUs);
+            usleep(toSleep);
+            elapsedUs += toSleep;
+
+            // Check state for emergency handling
+            RopewayState state;
+            bool closing;
+            {
+                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                state = shm_->operational.state;
+                closing = !shm_->operational.acceptingNewTourists;
+            }
+
+            if (state == RopewayState::EMERGENCY_STOP) {
+                // Pause and wait for emergency to resolve or closing time to trigger auto-resume
+                Logger::info(Logger::Source::Tourist, tag_, "Chair paused - emergency stop");
+                while (!g_signals.exit) {
+                    sleep(1);
+                    Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                    if (shm_->operational.state != RopewayState::EMERGENCY_STOP) {
+                        Logger::info(Logger::Source::Tourist, tag_, "Chair resuming after emergency");
+                        break;
+                    }
+                }
+            }
+        }
 
         bool lastPassenger = false;
         {

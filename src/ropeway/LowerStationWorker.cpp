@@ -59,7 +59,17 @@ public:
             // Check for emergency signal from external source (backward compatibility)
             if (g_signals.emergency) {
                 g_signals.emergency = 0;
-                triggerEmergencyStop();
+                // Check if we triggered this emergency or another worker did
+                pid_t detectorPid;
+                {
+                    Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                    detectorPid = shm_->operational.dangerDetectorPid;
+                }
+                if (detectorPid != getpid()) {
+                    // Another worker triggered it - just acknowledge, don't re-trigger
+                    handleEmergencyStop();
+                }
+                // If we triggered it, we're already handling it in checkForDanger()
             }
 
             // Check for resume signal from external source
@@ -97,10 +107,26 @@ public:
             // Use local flag for emergency handling - shared state may have been
             // overwritten by Simulation (e.g., CLOSING transition during emergency)
             if (isEmergencyStopped_) {
-                Logger::debug(SRC, TAG, "Emergency loop: sharedState=%d", static_cast<int>(currentState));
-                // Block until a signal (SIGUSR2 for resume) interrupts the wait
-                sem_.wait(Semaphore::Index::BOARDING_QUEUE_WORK, 1, false);
-                continue;
+                // Check if closing time reached during emergency - auto-resume
+                bool closingDuringEmergency;
+                {
+                    Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                    closingDuringEmergency = !shm_->operational.acceptingNewTourists;
+                }
+                if (closingDuringEmergency) {
+                    Logger::info(SRC, TAG, "Closing time during emergency - auto-resuming");
+                    {
+                        Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                        shm_->operational.state = RopewayState::CLOSING;
+                    }
+                    isEmergencyStopped_ = false;
+                    // Fall through to normal processing
+                } else {
+                    Logger::debug(SRC, TAG, "Emergency loop: sharedState=%d", static_cast<int>(currentState));
+                    // Block until a signal (SIGUSR2 for resume) interrupts the wait
+                    sem_.wait(Semaphore::Index::BOARDING_QUEUE_WORK, 1, false);
+                    continue;
+                }
             }
 
             // Autonomous danger detection (only during normal operation, not closing)
@@ -173,8 +199,25 @@ private:
         Logger::info(SRC, TAG, "Emergency stop activated");
     }
 
+    /**
+     * Acknowledge emergency stop triggered by another worker.
+     * Unlike triggerEmergencyStop(), this does NOT set dangerDetectorPid.
+     */
+    void handleEmergencyStop() {
+        Logger::warn(SRC, TAG, "!!! EMERGENCY STOP RECEIVED !!!");
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            shm_->operational.state = RopewayState::EMERGENCY_STOP;
+        }
+        isEmergencyStopped_ = true;
+        Logger::info(SRC, TAG, "Emergency stop acknowledged");
+    }
+
     void handleResumeRequest() {
         Logger::info(SRC, TAG, "Resume signal received, confirming ready...");
+
+        // Drain stale emergency messages that might have been queued
+        while (msgQueue_.tryReceive(MSG_TYPE_FROM_UPPER)) { /* discard */ }
 
         // Check for ready message from UpperWorker
         auto msg = msgQueue_.tryReceive(MSG_TYPE_FROM_UPPER);
@@ -213,6 +256,9 @@ private:
 
     void initiateResume() {
         Logger::info(SRC, TAG, "Resume requested, checking with UpperWorker...");
+
+        // Drain stale emergency messages that might have been queued
+        while (msgQueue_.tryReceive(MSG_TYPE_FROM_UPPER)) { /* discard */ }
 
         // Send ready message to UpperWorker
         sendMessage(WorkerSignal::READY_TO_START, "LowerWorker ready to resume");
@@ -285,6 +331,14 @@ private:
      * Replaces centralized emergency timing from main process.
      */
     void checkForDanger() {
+        // Don't detect new danger if already in emergency (another worker triggered it)
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            if (shm_->operational.state == RopewayState::EMERGENCY_STOP) {
+                return;
+            }
+        }
+
         // Each worker can only detect danger once per simulation
         if (hasDetectedDanger_) {
             return;
@@ -495,7 +549,16 @@ private:
         Semaphore::ScopedLock lockChairs(sem_, Semaphore::Index::SHM_CHAIRS);
 
         if (shm_->operational.state == RopewayState::EMERGENCY_STOP) {
-            return;
+            // During emergency, no chairs dispatch
+            // If closing time reached, auto-resume to CLOSING state so tourists can drain
+            if (!shm_->operational.acceptingNewTourists) {
+                Logger::info(SRC, TAG, "Closing time during emergency - auto-resuming to drain");
+                shm_->operational.state = RopewayState::CLOSING;
+                isEmergencyStopped_ = false;
+                // Continue to process boarding queue below
+            } else {
+                return;
+            }
         }
 
         BoardingQueue &queue = shm_->chairPool.boardingQueue;

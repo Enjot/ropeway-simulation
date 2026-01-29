@@ -60,7 +60,17 @@ public:
             // Check for emergency signal from external source
             if (g_signals.emergency) {
                 g_signals.emergency = 0;
-                handleEmergencyStop();
+                // Check if we triggered this emergency or another worker did
+                pid_t detectorPid;
+                {
+                    Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+                    detectorPid = shm_->operational.dangerDetectorPid;
+                }
+                if (detectorPid != getpid()) {
+                    // Another worker triggered it - just acknowledge, don't re-trigger
+                    handleEmergencyStop();
+                }
+                // If we triggered it, we're already handling it in checkForDanger()
             }
 
             // Check for resume signal from external source
@@ -108,6 +118,11 @@ public:
 
 private:
     void handleEmergencyStop() {
+        if (isEmergencyStopped_) {
+            Logger::debug(SRC, TAG, "Emergency stop already active, ignoring duplicate");
+            return;
+        }
+
         Logger::warn(SRC, TAG, "!!! EMERGENCY STOP RECEIVED !!!");
 
         {
@@ -121,6 +136,9 @@ private:
 
     void handleResumeRequest() {
         Logger::info(SRC, TAG, "Resume signal received, confirming ready...");
+
+        // Drain stale emergency messages that might have been queued
+        while (msgQueue_.tryReceive(MSG_TYPE_FROM_LOWER)) { /* discard */ }
 
         // Check for ready message from LowerWorker
         auto msg = msgQueue_.tryReceive(MSG_TYPE_FROM_LOWER);
@@ -187,6 +205,14 @@ private:
      * Simulates worker detecting a problem at the upper station.
      */
     void checkForDanger() {
+        // Don't detect new danger if already in emergency (another worker triggered it)
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
+            if (shm_->operational.state == RopewayState::EMERGENCY_STOP) {
+                return;
+            }
+        }
+
         // Each worker can only detect danger once per simulation
         if (hasDetectedDanger_) {
             return;
@@ -260,6 +286,9 @@ private:
 
     void initiateResume() {
         Logger::info(SRC, TAG, "Resume requested, checking with LowerWorker...");
+
+        // Drain stale emergency messages that might have been queued
+        while (msgQueue_.tryReceive(MSG_TYPE_FROM_LOWER)) { /* discard */ }
 
         // Send ready message to LowerWorker
         sendMessage(WorkerSignal::READY_TO_START, "UpperWorker ready to resume");

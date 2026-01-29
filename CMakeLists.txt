@@ -78,12 +78,6 @@ set(UTILS_HEADERS
         include/utils/TimeHelper.h
 )
 
-set(TEST_HEADERS
-        include/tests/TestConfig.h
-        include/tests/TestValidator.h
-        include/tests/TestRunner.h
-)
-
 # All headers combined
 set(ALL_HEADERS
         ${CORE_HEADERS}
@@ -94,7 +88,6 @@ set(ALL_HEADERS
         ${IPC_HEADERS}
         ${STATS_HEADERS}
         ${UTILS_HEADERS}
-        ${TEST_HEADERS}
 )
 
 # === Source files (in src/) ===
@@ -146,13 +139,6 @@ add_executable(cashier_process
 # Logger process - Centralized log collection (spawned via fork/exec)
 add_executable(logger_process
         src/logging/LoggerProcess.cpp
-        ${COMMON_SOURCES}
-        ${ALL_HEADERS}
-)
-
-# Test runner - Automated test suite
-add_executable(test_runner
-        src/tests/TestRunner.cpp
         ${COMMON_SOURCES}
         ${ALL_HEADERS}
 )
