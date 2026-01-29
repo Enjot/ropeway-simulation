@@ -137,6 +137,13 @@ private:
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
             shm_->operational.dangerDetectorPid = 0;
         }
+
+        // Record emergency end if this worker started it
+        if (currentEmergencyRecordIndex_ >= 0) {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
+            shm_->stats.dailyStats.recordEmergencyEnd(currentEmergencyRecordIndex_);
+            currentEmergencyRecordIndex_ = -1;
+        }
         isEmergencyStopped_ = false;
     }
 
@@ -200,12 +207,6 @@ private:
             Logger::warn(SRC, TAG, "!!! DANGER DETECTED - Initiating emergency stop !!!");
             triggerEmergencyStop();
 
-            // Update statistics
-            {
-                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
-                shm_->stats.dailyStats.emergencyStops++;
-            }
-
             // Simulate time to assess and resolve the danger (3-6 real seconds)
             int resolveTime = 3 + (rand() % 4);
             int simulatedMinutes = resolveTime * Config::Simulation::TIME_SCALE() / 60;
@@ -227,6 +228,12 @@ private:
     }
 
     void triggerEmergencyStop() {
+        // Record emergency start for statistics
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
+            currentEmergencyRecordIndex_ = shm_->stats.dailyStats.recordEmergencyStart(2); // workerId=2
+        }
+
         Logger::warn(SRC, TAG, "!!! EMERGENCY STOP TRIGGERED !!!");
 
         pid_t lowerWorkerPid;
@@ -290,6 +297,13 @@ private:
             }
             shm_->operational.dangerDetectorPid = 0; // Clear danger detector
         }
+
+        // Record emergency end if this worker started it
+        if (currentEmergencyRecordIndex_ >= 0) {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
+            shm_->stats.dailyStats.recordEmergencyEnd(currentEmergencyRecordIndex_);
+            currentEmergencyRecordIndex_ = -1;
+        }
         isEmergencyStopped_ = false;
     }
 
@@ -327,6 +341,7 @@ private:
     bool isEmergencyStopped_;
     time_t lastDangerCheckTime_;
     bool hasDetectedDanger_;
+    int32_t currentEmergencyRecordIndex_{-1};
 };
 
 int main(int argc, char *argv[]) {

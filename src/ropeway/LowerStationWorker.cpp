@@ -140,6 +140,12 @@ public:
 
 private:
     void triggerEmergencyStop() {
+        // Record emergency start for statistics
+        {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
+            currentEmergencyRecordIndex_ = shm_->stats.dailyStats.recordEmergencyStart(1); // workerId=1
+        }
+
         Logger::warn(SRC, TAG, "!!! EMERGENCY STOP TRIGGERED !!!");
 
         pid_t upperWorkerPid;
@@ -192,6 +198,13 @@ private:
             }
             shm_->operational.dangerDetectorPid = 0; // Clear danger detector
         }
+
+        // Record emergency end if this worker started it
+        if (currentEmergencyRecordIndex_ >= 0) {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
+            shm_->stats.dailyStats.recordEmergencyEnd(currentEmergencyRecordIndex_);
+            currentEmergencyRecordIndex_ = -1;
+        }
         isEmergencyStopped_ = false;
 
         // Wake up main loop to resume processing boarding queue
@@ -241,6 +254,13 @@ private:
             }
             shm_->operational.dangerDetectorPid = 0; // Clear danger detector
         }
+
+        // Record emergency end if this worker started it
+        if (currentEmergencyRecordIndex_ >= 0) {
+            Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
+            shm_->stats.dailyStats.recordEmergencyEnd(currentEmergencyRecordIndex_);
+            currentEmergencyRecordIndex_ = -1;
+        }
         isEmergencyStopped_ = false;
 
         // Wake up main loop to resume processing boarding queue
@@ -284,12 +304,6 @@ private:
             hasDetectedDanger_ = true;
             Logger::warn(SRC, TAG, "!!! DANGER DETECTED - Initiating emergency stop !!!");
             triggerEmergencyStop();
-
-            // Update statistics
-            {
-                Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
-                shm_->stats.dailyStats.emergencyStops++;
-            }
 
             // Simulate time to assess and resolve the danger (3-6 real seconds)
             int resolveTime = 3 + (rand() % 4);
@@ -586,6 +600,7 @@ private:
     time_t lastDangerCheckTime_;
     bool hasDetectedDanger_;
     std::optional<EntryGateRequest> pendingEntryRequest_;
+    int32_t currentEmergencyRecordIndex_{-1};
 };
 
 int main(int argc, char *argv[]) {

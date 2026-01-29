@@ -133,148 +133,111 @@ namespace Test {
         }
 
         /**
-     * Validate child supervision rules from gate passage log
+     * Validate child supervision rules.
+     * With thread-based children, we validate through parent records using childCount field.
      */
-        static void validateChildSupervision(const TestScenario &scenario,
+        static void validateChildSupervision([[maybe_unused]] const TestScenario &scenario,
                                              const SharedRopewayState &state,
                                              TestResult &result) {
-            uint32_t childrenRodeAlone = 0;
-            uint32_t childrenTotal = 0;
-            uint32_t childrenWithRides = 0;
+            uint32_t totalChildren = 0;
+            uint32_t adultsWithTooManyChildren = 0;
+            uint32_t adultsWithChildren = 0;
 
-            // Check tourist records for children under 8 who completed rides
+            // Check parent tourist records for child counts
+            // Children are threads within parent processes, not separate records
             for (uint32_t i = 0; i < state.stats.touristRecordCount; ++i) {
                 const TouristRideRecord &rec = state.stats.touristRecords[i];
 
-                if (rec.age < Constants::Age::SUPERVISION_AGE_LIMIT) {
-                    ++childrenTotal;
+                // Only adults can have children (they have childCount field set)
+                if (rec.age >= Constants::Age::SUPERVISION_AGE_LIMIT) {
+                    if (rec.childCount > 0) {
+                        totalChildren += rec.childCount;
+                        ++adultsWithChildren;
 
-                    if (rec.rideGatePassages > 0) {
-                        ++childrenWithRides;
-
-                        // Check if child had a guardian assigned
-                        if (rec.guardianId < 0) {
-                            ++childrenRodeAlone;
+                        if (rec.childCount > Constants::Gate::MAX_CHILDREN_PER_ADULT) {
+                            ++adultsWithTooManyChildren;
                         }
                     }
                 }
             }
 
-            result.childrenWithoutGuardian = childrenRodeAlone;
+            result.adultsWithTooManyChildren = adultsWithTooManyChildren;
+            // Children can't ride alone when they're threads - always 0
+            result.childrenWithoutGuardian = 0;
 
-            // With children as threads inside parent processes, stranded children shouldn't occur
-            // Children are part of the parent's process and use combined slots
-            uint32_t strandedChildren = 0; // Always 0 now - children can't be separated
-
-            // Validate max 2 children per adult constraint
-            // Now checked via childCount field on each tourist
-            uint32_t adultsWithExcess = 0;
-            for (uint32_t i = 0; i < state.chairPool.boardingQueue.count; ++i) {
-                const BoardingQueueEntry &entry = state.chairPool.boardingQueue.entries[i];
-                if (entry.childCount > Constants::Gate::MAX_CHILDREN_PER_ADULT) {
-                    ++adultsWithExcess;
-                }
-            }
-
-            result.adultsWithTooManyChildren = adultsWithExcess;
-
-            // Report failures
-            if (childrenRodeAlone > 0) {
+            // Validation passes if max children per adult is respected
+            if (adultsWithTooManyChildren > 0) {
                 std::ostringstream oss;
-                oss << "SUPERVISION VIOLATION: " << childrenRodeAlone
-                        << " child(ren) rode without guardian";
-                result.addFailure(oss.str());
-            }
-
-            if (adultsWithExcess > 0) {
-                std::ostringstream oss;
-                oss << "SUPERVISION VIOLATION: " << adultsWithExcess
+                oss << "SUPERVISION VIOLATION: " << adultsWithTooManyChildren
                         << " adult(s) supervising more than " << Constants::Gate::MAX_CHILDREN_PER_ADULT << " children";
                 result.addFailure(oss.str());
             }
 
-            // Report info
-            if (childrenTotal > 0) {
+            // Report info about child supervision
+            if (totalChildren > 0 || adultsWithChildren > 0) {
                 std::ostringstream oss;
-                oss << "Child supervision: " << childrenTotal << " children under "
-                        << Constants::Age::SUPERVISION_AGE_LIMIT << " years, "
-                        << childrenWithRides << " completed rides";
+                oss << "Child supervision: " << totalChildren << " children traveled with "
+                        << adultsWithChildren << " adult guardian(s)";
                 result.addWarning(oss.str());
-            }
-
-            if (strandedChildren > 0) {
-                std::ostringstream oss;
-                oss << "Stranded children at end: " << strandedChildren
-                        << " (waiting for guardian pairing)";
-                result.addWarning(oss.str());
+            } else {
+                result.addWarning("Child supervision: No children in this test run");
             }
         }
 
         /**
-     * Validate VIP priority handling
+     * Validate VIP priority handling with timestamp checks
      */
-        static void validateVipPriority(const TestScenario &scenario,
+        static void validateVipPriority([[maybe_unused]] const TestScenario &scenario,
                                         const SharedRopewayState &state,
                                         TestResult &result) {
-            // Count VIP and regular entry gate passages
             uint32_t vipEntries = 0;
             uint32_t regularEntries = 0;
-            time_t firstVipEntry = 0;
-            time_t firstRegularEntry = 0;
+            time_t earliestVipEntry = LONG_MAX;
+            time_t earliestRegularEntry = LONG_MAX;
 
             for (uint32_t i = 0; i < state.stats.gateLog.count; ++i) {
                 const GatePassage &passage = state.stats.gateLog.entries[i];
+                if (passage.gateType != GateType::ENTRY || !passage.wasAllowed) continue;
 
-                if (passage.gateType != GateType::ENTRY || !passage.wasAllowed) {
-                    continue;
-                }
-
-                // Find if this tourist is VIP
-                int32_t recordIdx = -1;
+                // Find tourist to check VIP status
+                bool isVip = false;
                 for (uint32_t j = 0; j < state.stats.touristRecordCount; ++j) {
                     if (state.stats.touristRecords[j].touristId == passage.touristId) {
-                        recordIdx = static_cast<int32_t>(j);
+                        isVip = state.stats.touristRecords[j].isVip;
                         break;
                     }
                 }
 
-                if (recordIdx >= 0) {
-                    if (state.stats.touristRecords[recordIdx].isVip) {
-                        ++vipEntries;
-                        if (firstVipEntry == 0) {
-                            firstVipEntry = passage.timestamp;
-                        }
-                    } else {
-                        ++regularEntries;
-                        if (firstRegularEntry == 0) {
-                            firstRegularEntry = passage.timestamp;
-                        }
-                    }
+                if (isVip) {
+                    ++vipEntries;
+                    if (passage.timestamp < earliestVipEntry) earliestVipEntry = passage.timestamp;
+                } else {
+                    ++regularEntries;
+                    if (passage.timestamp < earliestRegularEntry) earliestRegularEntry = passage.timestamp;
                 }
             }
 
-            // Check that regular tourists also entered (no starvation)
-            if (regularEntries == 0 && vipEntries > 0) {
-                // Could be starvation, but need more context
-                result.addWarning("No regular tourists entered - possible starvation or short simulation");
+            // Validation: No starvation
+            if (regularEntries == 0 && state.stats.touristRecordCount > state.stats.dailyStats.vipTourists) {
+                result.addFailure("STARVATION DETECTED: Regular tourists not served");
             }
 
-            // VIPs should generally enter before regulars who arrived at the same time
-            // This is hard to validate precisely without arrival timestamps
+            // Validation: VIPs should enter first (with tolerance)
+            if (vipEntries > 0 && regularEntries > 0 && earliestVipEntry != LONG_MAX && earliestRegularEntry != LONG_MAX) {
+                if (earliestVipEntry > earliestRegularEntry + 3) {
+                    std::ostringstream oss;
+                    oss << "VIP PRIORITY ISSUE: First VIP entered " << (earliestVipEntry - earliestRegularEntry)
+                        << "s after first regular tourist";
+                    result.addWarning(oss.str());
+                }
+            }
 
-            result.vipWaitTime = 0; // Would need more tracking
+            result.vipWaitTime = 0;
             result.regularWaitTime = 0;
 
             std::ostringstream oss;
             oss << "VIP Priority: " << vipEntries << " VIP entries, " << regularEntries << " regular entries";
             result.addWarning(oss.str());
-
-            // If we have VIPs and regulars, VIP system is working
-            if (vipEntries > 0 && regularEntries > 0) {
-                // Success - both groups served
-            } else if (regularEntries == 0 && state.stats.touristRecordCount > state.stats.dailyStats.vipTourists) {
-                result.addFailure("STARVATION DETECTED: Regular tourists not served despite being present");
-            }
         }
 
         /**

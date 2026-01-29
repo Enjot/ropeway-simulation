@@ -51,7 +51,8 @@ struct SharedRopewayState {
      * @return Record index or -1 if full
      */
     int32_t registerTourist(uint32_t touristId, uint32_t ticketId, uint32_t age,
-                            TouristType type, bool isVip, int32_t guardianId = -1) {
+                            TouristType type, bool isVip, int32_t guardianId = -1,
+                            uint32_t childCount = 0) {
         // Allow space for tourists + their children (3x multiplier)
         if (stats.touristRecordCount >= Flags::Simulation::MAX_TOURIST_RECORDS) return -1;
 
@@ -62,6 +63,7 @@ struct SharedRopewayState {
         record.type = type;
         record.isVip = isVip;
         record.guardianId = guardianId;
+        record.childCount = childCount;
         record.ridesCompleted = 0;
         record.entryGatePassages = 0;
         record.rideGatePassages = 0;

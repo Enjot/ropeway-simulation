@@ -118,6 +118,7 @@ public:
           responseQueue_{args.cashierMsgKey, "CashierResp"},
           entryRequestQueue_{args.entryGateMsgKey, "EntryReq"},
           entryResponseQueue_{args.entryGateMsgKey, "EntryResp"},
+          forcedChildCount_{args.numChildren},
           tag_{"Tourist"} {
         tourist_.id = args.id;
         tourist_.pid = getpid();
@@ -214,23 +215,32 @@ private:
      * Children and bikes are represented as threads.
      */
     void setupGroup() {
-        // Only adults can have children
-        if (tourist_.isAdult()) {
+        uint32_t childCount = 0;
+
+        if (forcedChildCount_ > 0) {
+            // Test mode: use exact count (only for adults)
+            if (tourist_.isAdult()) {
+                childCount = forcedChildCount_;
+            }
+        } else if (tourist_.isAdult()) {
+            // Normal mode: random generation
             float childRoll = static_cast<float>(rand()) / RAND_MAX;
             if (childRoll < Constants::Group::CHILD_CHANCE) {
                 // Determine number of children (1 or 2)
                 float twoChildRoll = static_cast<float>(rand()) / RAND_MAX;
-                tourist_.childCount = (twoChildRoll < Constants::Group::TWO_CHILDREN_CHANCE) ? 2 : 1;
-
-                // Create child threads
-                for (uint32_t i = 0; i < tourist_.childCount; ++i) {
-                    uint32_t childAge = 3 + (rand() % 5); // Age 3-7
-                    tourist_.childAges[i] = childAge;
-                    childThreads_.push_back(
-                        std::make_unique<ChildThread>(tourist_.id * 100 + i, childAge, tourist_.id)
-                    );
-                }
+                childCount = (twoChildRoll < Constants::Group::TWO_CHILDREN_CHANCE) ? 2 : 1;
             }
+        }
+
+        tourist_.childCount = childCount;
+
+        // Create child threads
+        for (uint32_t i = 0; i < tourist_.childCount; ++i) {
+            uint32_t childAge = 3 + (rand() % 5); // Age 3-7
+            tourist_.childAges[i] = childAge;
+            childThreads_.push_back(
+                std::make_unique<ChildThread>(tourist_.id * 100 + i, childAge, tourist_.id)
+            );
         }
 
         // Cyclists may have a bike (takes extra slot)
@@ -331,9 +341,9 @@ private:
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_STATS);
 
-            // Register main tourist
+            // Register main tourist with child count for validation
             shm_->registerTourist(tourist_.id, tourist_.ticketId, tourist_.age,
-                                  tourist_.type, tourist_.isVip, -1);
+                                  tourist_.type, tourist_.isVip, -1, tourist_.childCount);
 
             auto &stats = shm_->stats.dailyStats;
             stats.totalTourists++;
@@ -664,6 +674,7 @@ private:
     MessageQueue<TicketResponse> responseQueue_;
     MessageQueue<EntryGateRequest> entryRequestQueue_;
     MessageQueue<EntryGateResponse> entryResponseQueue_;
+    uint32_t forcedChildCount_{0};
     int32_t assignedChairId_{-1};
     time_t simulationStartTime_{0};
     char tagBuf_[32];

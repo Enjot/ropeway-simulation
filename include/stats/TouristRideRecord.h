@@ -18,6 +18,9 @@ struct TouristRideRecord {
     // Guardian tracking (for children under supervision age)
     int32_t guardianId; // Guardian tourist ID (-1 if none/not needed)
 
+    // Child supervision tracking (for adults with children)
+    uint32_t childCount; // Number of children this adult is supervising (0-2)
+
     // Accumulated statistics
     uint32_t ridesCompleted;
     uint32_t entryGatePassages;
@@ -25,6 +28,6 @@ struct TouristRideRecord {
 
     TouristRideRecord()
         : touristId{0}, ticketId{0}, age{0}, type{TouristType::PEDESTRIAN},
-          isVip{false}, guardianId{-1}, ridesCompleted{0}, entryGatePassages{0}, rideGatePassages{0} {
+          isVip{false}, guardianId{-1}, childCount{0}, ridesCompleted{0}, entryGatePassages{0}, rideGatePassages{0} {
     }
 };

@@ -61,15 +61,16 @@ namespace Test {
                 std::cout << "[Test] Tourists: " << scenario.tourists.size() << "\n";
 
                 pid_t cashierPid = ProcessSpawner::spawnWithKeys("cashier_process",
-                                                                 ipc.shmKey(), ipc.semKey(), ipc.cashierMsgKey());
+                                                                 ipc.shmKey(), ipc.semKey(), ipc.cashierMsgKey(),
+                                                                 ipc.logMsgKey());
                 ipc.sem().wait(Semaphore::Index::CASHIER_READY, 1, true);
 
                 pid_t lowerWorkerPid = ProcessSpawner::spawnWithKeys("lower_worker_process",
                                                                      ipc.shmKey(), ipc.semKey(), ipc.workerMsgKey(),
-                                                                     ipc.entryGateMsgKey());
+                                                                     ipc.entryGateMsgKey(), ipc.logMsgKey());
                 pid_t upperWorkerPid = ProcessSpawner::spawnWithKeys("upper_worker_process",
                                                                      ipc.shmKey(), ipc.semKey(), ipc.workerMsgKey(),
-                                                                     ipc.entryGateMsgKey());
+                                                                     ipc.entryGateMsgKey(), ipc.logMsgKey());
 
                 {
                     Semaphore::ScopedLock lock(ipc.sem(), Semaphore::Index::SHM_OPERATIONAL);
@@ -126,14 +127,14 @@ namespace Test {
                                              std::to_string(static_cast<int>(t.type)),
                                              std::to_string(t.requestVip ? 1 : 0),
                                              std::to_string(t.wantsToRide ? 1 : 0),
-                                             std::to_string(t.guardianId),
                                              std::to_string(t.numChildren),
                                              std::to_string(static_cast<int>(t.trail)),
                                              std::to_string(ipc.shmKey()),
                                              std::to_string(ipc.semKey()),
                                              std::to_string(ipc.workerMsgKey()),
                                              std::to_string(ipc.cashierMsgKey()),
-                                             std::to_string(ipc.entryGateMsgKey())
+                                             std::to_string(ipc.entryGateMsgKey()),
+                                             std::to_string(ipc.logMsgKey())
                                          });
         }
 
