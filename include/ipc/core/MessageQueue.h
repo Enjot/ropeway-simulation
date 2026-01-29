@@ -41,17 +41,16 @@ public:
 
     MessageQueue &operator=(const MessageQueue &) = delete;
 
-    // Convenience send that returns bool (for process code compatibility).
-    // Retries on EINTR (signal interruption) to avoid silent send failures.
-    bool send(const T &message, const long type) {
+    // Blocking send with EINTR handling. Throws on error.
+    void send(const T &message, const long type) const {
         Wrapper wrapper{};
         wrapper.mtype = type;
         wrapper.message = message;
         while (msgsnd(msgId_, &wrapper, sizeof(T), 0) == -1) {
-            if (errno == EINTR) continue; // Retry on signal interruption
-            return false; // Real error
+            if (errno == EINTR) continue;
+            Logger::pError("Failed to send message to queue");
+            throw ipc_exception("Failed to send message");
         }
-        return true;
     }
 
     // Non-blocking send - returns false if queue is full (IPC_NOWAIT)

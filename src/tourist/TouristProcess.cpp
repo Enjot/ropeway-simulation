@@ -300,7 +300,9 @@ private:
             }
         }
 
-        if (!requestQueue_.send(request, CashierMsgType::REQUEST)) {
+        try {
+            requestQueue_.send(request, CashierMsgType::REQUEST);
+        } catch (const ipc_exception &) {
             sem_.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, 1, false);
             changeState(TouristState::FINISHED);
             return;
@@ -385,7 +387,9 @@ private:
             }
         }
 
-        if (!entryRequestQueue_.send(request, requestType)) {
+        try {
+            entryRequestQueue_.send(request, requestType);
+        } catch (const ipc_exception &) {
             sem_.post(queueSlotSem, 1, false);
             changeState(TouristState::FINISHED);
             return;
