@@ -18,11 +18,15 @@ struct TicketRequest {
     uint32_t touristAge;
     TicketType requestedType;
     bool requestVip;
+    uint32_t childCount;
+    uint32_t childAges[2];
 
     TicketRequest() : touristId{0},
                       touristAge{0},
                       requestedType{TicketType::SINGLE_USE},
-                      requestVip{false} {
+                      requestVip{false},
+                      childCount{0},
+                      childAges{0, 0} {
     }
 };
 

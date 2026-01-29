@@ -35,7 +35,8 @@ public:
           sem_{args.semKey},
           msgQueue_{args.msgKey, "WorkerMsg"},
           isEmergencyStopped_{false},
-          lastDangerCheckTime_{0} {
+          lastDangerCheckTime_{0},
+          hasDetectedDanger_{false} {
         {
             Semaphore::ScopedLock lock(sem_, Semaphore::Index::SHM_OPERATIONAL);
             shm_->operational.upperWorkerPid = getpid();
@@ -157,6 +158,11 @@ private:
      * Simulates worker detecting a problem at the upper station.
      */
     void checkForDanger() {
+        // Each worker can only detect danger once per simulation
+        if (hasDetectedDanger_) {
+            return;
+        }
+
         time_t now = time(nullptr) - shm_->operational.totalPausedSeconds;
 
         // Only check periodically
@@ -168,6 +174,7 @@ private:
         // Random chance to detect "danger"
         double roll = static_cast<double>(rand()) / RAND_MAX;
         if (roll < DANGER_DETECTION_CHANCE) {
+            hasDetectedDanger_ = true;
             Logger::warn(SRC, TAG, "!!! DANGER DETECTED - Initiating emergency stop !!!");
             triggerEmergencyStop();
 
@@ -177,9 +184,10 @@ private:
                 shm_->stats.dailyStats.emergencyStops++;
             }
 
-            // Simulate time to assess and resolve the danger (3-6 seconds)
+            // Simulate time to assess and resolve the danger (3-6 real seconds)
             int resolveTime = 3 + (rand() % 4);
-            Logger::info(SRC, TAG, "Assessing danger... (estimated %d seconds)", resolveTime);
+            int simulatedMinutes = resolveTime * Config::Simulation::TIME_SCALE() / 60;
+            Logger::info(SRC, TAG, "Assessing danger... (estimated %d minutes)", simulatedMinutes);
 
             // Wait using simulation time (respects pause)
             time_t startSimTime = time(nullptr) - shm_->operational.totalPausedSeconds;
@@ -294,6 +302,7 @@ private:
     MessageQueue<WorkerMessage> msgQueue_;
     bool isEmergencyStopped_;
     time_t lastDangerCheckTime_;
+    bool hasDetectedDanger_;
 };
 
 int main(int argc, char *argv[]) {

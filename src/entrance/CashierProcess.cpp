@@ -81,12 +81,21 @@ private:
 
         // Calculate price with discounts
         double basePrice = TicketPricing::getPrice(request.requestedType);
-        double discount = 0.0;
+        double touristDiscount = 0.0;
 
         if (request.touristAge < Constants::Discount::CHILD_DISCOUNT_AGE) {
-            discount = Constants::Discount::CHILD_DISCOUNT;
+            touristDiscount = Constants::Discount::CHILD_DISCOUNT;
         } else if (request.touristAge >= Constants::Age::SENIOR_AGE_FROM) {
-            discount = Constants::Discount::SENIOR_DISCOUNT;
+            touristDiscount = Constants::Discount::SENIOR_DISCOUNT;
+        }
+
+        // Calculate tourist price (main tourist process)
+        double touristPrice = basePrice * (1.0 - touristDiscount);
+
+        // Calculate children's prices (25% discount for each child under 10)
+        double childrenPrice = 0.0;
+        for (uint32_t i = 0; i < request.childCount; ++i) {
+            childrenPrice += basePrice * (1.0 - Constants::Discount::CHILD_DISCOUNT);
         }
 
         // Issue ticket
@@ -94,8 +103,8 @@ private:
         response.ticketId = nextTicketId_++;
         response.ticketType = request.requestedType;
         response.isVip = request.requestVip;
-        response.price = basePrice * (1.0 - discount);
-        response.discount = discount;
+        response.price = touristPrice + childrenPrice;
+        response.discount = touristDiscount;
         response.validFrom = time(nullptr) - shm_->operational.totalPausedSeconds;
 
         // Set validity based on ticket type

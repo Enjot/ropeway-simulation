@@ -287,6 +287,9 @@ private:
         request.touristAge = tourist_.age;
         request.requestedType = chooseTicketType();
         request.requestVip = tourist_.isVip;
+        request.childCount = tourist_.childCount;
+        request.childAges[0] = tourist_.childAges[0];
+        request.childAges[1] = tourist_.childAges[1];
 
         Logger::info(Logger::Source::Tourist, tag_, "Requesting %s ticket...", toString(request.requestedType));
 
@@ -334,7 +337,7 @@ private:
 
             auto &stats = shm_->stats.dailyStats;
             stats.totalTourists++;
-            stats.ticketsSold++;
+            stats.ticketsSold += 1 + tourist_.childCount;
             stats.totalRevenueWithDiscounts += response->price;
 
             if (tourist_.isVip) stats.vipTourists++;

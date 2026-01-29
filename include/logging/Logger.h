@@ -109,7 +109,11 @@ namespace Logger {
                              names[static_cast<int>(level)],
                              tag);
             }
-            n += snprintf(buf + n, sizeof(buf) - n, message, args...);
+            if constexpr (sizeof...(args) == 0) {
+                n += snprintf(buf + n, sizeof(buf) - n, "%s", message);
+            } else {
+                n += snprintf(buf + n, sizeof(buf) - n, message, args...);
+            }
             buf[n++] = '\n';
             write(STDOUT_FILENO, buf, n);
         }
@@ -121,7 +125,11 @@ namespace Logger {
             if (centralizedMode && logQueue != nullptr) {
                 // Format message
                 char text[256];
-                snprintf(text, sizeof(text), message, args...);
+                if constexpr (sizeof...(args) == 0) {
+                    snprintf(text, sizeof(text), "%s", message);
+                } else {
+                    snprintf(text, sizeof(text), message, args...);
+                }
                 sendToQueue(source, level, tag, text);
             } else {
                 logDirect(source, level, tag, message, args...);
