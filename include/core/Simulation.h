@@ -31,7 +31,7 @@ public:
         SignalHelper::setup(signals_, false);
         // Start async zombie reaper thread instead of using SIGCHLD=SIG_IGN
         // This handles zombie cleanup even when main process is busy spawning
-        startZombieReaper();
+        //startZombieReaper();
 
         try {
             setup();
@@ -40,7 +40,7 @@ public:
             Logger::error(Logger::Source::Other, tag_, "Exception: %s", e.what());
         }
 
-        stopZombieReaper();
+        //stopZombieReaper();
         shutdown();
     }
 
@@ -297,7 +297,7 @@ private:
             if (pid > 0) touristPids_.push_back(pid);
 
             if (Config::Time::ARRIVAL_DELAY_BASE_US() > 0 || Config::Time::ARRIVAL_DELAY_RANDOM_US() > 0) {
-            usleep(Config::Time::ARRIVAL_DELAY_BASE_US() + (gen() % Config::Time::ARRIVAL_DELAY_RANDOM_US()));
+                usleep(Config::Time::ARRIVAL_DELAY_BASE_US() + (gen() % Config::Time::ARRIVAL_DELAY_RANDOM_US()));
             }
         }
         Logger::info(Logger::Source::Other, tag_, "Spawned %d tourists", static_cast<int>(touristPids_.size()));

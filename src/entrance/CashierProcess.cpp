@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    SignalHelper::setup(g_signals, false);
+    SignalHelper::setupChildProcess(g_signals, false);
     srand(static_cast<unsigned>(time(nullptr)) ^ static_cast<unsigned>(getpid()));
 
     try {

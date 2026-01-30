@@ -154,7 +154,7 @@ int main(int argc, char *argv[]) {
     key_t semKey = static_cast<key_t>(std::stol(argv[2]));
     key_t logMsgKey = static_cast<key_t>(std::stol(argv[3]));
 
-    SignalHelper::setup(g_signals, true);
+    SignalHelper::setupChildProcess(g_signals, true);
 
     try {
         Config::loadEnvFile();

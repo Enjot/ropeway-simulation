@@ -728,7 +728,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    SignalHelper::setup(g_signals, true);
+    SignalHelper::setupChildProcess(g_signals, true);
     srand(static_cast<unsigned>(time(nullptr)) ^ static_cast<unsigned>(getpid()) ^ (args.id * 31337));
 
     try {

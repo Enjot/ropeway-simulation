@@ -185,6 +185,7 @@ public:
     private:
         const Semaphore &sem_;
         uint8_t semIndex_;
+        bool acquired_{false};  ///< Whether lock was successfully acquired
     };
 
 private:
