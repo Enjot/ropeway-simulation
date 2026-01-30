@@ -1,0 +1,104 @@
+#include "logger.h"
+#include "time_sim.h"  // Issue #12 fix: Use time_sim functions instead of duplicating
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <unistd.h>
+#include <time.h>
+
+static SharedState *g_state = NULL;
+
+void logger_init(SharedState *state) {
+    g_state = state;
+}
+
+// Issue #12 fix: Removed duplicated get_sim_minutes() - use time_get_sim_minutes() instead
+
+// Format sim time as HH:MM:SS
+// Issue #12 fix: Uses time_get_sim_minutes() instead of duplicated logic
+static void format_sim_time(char *buf, int buf_size) {
+    int total_minutes = g_state ? time_get_sim_minutes(g_state) : 0;
+    int hours = total_minutes / 60;
+    int minutes = total_minutes % 60;
+
+    // Simulated seconds based on fractional sim time
+    // For simplicity, we'll just use real seconds mod 60
+    time_t now = time(NULL);
+    int seconds = (int)(now % 60);
+
+    // Clamp hours to 0-23
+    if (hours > 23) hours = 23;
+    if (hours < 0) hours = 0;
+
+    snprintf(buf, buf_size, "%02d:%02d:%02d", hours, minutes, seconds);
+}
+
+void log_msg(const char *level, const char *component, const char *fmt, ...) {
+    char buf[512];
+    char time_buf[16];
+    int len = 0;
+
+    // Format sim time
+    format_sim_time(time_buf, sizeof(time_buf));
+
+    // Format prefix: [TIME] [LEVEL] [COMPONENT]
+    len = snprintf(buf, sizeof(buf), "[%s] [%-5s] [%s] ", time_buf, level, component);
+
+    // Format message
+    va_list args;
+    va_start(args, fmt);
+    len += vsnprintf(buf + len, sizeof(buf) - len, fmt, args);
+    va_end(args);
+
+    // Add newline
+    if (len < (int)sizeof(buf) - 1) {
+        buf[len++] = '\n';
+        buf[len] = '\0';
+    }
+
+    // Write to stderr (async-signal-safe)
+    write(STDERR_FILENO, buf, len);
+}
+
+void log_signal_safe(const char *msg) {
+    if (msg) {
+        write(STDERR_FILENO, msg, strlen(msg));
+    }
+}
+
+void int_to_str(int n, char *buf, int buf_size) {
+    if (buf_size <= 0) return;
+
+    if (n == 0) {
+        if (buf_size >= 2) {
+            buf[0] = '0';
+            buf[1] = '\0';
+        }
+        return;
+    }
+
+    char tmp[16];
+    int i = 0;
+    int neg = 0;
+
+    if (n < 0) {
+        neg = 1;
+        n = -n;
+    }
+
+    while (n > 0 && i < 15) {
+        tmp[i++] = '0' + (n % 10);
+        n /= 10;
+    }
+
+    int j = 0;
+    if (neg && j < buf_size - 1) {
+        buf[j++] = '-';
+    }
+
+    while (i > 0 && j < buf_size - 1) {
+        buf[j++] = tmp[--i];
+    }
+
+    buf[j] = '\0';
+}
