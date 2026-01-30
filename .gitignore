@@ -16,3 +16,6 @@ build
 # Test reports (generated)
 tests/reports/*.txt
 tests/reports/*.log
+.claude/
+CLAUDE.md
+NAHACZ_JAKUB_139277_opis_KOLEJ_LINOWA.md

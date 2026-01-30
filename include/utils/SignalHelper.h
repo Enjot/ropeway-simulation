@@ -156,6 +156,34 @@ namespace SignalHelper {
     }
 
     /**
+     * @brief Install signal handlers for child processes (ignores SIGINT).
+     * @param flags Reference to Flags structure that will be updated by handlers
+     * @param handleUserSignals If true, also handle SIGUSR1/SIGUSR2 for emergency protocol
+     *
+     * Child processes should ignore SIGINT so Ctrl+C only affects the main process.
+     * The main process will send SIGTERM to children during shutdown.
+     */
+    inline void setupChildProcess(Flags &flags, const bool handleUserSignals) {
+        detail::g_flags = &flags;
+
+        // Ignore SIGINT - parent will send SIGTERM for shutdown
+        signal(SIGINT, SIG_IGN);
+
+        struct sigaction sa{};
+        sa.sa_handler = detail::handler;
+        sigemptyset(&sa.sa_mask);
+
+        sigaction(SIGTERM, &sa, nullptr);
+
+        if (handleUserSignals) {
+            sigaction(SIGUSR1, &sa, nullptr);
+            sigaction(SIGUSR2, &sa, nullptr);
+        }
+
+        Logger::debug(Logger::Source::Other, tag, "child setup done (SIGINT ignored), userSignals=%d", handleUserSignals);
+    }
+
+    /**
      * Install SIGTSTP handler for pause tracking (main process only).
      * @param totalPausedSeconds Pointer to totalPausedSeconds field in shared memory.
      */

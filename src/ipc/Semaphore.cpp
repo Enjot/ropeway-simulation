@@ -4,6 +4,7 @@
 #include <cstdio>
 
 #include "logging/Logger.h"
+#include "utils/SignalHelper.h"
 
 const char *Semaphore::Index::toString(const uint8_t index) {
     switch (index) {
@@ -138,12 +139,19 @@ void Semaphore::destroy() const {
 }
 
 Semaphore::ScopedLock::ScopedLock(const Semaphore &sem, const uint8_t semIndex)
-    : sem_(sem), semIndex_(semIndex) {
+    : sem_(sem), semIndex_(semIndex), acquired_(false) {
     while (!sem_.wait(semIndex_, 1, true)) {
-        // Retry on EINTR - signal interrupted the wait, but we must acquire the lock
+        // EINTR - check if exit signal was received
+        if (SignalHelper::detail::g_flags && SignalHelper::detail::g_flags->exit) {
+            return;  // Exit requested, don't acquire lock
+        }
+        // Otherwise retry (signal was SIGUSR1/2 for emergency protocol)
     }
+    acquired_ = true;
 }
 
 Semaphore::ScopedLock::~ScopedLock() {
-    sem_.post(semIndex_, 1, true);
+    if (acquired_) {
+        sem_.post(semIndex_, 1, true);
+    }
 }
