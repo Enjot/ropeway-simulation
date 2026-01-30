@@ -301,26 +301,6 @@ bool Semaphore::wait(uint8_t semIndex, int32_t n, bool useUndo) const {
 
 ---
 
-## Ograniczenia macOS
-
-Na macOS kolejki komunikatów mają ograniczone limity:
-- **MSGMNB** = 2048 bajtów na kolejkę
-- **msgtql** = 40 wiadomości w całym systemie
-
-Dlatego używamy semaforów do kontroli przepływu:
-
-```cpp
-// Przed wysłaniem
-sem.wait(Semaphore::Index::CASHIER_QUEUE_SLOTS, 1, true);
-queue.send(request, type);
-
-// Po odebraniu
-auto msg = queue.receive(type);
-sem.post(Semaphore::Index::CASHIER_QUEUE_SLOTS, 1, true);
-```
-
----
-
 ## Czyszczenie Zasobów
 
 Zasoby IPC **nie są automatycznie usuwane** po zakończeniu procesu. IpcManager rejestruje handler `atexit()`:

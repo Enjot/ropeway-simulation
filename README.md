@@ -182,7 +182,7 @@ Process lifecycle management utilities.
 #### `ProcessSpawner::getExecutablePath(const char* processName)`
 Get the full path to an executable in the same directory as current process.
 
-Uses platform-specific methods (macOS: `_NSGetExecutablePath`, Linux: `/proc/self/exe`).
+Uses `/proc/self/exe` symlink to find current executable location.
 
 - **Parameters**:
   - `processName` - Name of the target executable

@@ -9,10 +9,6 @@
 #include <sys/wait.h>
 #include "core/Config.h"
 
-#ifdef __APPLE__
-#include <mach-o/dyld.h>
-#endif
-
 /**
  * @brief Process lifecycle management utilities.
  *
@@ -25,27 +21,16 @@ namespace ProcessSpawner {
      * @param processName Name of the target executable
      * @return Full path to the executable
      *
-     * Uses platform-specific methods:
-     * - macOS: _NSGetExecutablePath
-     * - Linux: /proc/self/exe symlink
+     * Uses /proc/self/exe symlink to find current executable location.
      */
     inline std::string getExecutablePath(const char *processName) {
         char path[1024];
-        uint32_t size = sizeof(path);
 
-#ifdef __APPLE__
-        // macOS: use _NSGetExecutablePath
-        if (_NSGetExecutablePath(path, &size) != 0) {
-            return std::string("./") + processName;
-        }
-#else
-        // Linux: read /proc/self/exe symlink
         ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
         if (len == -1) {
             return std::string("./") + processName;
         }
         path[len] = '\0';
-#endif
 
         // Replace executable name with target process name
         if (char *lastSlash = strrchr(path, '/'); lastSlash != nullptr) {

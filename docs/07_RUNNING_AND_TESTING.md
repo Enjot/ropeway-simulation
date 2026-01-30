@@ -6,7 +6,7 @@
 
 - CMake 3.16+
 - Kompilator C++17 (GCC 7+, Clang 5+)
-- System POSIX (Linux, macOS)
+- System POSIX (Linux)
 
 ### Budowanie
 
@@ -483,15 +483,7 @@ ps aux | grep defunct
 kill -9 <parent_pid>
 ```
 
-### 4. "Message queue full"
-
-To normalne na macOS (małe limity). Zmniejsz:
-
-```bash
-ROPEWAY_NUM_TOURISTS=20  # Mniej turystów
-```
-
-### 5. Deadlock
+### 4. Deadlock
 
 Sprawdź kolejność locków w kodzie. Użyj:
 

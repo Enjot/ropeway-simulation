@@ -41,10 +41,8 @@ namespace Logger {
             }
 
             // Send to queue with sequence number as mtype (enables ordered retrieval)
-            // MUST be non-blocking: the System V message queue has a byte limit
-            // (MSGMNB ~2048 on macOS) much smaller than LOG_QUEUE_SLOTS (5000).
-            // A blocking msgsnd here would deadlock any process that logs while
-            // holding a shared memory lock (e.g., LowerWorker in processBoardingQueue).
+            // MUST be non-blocking: A blocking msgsnd here would deadlock any process
+            // that logs while holding a shared memory lock (e.g., LowerWorker in processBoardingQueue).
             if (!logQueue->trySend(msg, static_cast<long>(msg.sequenceNum))) {
                 // Queue full at kernel level - release slot and fall back
                 sem->post(Semaphore::Index::LOG_QUEUE_SLOTS, 1, false);

@@ -122,7 +122,7 @@ ROPEWAY_CLOSING_HOUR=18
 
 ## Wymagania Systemowe
 
-- System POSIX (Linux, macOS)
+- System POSIX (Linux)
 - C++17
 - CMake 3.16+
 - System V IPC (shmget, semget, msgget)
