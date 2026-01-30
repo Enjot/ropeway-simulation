@@ -1,21 +1,4 @@
-example_selective
-example_selective_import.cpp
-ropeway_simulation
-test_types
-.DS_Store
-.idea
 cmake-build-*
-out
 build
-*.o
-*.a
-*.so
-*.dylib
-*.tmp
-
-# Test reports (generated)
-tests/reports/*.txt
-tests/reports/*.log
 .claude/
 CLAUDE.md
-NAHACZ_JAKUB_139277_opis_KOLEJ_LINOWA.md
