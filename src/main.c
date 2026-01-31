@@ -248,7 +248,7 @@ int main(int argc, char *argv[]) {
 
     // Generate IPC keys
     IPCKeys keys;
-    if (ipc_generate_keys(&keys, argv[0]) == -1) {
+    if (ipc_generate_keys(&keys, ".") == -1) {
         fprintf(stderr, "Error: Failed to generate IPC keys\n");
         return 1;
     }

@@ -12,6 +12,8 @@
 #include <sys/msg.h>
 #include <time.h>
 #include <pthread.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 // Tourist data structure
 typedef struct {
@@ -445,10 +447,9 @@ int main(int argc, char *argv[]) {
     // Seed random number generator
     srand(time(NULL) ^ getpid());
 
-    // Generate IPC keys (using same path as main)
+    // Generate IPC keys (using current directory - same for all processes)
     IPCKeys keys;
-    // We need to use the same path as main - assume it's in current directory
-    if (ipc_generate_keys(&keys, "./ropeway_simulation") == -1) {
+    if (ipc_generate_keys(&keys, ".") == -1) {
         fprintf(stderr, "tourist %d: Failed to generate IPC keys\n", data.id);
         return 1;
     }

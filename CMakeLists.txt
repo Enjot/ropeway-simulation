@@ -4,6 +4,9 @@ project(ropeway_simulation C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+# Enable POSIX and System V IPC extensions (required for sigaction, key_t, etc.)
+add_definitions(-D_GNU_SOURCE)
+
 # Compiler flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wpedantic")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -O0")
