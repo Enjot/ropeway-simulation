@@ -38,7 +38,8 @@ static void trigger_emergency_stop(IPCResources *res) {
     log_warn("UPPER_WORKER", "Danger detected! Triggering emergency stop");
 
     g_is_emergency_initiator = 1;
-    g_emergency_start_time = time(NULL);
+    // Store pause-adjusted start time for consistent cooldown calculation
+    g_emergency_start_time = time(NULL) - res->state->total_pause_offset;
 
     // Set emergency flag
     if (sem_wait(res->sem_id, SEM_STATE) == -1) {
@@ -56,6 +57,7 @@ static void trigger_emergency_stop(IPCResources *res) {
 /**
  * Called when receiving SIGUSR1 from lower worker.
  * Acknowledges emergency, blocks on semaphore until resume is initiated.
+ * Handles SIGTSTP (EINTR) by checking pause and retrying.
  */
 static void acknowledge_emergency_stop(IPCResources *res) {
     log_warn("UPPER_WORKER", "Emergency stop acknowledged from lower worker");
@@ -63,16 +65,18 @@ static void acknowledge_emergency_stop(IPCResources *res) {
     g_is_emergency_initiator = 0;
 
     // Set emergency flag
-    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
-        return;  // Shutdown in progress
+    while (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        if (errno != EINTR) return;  // Shutdown in progress
+        ipc_check_pause(res);  // Handle SIGTSTP
     }
     res->state->emergency_stop = 1;
     sem_post(res->sem_id, SEM_STATE);
 
     // Block until detecting worker says we can resume
     log_debug("UPPER_WORKER", "Waiting for resume signal from lower worker...");
-    if (sem_wait(res->sem_id, SEM_EMERGENCY_CLEAR) == -1) {
-        return;  // Shutdown in progress
+    while (sem_wait(res->sem_id, SEM_EMERGENCY_CLEAR) == -1) {
+        if (errno != EINTR) return;  // Shutdown in progress
+        ipc_check_pause(res);  // Handle SIGTSTP while waiting
     }
 
     // Signal that we're ready to resume
@@ -80,8 +84,9 @@ static void acknowledge_emergency_stop(IPCResources *res) {
     sem_post(res->sem_id, SEM_UPPER_READY);
 
     // Clear emergency stop
-    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
-        return;  // Shutdown in progress
+    while (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        if (errno != EINTR) return;  // Shutdown in progress
+        ipc_check_pause(res);  // Handle SIGTSTP
     }
     res->state->emergency_stop = 0;
     sem_post(res->sem_id, SEM_STATE);
@@ -92,6 +97,7 @@ static void acknowledge_emergency_stop(IPCResources *res) {
 /**
  * Called by detecting worker after cooldown to initiate resume.
  * Wakes up receiving worker, waits for ready confirmation, sends SIGUSR2.
+ * Handles SIGTSTP (EINTR) by checking pause and retrying.
  */
 static void initiate_resume(IPCResources *res) {
     log_info("UPPER_WORKER", "Cooldown passed, initiating resume");
@@ -101,8 +107,9 @@ static void initiate_resume(IPCResources *res) {
 
     // Wait for other worker to be ready
     log_debug("UPPER_WORKER", "Waiting for lower worker to be ready...");
-    if (sem_wait(res->sem_id, SEM_LOWER_READY) == -1) {
-        return;  // Shutdown in progress
+    while (sem_wait(res->sem_id, SEM_LOWER_READY) == -1) {
+        if (errno != EINTR) return;  // Shutdown in progress
+        ipc_check_pause(res);  // Handle SIGTSTP while waiting
     }
 
     // Send SIGUSR2 to formally resume chairlift
@@ -111,8 +118,9 @@ static void initiate_resume(IPCResources *res) {
     }
 
     // Clear emergency stop
-    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
-        return;  // Shutdown in progress
+    while (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        if (errno != EINTR) return;  // Shutdown in progress
+        ipc_check_pause(res);  // Handle SIGTSTP
     }
     res->state->emergency_stop = 0;
     sem_post(res->sem_id, SEM_STATE);
@@ -132,6 +140,7 @@ static void initiate_resume(IPCResources *res) {
 /**
  * Check for random danger and trigger emergency stop if detected.
  * Returns 1 if danger was detected, 0 otherwise.
+ * Uses pause-adjusted time for cooldown calculation.
  */
 static int check_for_danger(IPCResources *res) {
     int probability = res->state->danger_probability;
@@ -140,20 +149,23 @@ static int check_for_danger(IPCResources *res) {
     }
 
     // Check cooldown period (convert sim minutes to real seconds)
+    // Use pause-adjusted time for consistent cooldown tracking
     time_t now = time(NULL);
+    time_t adjusted_now = now - res->state->total_pause_offset;
+
     if (g_last_danger_time > 0) {
         double time_accel = res->state->time_acceleration;
         int cooldown_sim = res->state->danger_cooldown_sim;
         double cooldown_real = (time_accel > 0) ? (cooldown_sim / time_accel) : 60.0;
 
-        if (now - g_last_danger_time < (time_t)cooldown_real) {
+        if (adjusted_now - g_last_danger_time < (time_t)cooldown_real) {
             return 0;  // Still in cooldown
         }
     }
 
     // Random check
     if ((rand() % 100) < probability) {
-        g_last_danger_time = now;
+        g_last_danger_time = adjusted_now;  // Store pause-adjusted time
         trigger_emergency_stop(res);
         return 1;
     }
@@ -204,17 +216,22 @@ void upper_worker_main(IPCResources *res, IPCKeys *keys) {
 
         // Check if we're the emergency initiator and need to wait for cooldown
         if (g_is_emergency_initiator && g_emergency_start_time > 0) {
+            // Account for pause time in cooldown calculation
             time_t now = time(NULL);
+            time_t pause_offset = res->state->total_pause_offset;
+            time_t adjusted_now = now - pause_offset;
+
             double time_accel = res->state->time_acceleration;
             int cooldown_sim = res->state->danger_cooldown_sim;
             double cooldown_real = (time_accel > 0) ? (cooldown_sim / time_accel) : 60.0;
 
-            if ((now - g_emergency_start_time) >= (time_t)cooldown_real) {
+            if ((adjusted_now - g_emergency_start_time) >= (time_t)cooldown_real) {
                 // Cooldown passed - initiate resume
                 initiate_resume(res);
             } else {
-                // Still in cooldown - sleep briefly (timing, not IPC sync)
-                usleep(100000);  // 100ms
+                // Still in cooldown - check for pause and sleep briefly
+                ipc_check_pause(res);
+                usleep(100000);  // 100ms (timing only, not IPC sync)
             }
             continue;
         }
