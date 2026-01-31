@@ -43,18 +43,28 @@ static void sigterm_handler(int sig) {
     write(STDERR_FILENO, "[SIGNAL] Shutdown requested\n", 28);
 }
 
-// Issue #3, #5 fix: Signal handler only sets flag, no shared state modification
-// Don't call signal() in handler - it's not signal-safe
+// Forward declaration for reinstallation in sigcont_handler
+static void sigtstp_handler(int sig);
+
+// Issue #3, #5 fix: Signal handler sets flag, then actually stops the process
+// We reset to SIG_DFL and re-raise SIGTSTP so the process actually suspends
 static void sigtstp_handler(int sig) {
     (void)sig;
     g_sigtstp_received = 1;
     write(STDERR_FILENO, "[SIGNAL] SIGTSTP received\n", 26);
+
+    // Reset SIGTSTP to default handler and re-raise to actually stop
+    signal(SIGTSTP, SIG_DFL);
+    raise(SIGTSTP);
 }
 
 static void sigcont_handler(int sig) {
     (void)sig;
     g_sigcont_received = 1;
     write(STDERR_FILENO, "[SIGNAL] SIGCONT received\n", 26);
+
+    // Reinstall our custom SIGTSTP handler (was reset to SIG_DFL before stopping)
+    signal(SIGTSTP, sigtstp_handler);
 }
 
 // SIGALRM handler - just wakes up from pause() to check simulation time
