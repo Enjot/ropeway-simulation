@@ -64,6 +64,21 @@ typedef enum {
 } TrailType;
 
 // ============================================================================
+// Per-Tourist Tracking Entry
+// ============================================================================
+
+typedef struct {
+    int active;                     // 1 if this slot is in use
+    int tourist_id;                 // Tourist ID
+    int ticket_type;                // TicketType
+    int entry_time_sim;             // Simulated time of first entry (minutes from midnight)
+    int total_rides;                // Number of rides completed
+    int is_vip;                     // VIP status
+    int tourist_type;               // TouristType (walker/cyclist)
+    int kid_count;                  // Number of kids (for family tracking)
+} TouristEntry;
+
+// ============================================================================
 // Shared Memory Structure
 // ============================================================================
 
@@ -121,6 +136,11 @@ typedef struct {
     pid_t lower_worker_pid;
     pid_t upper_worker_pid;
     pid_t generator_pid;
+
+    // Per-tourist tracking (flexible array - MUST BE LAST)
+    int max_tracked_tourists;       // Config value for array sizing
+    int tourist_entry_count;        // Number of entries used
+    TouristEntry tourist_entries[]; // Flexible array member
 } SharedState;
 
 // ============================================================================

@@ -31,7 +31,9 @@ static void signal_handler(int sig) {
 static void handle_emergency_stop(IPCResources *res) {
     log_warn("UPPER_WORKER", "Emergency stop acknowledged");
 
-    sem_wait(res->sem_id, SEM_STATE);
+    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        return;  // Shutdown in progress
+    }
     res->state->emergency_stop = 1;
     sem_post(res->sem_id, SEM_STATE);
 }
@@ -44,10 +46,14 @@ static void handle_resume(IPCResources *res) {
     sem_post(res->sem_id, SEM_UPPER_READY);
 
     // Wait for lower worker to be ready
-    sem_wait(res->sem_id, SEM_LOWER_READY);
+    if (sem_wait(res->sem_id, SEM_LOWER_READY) == -1) {
+        return;  // Shutdown in progress
+    }
 
     // Clear emergency stop (lower worker also clears it, but be safe)
-    sem_wait(res->sem_id, SEM_STATE);
+    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        return;  // Shutdown in progress
+    }
     res->state->emergency_stop = 0;
     sem_post(res->sem_id, SEM_STATE);
 

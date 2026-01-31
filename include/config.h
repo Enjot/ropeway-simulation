@@ -16,6 +16,7 @@ typedef struct {
     // Tourist generation
     int tourist_spawn_rate;         // Tourists per second
     int max_concurrent_tourists;    // Max active tourist processes
+    int max_tracked_tourists;       // Max tourists to track in report (default 5000)
 
     // Tourist distribution (percentages 0-100)
     int vip_percentage;

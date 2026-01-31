@@ -51,13 +51,16 @@ int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     res->mq_arrivals_id = -1;
     res->state = NULL;
 
+    // Calculate shared memory size (base + flexible array for tourist entries)
+    size_t shm_size = sizeof(SharedState) + (cfg->max_tracked_tourists * sizeof(TouristEntry));
+
     // Create shared memory
-    res->shm_id = shmget(keys->shm_key, sizeof(SharedState), IPC_CREAT | IPC_EXCL | 0666);
+    res->shm_id = shmget(keys->shm_key, shm_size, IPC_CREAT | IPC_EXCL | 0666);
     if (res->shm_id == -1) {
         perror("ipc_create: shmget");
         goto cleanup;
     }
-    log_debug("IPC", "Created shared memory: id=%d", res->shm_id);
+    log_debug("IPC", "Created shared memory: id=%d, size=%zu", res->shm_id, shm_size);
 
     // Attach shared memory
     res->state = (SharedState *)shmat(res->shm_id, NULL, 0);
@@ -68,8 +71,8 @@ int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     }
     log_debug("IPC", "Attached shared memory");
 
-    // Initialize shared memory to zero
-    memset(res->state, 0, sizeof(SharedState));
+    // Initialize shared memory to zero (including flexible array)
+    memset(res->state, 0, shm_size);
 
     // Create semaphore set
     res->sem_id = semget(keys->sem_key, SEM_COUNT, IPC_CREAT | IPC_EXCL | 0666);
@@ -137,6 +140,8 @@ int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     res->state->station_capacity = cfg->station_capacity;
     res->state->tourist_spawn_rate = cfg->tourist_spawn_rate;
     res->state->max_concurrent_tourists = cfg->max_concurrent_tourists;
+    res->state->max_tracked_tourists = cfg->max_tracked_tourists;
+    res->state->tourist_entry_count = 0;
     res->state->vip_percentage = cfg->vip_percentage;
     res->state->walker_percentage = cfg->walker_percentage;
     res->state->trail_walk_time = cfg->trail_walk_time;
@@ -165,8 +170,8 @@ int ipc_attach(IPCResources *res, const IPCKeys *keys) {
     memset(res, 0, sizeof(IPCResources));
     res->state = NULL;
 
-    // Get shared memory
-    res->shm_id = shmget(keys->shm_key, sizeof(SharedState), 0666);
+    // Get shared memory (size 0 to attach to existing segment with unknown size)
+    res->shm_id = shmget(keys->shm_key, 0, 0666);
     if (res->shm_id == -1) {
         perror("ipc_attach: shmget");
         return -1;
@@ -279,9 +284,9 @@ void ipc_destroy(IPCResources *res) {
 int sem_wait(int sem_id, int sem_num) {
     struct sembuf sop = {sem_num, -1, 0};
 
-    while (semop(sem_id, &sop, 1) == -1) {
-        if (errno == EINTR) {
-            continue;  // Retry on interrupt
+    if (semop(sem_id, &sop, 1) == -1) {
+        if (errno == EINTR || errno == EIDRM) {
+            return -1;  // Let caller check g_running / handle shutdown
         }
         perror("sem_wait: semop");
         return -1;
@@ -292,9 +297,9 @@ int sem_wait(int sem_id, int sem_num) {
 int sem_post(int sem_id, int sem_num) {
     struct sembuf sop = {sem_num, 1, 0};
 
-    while (semop(sem_id, &sop, 1) == -1) {
-        if (errno == EINTR) {
-            continue;  // Retry on interrupt
+    if (semop(sem_id, &sop, 1) == -1) {
+        if (errno == EINTR || errno == EIDRM) {
+            return -1;  // Let caller check g_running / handle shutdown
         }
         perror("sem_post: semop");
         return -1;
@@ -310,9 +315,9 @@ int sem_wait_n(int sem_id, int sem_num, int count) {
     if (count <= 0) return 0;
     struct sembuf sop = {sem_num, -count, 0};
 
-    while (semop(sem_id, &sop, 1) == -1) {
-        if (errno == EINTR) {
-            continue;  // Retry on interrupt
+    if (semop(sem_id, &sop, 1) == -1) {
+        if (errno == EINTR || errno == EIDRM) {
+            return -1;  // Let caller check g_running / handle shutdown
         }
         perror("sem_wait_n: semop");
         return -1;
@@ -328,9 +333,9 @@ int sem_post_n(int sem_id, int sem_num, int count) {
     if (count <= 0) return 0;
     struct sembuf sop = {sem_num, count, 0};
 
-    while (semop(sem_id, &sop, 1) == -1) {
-        if (errno == EINTR) {
-            continue;  // Retry on interrupt
+    if (semop(sem_id, &sop, 1) == -1) {
+        if (errno == EINTR || errno == EIDRM) {
+            return -1;  // Let caller check g_running / handle shutdown
         }
         perror("sem_post_n: semop");
         return -1;
@@ -367,7 +372,9 @@ int sem_getval(int sem_id, int sem_num) {
  * Properly tracks pause_waiters for reliable wakeup (issue #7, #11 fix).
  */
 void ipc_check_pause(IPCResources *res) {
-    sem_wait(res->sem_id, SEM_STATE);
+    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        return;  // Shutdown in progress
+    }
     int paused = res->state->paused;
     if (paused) {
         // Track that we're waiting
@@ -377,7 +384,7 @@ void ipc_check_pause(IPCResources *res) {
 
     if (paused) {
         // Block until SIGCONT releases us
-        sem_wait(res->sem_id, SEM_PAUSE);
+        sem_wait(res->sem_id, SEM_PAUSE);  // May fail on shutdown, OK
     }
 }
 
@@ -386,7 +393,9 @@ void ipc_check_pause(IPCResources *res) {
  * Uses semaphore blocking instead of usleep polling (issue #4 fix).
  */
 void ipc_wait_emergency_clear(IPCResources *res) {
-    sem_wait(res->sem_id, SEM_STATE);
+    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        return;  // Shutdown in progress
+    }
     int emergency = res->state->emergency_stop;
     if (emergency) {
         // Track that we're waiting
@@ -396,7 +405,7 @@ void ipc_wait_emergency_clear(IPCResources *res) {
 
     if (emergency) {
         // Block until emergency clears
-        sem_wait(res->sem_id, SEM_EMERGENCY_CLEAR);
+        sem_wait(res->sem_id, SEM_EMERGENCY_CLEAR);  // May fail on shutdown, OK
     }
 }
 
@@ -405,7 +414,9 @@ void ipc_wait_emergency_clear(IPCResources *res) {
  * Called when emergency stop is cleared (after both workers ready).
  */
 void ipc_release_emergency_waiters(IPCResources *res) {
-    sem_wait(res->sem_id, SEM_STATE);
+    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        return;  // Shutdown in progress
+    }
     int waiters = res->state->emergency_waiters;
     res->state->emergency_waiters = 0;
     sem_post(res->sem_id, SEM_STATE);
@@ -425,7 +436,9 @@ void ipc_release_emergency_waiters(IPCResources *res) {
  * Called on SIGCONT in main process.
  */
 void ipc_release_pause_waiters(IPCResources *res) {
-    sem_wait(res->sem_id, SEM_STATE);
+    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        return;  // Shutdown in progress
+    }
     int waiters = res->state->pause_waiters;
     res->state->pause_waiters = 0;
     sem_post(res->sem_id, SEM_STATE);

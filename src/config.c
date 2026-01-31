@@ -15,6 +15,7 @@ void config_set_defaults(Config *cfg) {
 
     cfg->tourist_spawn_rate = 5;
     cfg->max_concurrent_tourists = 100;
+    cfg->max_tracked_tourists = 5000;
 
     cfg->vip_percentage = 1;
     cfg->walker_percentage = 50;
@@ -88,6 +89,8 @@ int config_load(const char *path, Config *cfg) {
             cfg->tourist_spawn_rate = atoi(value);
         } else if (strcmp(key, "MAX_CONCURRENT_TOURISTS") == 0) {
             cfg->max_concurrent_tourists = atoi(value);
+        } else if (strcmp(key, "MAX_TRACKED_TOURISTS") == 0) {
+            cfg->max_tracked_tourists = atoi(value);
         } else if (strcmp(key, "VIP_PERCENTAGE") == 0) {
             cfg->vip_percentage = atoi(value);
         } else if (strcmp(key, "WALKER_PERCENTAGE") == 0) {
@@ -164,6 +167,11 @@ int config_validate(const Config *cfg) {
 
     if (cfg->max_concurrent_tourists <= 0) {
         fprintf(stderr, "config: MAX_CONCURRENT_TOURISTS must be > 0\n");
+        valid = 0;
+    }
+
+    if (cfg->max_tracked_tourists <= 0) {
+        fprintf(stderr, "config: MAX_TRACKED_TOURISTS must be > 0\n");
         valid = 0;
     }
 

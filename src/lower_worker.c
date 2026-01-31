@@ -31,7 +31,9 @@ static void signal_handler(int sig) {
 static void handle_emergency_stop(IPCResources *res) {
     log_warn("LOWER_WORKER", "Emergency stop triggered - chairlift halted");
 
-    sem_wait(res->sem_id, SEM_STATE);
+    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        return;  // Shutdown in progress
+    }
     res->state->emergency_stop = 1;
     sem_post(res->sem_id, SEM_STATE);
 
@@ -49,10 +51,14 @@ static void handle_resume(IPCResources *res) {
     sem_post(res->sem_id, SEM_LOWER_READY);
 
     // Wait for upper worker to be ready
-    sem_wait(res->sem_id, SEM_UPPER_READY);
+    if (sem_wait(res->sem_id, SEM_UPPER_READY) == -1) {
+        return;  // Shutdown in progress
+    }
 
     // Clear emergency stop
-    sem_wait(res->sem_id, SEM_STATE);
+    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        return;  // Shutdown in progress
+    }
     res->state->emergency_stop = 0;
     sem_post(res->sem_id, SEM_STATE);
 
@@ -99,7 +105,9 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
         ipc_check_pause(res);
 
         // Issue #2, #4 fix: Check emergency_stop with proper synchronization
-        sem_wait(res->sem_id, SEM_STATE);
+        if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+            continue;  // Check loop condition on failure
+        }
         int emergency = res->state->emergency_stop;
         sem_post(res->sem_id, SEM_STATE);
 
@@ -127,7 +135,9 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
         }
 
         // Issue #2 fix: Check emergency stop with semaphore protection
-        sem_wait(res->sem_id, SEM_STATE);
+        if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+            continue;  // Check loop condition on failure
+        }
         emergency = res->state->emergency_stop;
         sem_post(res->sem_id, SEM_STATE);
 

@@ -15,8 +15,8 @@
 static int g_running = 1;
 static int g_child_exited = 0;
 
-// Track child PIDs for cleanup
-#define MAX_CHILD_PIDS 256
+// Track child PIDs for cleanup (match max_tracked_tourists default)
+#define MAX_CHILD_PIDS 5000
 static pid_t g_child_pids[MAX_CHILD_PIDS];
 static int g_child_count = 0;
 
@@ -92,13 +92,15 @@ static int is_vip(SharedState *state) {
 
 // Check pause state
 static void check_pause(IPCResources *res) {
-    sem_wait(res->sem_id, SEM_STATE);
+    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        return;  // Shutdown in progress
+    }
     int paused = res->state->paused;
     sem_post(res->sem_id, SEM_STATE);
 
     if (paused) {
         log_debug("GENERATOR", "Paused, waiting for resume...");
-        sem_wait(res->sem_id, SEM_PAUSE);
+        sem_wait(res->sem_id, SEM_PAUSE);  // May fail on shutdown, OK
         log_debug("GENERATOR", "Resumed");
     }
 }
