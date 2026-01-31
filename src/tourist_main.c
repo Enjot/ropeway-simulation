@@ -44,9 +44,6 @@ typedef struct FamilyState {
     // Ticket info (same for all family members)
     TicketType ticket_type;
     int ticket_valid_until;
-
-    // Per-kid data
-    int kid_ids[MAX_KIDS_PER_ADULT];  // Generated IDs for logging
 } FamilyState;
 
 // Per-thread data for kid threads
@@ -127,8 +124,8 @@ static void *kid_thread_func(void *arg) {
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-    log_info("TOURIST", "Kid %d of tourist %d started",
-             family->kid_ids[kid_idx], family->parent_id);
+    log_info("TOURIST", "Tourist %d kid #%d started",
+             family->parent_id, kid_idx + 1);
 
     while (!family->should_exit) {
         // Wait at barrier for parent to complete each stage
@@ -140,12 +137,12 @@ static void *kid_thread_func(void *arg) {
         if (family->should_exit) break;
 
         // Kid just follows parent - no independent actions needed
-        log_debug("TOURIST", "Kid %d completed stage %d with parent %d",
-                  family->kid_ids[kid_idx], family->current_stage, family->parent_id);
+        log_debug("TOURIST", "Tourist %d kid #%d completed stage %d",
+                  family->parent_id, kid_idx + 1, family->current_stage);
     }
 
-    log_info("TOURIST", "Kid %d of tourist %d exiting",
-             family->kid_ids[kid_idx], family->parent_id);
+    log_info("TOURIST", "Tourist %d kid #%d exiting",
+             family->parent_id, kid_idx + 1);
 
     return NULL;
 }
@@ -509,11 +506,6 @@ int main(int argc, char *argv[]) {
     family.res = &res;
     family.should_exit = 0;
     family.current_stage = STAGE_AT_CASHIER;
-
-    // Generate kid IDs for logging (e.g., parent 5 -> kids 501, 502)
-    for (int i = 0; i < data.kid_count; i++) {
-        family.kid_ids[i] = data.id * 100 + i + 1;
-    }
 
     // Initialize synchronization primitives for family
     if (data.kid_count > 0) {
