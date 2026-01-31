@@ -74,6 +74,9 @@ static void handle_resume(IPCResources *res) {
 void lower_worker_main(IPCResources *res, IPCKeys *keys) {
     (void)keys;
 
+    // Initialize logger with component type
+    logger_init(res->state, LOG_LOWER_WORKER);
+
     // Install signal handlers
     struct sigaction sa;
     sa.sa_handler = signal_handler;

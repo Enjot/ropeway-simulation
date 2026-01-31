@@ -7,9 +7,27 @@
 #include <time.h>
 
 static SharedState *g_state = NULL;
+static int g_use_colors = 0;
+static LogComponent g_component = LOG_UNKNOWN;
 
-void logger_init(SharedState *state) {
+#define COLOR_RESET "\033[0m"
+
+// Color for each component type (indexed by LogComponent enum)
+static const char *g_component_colors[LOG_COMPONENT_COUNT] = {
+    [LOG_TOURIST]      = "\033[32m",  // green
+    [LOG_CASHIER]      = "\033[33m",  // yellow
+    [LOG_LOWER_WORKER] = "\033[34m",  // blue
+    [LOG_UPPER_WORKER] = "\033[36m",  // cyan
+    [LOG_GENERATOR]    = "\033[35m",  // magenta
+    [LOG_MAIN]         = "\033[37m",  // white
+    [LOG_IPC]          = "\033[90m",  // gray
+    [LOG_UNKNOWN]      = "\033[39m",  // default
+};
+
+void logger_init(SharedState *state, LogComponent comp) {
     g_state = state;
+    g_component = comp;
+    g_use_colors = isatty(STDERR_FILENO);
 }
 
 // Issue #12 fix: Removed duplicated get_sim_minutes() - use time_get_sim_minutes() instead
@@ -41,8 +59,16 @@ void log_msg(const char *level, const char *component, const char *fmt, ...) {
     // Format sim time
     format_sim_time(time_buf, sizeof(time_buf));
 
-    // Format prefix: [TIME] [LEVEL] [COMPONENT]
-    len = snprintf(buf, sizeof(buf), "[%s] [%-5s] [%s] ", time_buf, level, component);
+    // Get color for this component (based on process's component type set at init)
+    const char *color = "";
+    const char *reset = "";
+    if (g_use_colors && g_component < LOG_COMPONENT_COUNT) {
+        color = g_component_colors[g_component];
+        reset = COLOR_RESET;
+    }
+
+    // Format prefix: [TIME] [LEVEL] [COMPONENT] (with color)
+    len = snprintf(buf, sizeof(buf), "%s[%s] [%-5s] [%s] ", color, time_buf, level, component);
 
     // Format message
     va_list args;
@@ -50,10 +76,9 @@ void log_msg(const char *level, const char *component, const char *fmt, ...) {
     len += vsnprintf(buf + len, sizeof(buf) - len, fmt, args);
     va_end(args);
 
-    // Add newline
-    if (len < (int)sizeof(buf) - 1) {
-        buf[len++] = '\n';
-        buf[len] = '\0';
+    // Add reset and newline
+    if (len < (int)sizeof(buf) - (int)sizeof(COLOR_RESET)) {
+        len += snprintf(buf + len, sizeof(buf) - len, "%s\n", reset);
     }
 
     // Write to stderr (async-signal-safe)

@@ -104,6 +104,9 @@ static int calculate_family_price(int parent_age, TicketType ticket, int is_vip,
 void cashier_main(IPCResources *res, IPCKeys *keys) {
     (void)keys;
 
+    // Initialize logger with component type
+    logger_init(res->state, LOG_CASHIER);
+
     // Install signal handlers
     struct sigaction sa;
     sa.sa_handler = signal_handler;

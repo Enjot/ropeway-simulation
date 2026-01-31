@@ -8,8 +8,21 @@
 #define LOG_WARN  "WARN"
 #define LOG_ERROR "ERROR"
 
-// Initialize logger with shared state (for sim time)
-void logger_init(SharedState *state);
+// Component types for colored logging
+typedef enum {
+    LOG_TOURIST,
+    LOG_CASHIER,
+    LOG_LOWER_WORKER,
+    LOG_UPPER_WORKER,
+    LOG_GENERATOR,
+    LOG_MAIN,
+    LOG_IPC,
+    LOG_UNKNOWN,
+    LOG_COMPONENT_COUNT
+} LogComponent;
+
+// Initialize logger with shared state and component type (for colored output)
+void logger_init(SharedState *state, LogComponent comp);
 
 // Main logging function (NOT signal-safe, uses snprintf)
 // Format: [HH:MM:SS] [LEVEL] [COMPONENT] message

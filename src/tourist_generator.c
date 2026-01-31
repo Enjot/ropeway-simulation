@@ -108,6 +108,9 @@ static void check_pause(IPCResources *res) {
 void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *tourist_exe) {
     (void)keys;
 
+    // Initialize logger with component type
+    logger_init(res->state, LOG_GENERATOR);
+
     // Install signal handlers
     struct sigaction sa;
     sa.sa_handler = signal_handler;

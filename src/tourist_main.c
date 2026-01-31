@@ -498,7 +498,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Initialize logger
-    logger_init(res.state);
+    logger_init(res.state, LOG_TOURIST);
 
     // Initialize family state
     family.parent_id = data.id;
