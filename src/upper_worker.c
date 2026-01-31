@@ -105,10 +105,16 @@ void upper_worker_main(IPCResources *res, IPCKeys *keys) {
             continue;
         }
 
-        arrivals_count++;
+        // Count parent + kids as separate arrivals
+        arrivals_count += (1 + msg.kid_count);
 
-        log_info("UPPER_WORKER", "Tourist %d arrived at upper platform (total arrivals: %d)",
-                 msg.tourist_id, arrivals_count);
+        if (msg.kid_count > 0) {
+            log_info("UPPER_WORKER", "Tourist %d + %d kid(s) arrived at upper platform (total arrivals: %d)",
+                     msg.tourist_id, msg.kid_count, arrivals_count);
+        } else {
+            log_info("UPPER_WORKER", "Tourist %d arrived at upper platform (total arrivals: %d)",
+                     msg.tourist_id, arrivals_count);
+        }
     }
 
     log_info("UPPER_WORKER", "Upper platform worker shutting down (processed %d arrivals)",

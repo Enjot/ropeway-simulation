@@ -10,6 +10,9 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/sem.h>
 #include <errno.h>
 #include <time.h>
 
@@ -52,6 +55,12 @@ static void sigcont_handler(int sig) {
     (void)sig;
     g_sigcont_received = 1;
     write(STDERR_FILENO, "[SIGNAL] SIGCONT received\n", 26);
+}
+
+// SIGALRM handler - just wakes up from pause() to check simulation time
+static void sigalrm_handler(int sig) {
+    (void)sig;
+    // Nothing to do - just wake up from pause()
 }
 
 // Issue #3 fix: Handle pause state changes outside signal handler (safe IPC)
@@ -281,6 +290,9 @@ int main(int argc, char *argv[]) {
     sa.sa_handler = sigcont_handler;
     sigaction(SIGCONT, &sa, NULL);
 
+    sa.sa_handler = sigalrm_handler;
+    sigaction(SIGALRM, &sa, NULL);
+
     // Spawn workers
     g_res.state->cashier_pid = spawn_worker(cashier_main, &g_res, &keys, "Cashier");
     g_res.state->lower_worker_pid = spawn_worker(lower_worker_main, &g_res, &keys, "LowerWorker");
@@ -310,13 +322,13 @@ int main(int argc, char *argv[]) {
         if (time_is_simulation_over(g_res.state)) {
             log_info("MAIN", "Simulation time ended");
             g_res.state->closing = 1;
-
-            // Wait a bit for tourists to finish, then shutdown
-            sleep(3);
             break;
         }
 
-        // Block until next signal
+        // Set alarm to wake up in 1 second to check time
+        alarm(1);
+
+        // Block until next signal (SIGCHLD, SIGALRM, etc.)
         pause();
     }
 
@@ -331,16 +343,44 @@ int main(int argc, char *argv[]) {
     if (g_res.state->upper_worker_pid > 0) kill(g_res.state->upper_worker_pid, SIGTERM);
     if (g_res.state->generator_pid > 0) kill(g_res.state->generator_pid, SIGTERM);
 
-    // Wait for workers to exit
+    // Destroy message queues to unblock any stuck msgrcv/msgsnd operations
+    // Processes will get EIDRM and should exit gracefully
+    if (g_res.mq_cashier_id != -1) {
+        msgctl(g_res.mq_cashier_id, IPC_RMID, NULL);
+        g_res.mq_cashier_id = -1;
+    }
+    if (g_res.mq_platform_id != -1) {
+        msgctl(g_res.mq_platform_id, IPC_RMID, NULL);
+        g_res.mq_platform_id = -1;
+    }
+    if (g_res.mq_boarding_id != -1) {
+        msgctl(g_res.mq_boarding_id, IPC_RMID, NULL);
+        g_res.mq_boarding_id = -1;
+    }
+    if (g_res.mq_arrivals_id != -1) {
+        msgctl(g_res.mq_arrivals_id, IPC_RMID, NULL);
+        g_res.mq_arrivals_id = -1;
+    }
+
+    // Destroy semaphores to unblock any stuck semop operations
+    // Processes will get EIDRM and should exit gracefully
+    if (g_res.sem_id != -1) {
+        semctl(g_res.sem_id, 0, IPC_RMID);
+        g_res.sem_id = -1;
+    }
+
+    // Now wait for workers to exit (they should be unblocked now)
+    // Generator waits for tourists before exiting, so this implicitly waits for all
     wait_for_workers();
 
-    // Print report
+    // Print report - shared memory is still attached
     print_report(g_res.state);
 
-    // Cleanup IPC resources
+    // Cleanup remaining IPC resources (shared memory)
     ipc_destroy(&g_res);
 
-    log_info("MAIN", "Simulation ended");
+    // Use write() directly since logger requires shared state which is now destroyed
+    write(STDERR_FILENO, "[INFO] [MAIN] Simulation ended\n", 31);
 
     return 0;
 }

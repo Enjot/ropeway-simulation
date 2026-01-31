@@ -13,6 +13,7 @@
 #define ENTRY_GATES 4             // Number of entry gates at lower station
 #define EXIT_GATES 2              // Number of exit gates at upper station
 #define PLATFORM_GATES 3          // Number of platform gates (before boarding)
+#define MAX_KIDS_PER_ADULT 2      // Maximum kids per guardian
 
 // Semaphore indices in the semaphore set
 #define SEM_STATE 0           // Mutex for SharedState access
@@ -135,6 +136,8 @@ typedef struct {
     int is_vip;
     int ticket_type;                // TicketType (set by cashier in response)
     int ticket_valid_until;         // Sim minutes (for time-based tickets)
+    int kid_count;                  // Number of kids (0-2) for family tickets
+    int kid_ages[2];                // Ages of kids (for discount calculation)
 } CashierMsg;
 
 // Message for platform/boarding communication
@@ -143,13 +146,15 @@ typedef struct {
                                     // tourist_id (for boarding confirmation)
     int tourist_id;
     int tourist_type;               // TouristType
-    int slots_needed;               // 1 for walker, 2 for cyclist
+    int slots_needed;               // 1 for walker, 2 for cyclist (includes kids for families)
+    int kid_count;                  // Number of kids in family group (0-2)
 } PlatformMsg;
 
 // Message for arrival notification
 typedef struct {
     long mtype;                     // Always 1
     int tourist_id;
+    int kid_count;                  // Number of kids arriving with parent (for logging)
 } ArrivalMsg;
 
 // ============================================================================

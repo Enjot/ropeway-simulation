@@ -188,9 +188,15 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
         current_chair_slots += slots_needed;
 
         const char *type_name = msg.tourist_type == TOURIST_WALKER ? "walker" : "cyclist";
-        log_info("LOWER_WORKER", "Tourist %d (%s, %d slots) boarded chair %d [%d/%d slots]",
-                 msg.tourist_id, type_name, slots_needed,
-                 chair_number, current_chair_slots, CHAIR_CAPACITY);
+        if (msg.kid_count > 0) {
+            log_info("LOWER_WORKER", "Tourist %d (%s) + %d kid(s) (%d slots) boarded chair %d [%d/%d slots]",
+                     msg.tourist_id, type_name, msg.kid_count, slots_needed,
+                     chair_number, current_chair_slots, CHAIR_CAPACITY);
+        } else {
+            log_info("LOWER_WORKER", "Tourist %d (%s, %d slots) boarded chair %d [%d/%d slots]",
+                     msg.tourist_id, type_name, slots_needed,
+                     chair_number, current_chair_slots, CHAIR_CAPACITY);
+        }
 
         // If chair is full, dispatch and reset
         if (current_chair_slots >= CHAIR_CAPACITY) {

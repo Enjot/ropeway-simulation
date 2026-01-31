@@ -58,7 +58,10 @@ static int calculate_ticket_validity(SharedState *state, TicketType ticket) {
     }
 }
 
-// Calculate ticket price (for logging)
+/**
+ * Calculate ticket price for one person.
+ * Age discounts: <10 years or 65+ get 25% off.
+ */
 static int calculate_price(int age, TicketType ticket, int is_vip) {
     // Base prices
     int base_prices[] = {15, 30, 50, 70, 80};
@@ -77,6 +80,24 @@ static int calculate_price(int age, TicketType ticket, int is_vip) {
     }
 
     return price;
+}
+
+/**
+ * Calculate total family ticket price.
+ * Parent and kids all get the same ticket type.
+ * Kids (4-7 years old) automatically get the under-10 discount.
+ */
+static int calculate_family_price(int parent_age, TicketType ticket, int is_vip,
+                                  int kid_count, int *kid_ages) {
+    // Parent ticket
+    int total = calculate_price(parent_age, ticket, is_vip);
+
+    // Kid tickets (same type, kids not VIP separately)
+    for (int i = 0; i < kid_count; i++) {
+        total += calculate_price(kid_ages[i], ticket, 0);
+    }
+
+    return total;
 }
 
 void cashier_main(IPCResources *res, IPCKeys *keys) {
@@ -135,15 +156,24 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
             continue;
         }
 
-        // Determine ticket type
+        // Determine ticket type (same for parent and kids)
         TicketType ticket = select_ticket_type(res->state);
         int valid_until = calculate_ticket_validity(res->state, ticket);
-        int price = calculate_price(request.age, ticket, request.is_vip);
 
-        // Update statistics
+        // Calculate price for whole family
+        int price;
+        if (request.kid_count > 0) {
+            int kid_ages[MAX_KIDS_PER_ADULT] = {request.kid_ages[0], request.kid_ages[1]};
+            price = calculate_family_price(request.age, ticket, request.is_vip,
+                                           request.kid_count, kid_ages);
+        } else {
+            price = calculate_price(request.age, ticket, request.is_vip);
+        }
+
+        // Update statistics (count parent + kids as separate tourists)
         sem_wait(res->sem_id, SEM_STATS);
-        res->state->total_tourists++;
-        res->state->tourists_by_ticket[ticket]++;
+        res->state->total_tourists += (1 + request.kid_count);
+        res->state->tourists_by_ticket[ticket] += (1 + request.kid_count);
         sem_post(res->sem_id, SEM_STATS);
 
         // Send ticket response
@@ -169,14 +199,26 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
         char valid_buf[8];
         time_format_minutes(valid_until, valid_buf, sizeof(valid_buf));
 
-        log_info("CASHIER", "Sold %s ticket to tourist %d (%s, age %d%s) - valid until %s, price %d PLN",
-                 ticket_names[ticket],
-                 request.tourist_id,
-                 type_name,
-                 request.age,
-                 request.is_vip ? ", VIP" : "",
-                 valid_buf,
-                 price);
+        if (request.kid_count > 0) {
+            log_info("CASHIER", "Sold %s family ticket to tourist %d (%s, age %d%s) + %d kid(s) - valid until %s, price %d PLN",
+                     ticket_names[ticket],
+                     request.tourist_id,
+                     type_name,
+                     request.age,
+                     request.is_vip ? ", VIP" : "",
+                     request.kid_count,
+                     valid_buf,
+                     price);
+        } else {
+            log_info("CASHIER", "Sold %s ticket to tourist %d (%s, age %d%s) - valid until %s, price %d PLN",
+                     ticket_names[ticket],
+                     request.tourist_id,
+                     type_name,
+                     request.age,
+                     request.is_vip ? ", VIP" : "",
+                     valid_buf,
+                     price);
+        }
     }
 
     log_info("CASHIER", "Cashier shutting down");

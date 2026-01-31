@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/sem.h>
@@ -221,36 +222,10 @@ void ipc_detach(IPCResources *res) {
 }
 
 void ipc_destroy(IPCResources *res) {
-    // Detach and remove shared memory
-    if (res->state) {
-        shmdt(res->state);
-        res->state = NULL;
-    }
-    if (res->shm_id != -1) {
-        if (shmctl(res->shm_id, IPC_RMID, NULL) == -1) {
-            perror("ipc_destroy: shmctl IPC_RMID");
-        } else {
-            log_debug("IPC", "Removed shared memory");
-        }
-        res->shm_id = -1;
-    }
-
-    // Remove semaphores
-    if (res->sem_id != -1) {
-        if (semctl(res->sem_id, 0, IPC_RMID) == -1) {
-            perror("ipc_destroy: semctl IPC_RMID");
-        } else {
-            log_debug("IPC", "Removed semaphore set");
-        }
-        res->sem_id = -1;
-    }
-
-    // Remove message queues
+    // Remove message queues first (before shared memory, so we can log)
     if (res->mq_cashier_id != -1) {
         if (msgctl(res->mq_cashier_id, IPC_RMID, NULL) == -1) {
             perror("ipc_destroy: msgctl cashier IPC_RMID");
-        } else {
-            log_debug("IPC", "Removed cashier message queue");
         }
         res->mq_cashier_id = -1;
     }
@@ -258,8 +233,6 @@ void ipc_destroy(IPCResources *res) {
     if (res->mq_platform_id != -1) {
         if (msgctl(res->mq_platform_id, IPC_RMID, NULL) == -1) {
             perror("ipc_destroy: msgctl platform IPC_RMID");
-        } else {
-            log_debug("IPC", "Removed platform message queue");
         }
         res->mq_platform_id = -1;
     }
@@ -267,8 +240,6 @@ void ipc_destroy(IPCResources *res) {
     if (res->mq_boarding_id != -1) {
         if (msgctl(res->mq_boarding_id, IPC_RMID, NULL) == -1) {
             perror("ipc_destroy: msgctl boarding IPC_RMID");
-        } else {
-            log_debug("IPC", "Removed boarding message queue");
         }
         res->mq_boarding_id = -1;
     }
@@ -276,13 +247,32 @@ void ipc_destroy(IPCResources *res) {
     if (res->mq_arrivals_id != -1) {
         if (msgctl(res->mq_arrivals_id, IPC_RMID, NULL) == -1) {
             perror("ipc_destroy: msgctl arrivals IPC_RMID");
-        } else {
-            log_debug("IPC", "Removed arrivals message queue");
         }
         res->mq_arrivals_id = -1;
     }
 
-    log_info("IPC", "All IPC resources destroyed");
+    // Remove semaphores
+    if (res->sem_id != -1) {
+        if (semctl(res->sem_id, 0, IPC_RMID) == -1) {
+            perror("ipc_destroy: semctl IPC_RMID");
+        }
+        res->sem_id = -1;
+    }
+
+    // Detach and remove shared memory last
+    if (res->state) {
+        shmdt(res->state);
+        res->state = NULL;
+    }
+    if (res->shm_id != -1) {
+        if (shmctl(res->shm_id, IPC_RMID, NULL) == -1) {
+            perror("ipc_destroy: shmctl IPC_RMID");
+        }
+        res->shm_id = -1;
+    }
+
+    // Use write() directly since logger requires shared state
+    write(STDERR_FILENO, "[INFO] [IPC] All IPC resources destroyed\n", 41);
 }
 
 int sem_wait(int sem_id, int sem_num) {
