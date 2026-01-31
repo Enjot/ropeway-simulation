@@ -16,7 +16,7 @@
 #include <sys/stat.h>
 
 // Tourist data structure
-typedef struct {
+typedef struct TouristData {
     int id;
     int age;
     TouristType type;
@@ -35,7 +35,7 @@ typedef struct FamilyState {
 
     int parent_id;
     int kid_count;
-    int current_stage;                // Current simulation stage
+    TouristStage current_stage;       // Current simulation stage
     int should_exit;                  // Flag for coordinated exit
 
     // Shared IPC resources (inherited from parent)
@@ -50,7 +50,7 @@ typedef struct FamilyState {
 } FamilyState;
 
 // Per-thread data for kid threads
-typedef struct {
+typedef struct KidThreadData {
     int kid_index;           // 0 or 1 for kids
     FamilyState *family;
 } KidThreadData;
@@ -155,13 +155,13 @@ static void *kid_thread_func(void *arg) {
  * Does nothing if no kids or if shutdown is in progress.
  * Returns 0 on success, -1 if shutdown detected.
  */
-static int sync_with_kids(FamilyState *family, int stage_num) {
+static int sync_with_kids(FamilyState *family, TouristStage stage) {
     if (family->kid_count > 0) {
         // Check if shutting down - don't wait on barrier
         if (!g_running || family->should_exit) {
             return -1;
         }
-        family->current_stage = stage_num;
+        family->current_stage = stage;
         pthread_barrier_wait(&family->stage_barrier);
     }
     return 0;
@@ -508,7 +508,7 @@ int main(int argc, char *argv[]) {
     family.kid_count = data.kid_count;
     family.res = &res;
     family.should_exit = 0;
-    family.current_stage = 0;
+    family.current_stage = STAGE_AT_CASHIER;
 
     // Generate kid IDs for logging (e.g., parent 5 -> kids 501, 502)
     for (int i = 0; i < data.kid_count; i++) {
@@ -566,6 +566,7 @@ int main(int argc, char *argv[]) {
     // Store ticket info in family state for kids
     family.ticket_type = data.ticket_type;
     family.ticket_valid_until = data.ticket_valid_until;
+    family.current_stage = STAGE_AT_ENTRY_GATES;  // Moving to entry gates after buying ticket
 
     const char *ticket_names[] = {"SINGLE", "TIME_T1", "TIME_T2", "TIME_T3", "DAILY"};
     if (data.kid_count > 0) {
@@ -582,7 +583,7 @@ int main(int argc, char *argv[]) {
     // Main ride loop
     while (g_running && res.state->running) {
         check_pause(&res);
-        sync_with_kids(&family, 0);  // Stage 0: Start of ride loop
+        sync_with_kids(&family, STAGE_AT_ENTRY_GATES);
 
         // Check exit conditions
         if (!is_ticket_valid(&res, &data)) {
@@ -603,7 +604,7 @@ int main(int argc, char *argv[]) {
         }
 
         check_pause(&res);
-        sync_with_kids(&family, 1);  // Stage 1: Through entry gate
+        sync_with_kids(&family, STAGE_ENTERED_LOWER_STATION);
 
         log_debug("TOURIST", "Tourist %d entered through gate", data.id);
 
@@ -639,7 +640,7 @@ int main(int argc, char *argv[]) {
         }
 
         check_pause(&res);
-        sync_with_kids(&family, 2);  // Stage 2: In lower station
+        sync_with_kids(&family, STAGE_QUEUED_FOR_PLATFORM);
 
         // ~10% of first-time visitors decide not to use the chairlift
         if (data.rides_completed == 0 && (rand() % 10) == 0) {
@@ -671,7 +672,7 @@ int main(int argc, char *argv[]) {
 
         log_debug("TOURIST", "Tourist %d passed through platform gate", data.id);
         check_pause(&res);
-        sync_with_kids(&family, 3);  // Stage 3: Through platform gate
+        sync_with_kids(&family, STAGE_AT_LOWER_PLATFORM);
 
         // Board chair (family boards together)
         if (board_chair(&res, &data) == -1) {
@@ -700,7 +701,7 @@ int main(int argc, char *argv[]) {
         } else {
             log_info("TOURIST", "Tourist %d boarded chairlift", data.id);
         }
-        sync_with_kids(&family, 4);  // Stage 4: Boarded chair
+        sync_with_kids(&family, STAGE_ON_CHAIR);
 
         // Ride chairlift
         if (ride_chairlift(&res, &data) == -1) {
@@ -708,19 +709,19 @@ int main(int argc, char *argv[]) {
             sem_post(res.sem_id, SEM_CHAIRS);
             break;
         }
-        sync_with_kids(&family, 5);  // Stage 5: Finished ride
+        sync_with_kids(&family, STAGE_RIDE_COMPLETE);
 
         // Arrive at upper platform
         if (arrive_upper(&res, &data) == -1) {
             break;
         }
-        sync_with_kids(&family, 6);  // Stage 6: At upper platform
+        sync_with_kids(&family, STAGE_AT_UPPER_PLATFORM_GATES);
 
         // Descend trail
         if (descend_trail(&res, &data) == -1) {
             break;
         }
-        sync_with_kids(&family, 7);  // Stage 7: Trail completed
+        sync_with_kids(&family, STAGE_ON_TRAIL);
 
         data.rides_completed++;
         update_stats(&res, &data);
@@ -749,6 +750,8 @@ int main(int argc, char *argv[]) {
     }
 
 cleanup_family:
+    family.current_stage = STAGE_LEAVING;
+
     // Signal kids to exit and join threads
     if (data.kid_count > 0) {
         family.should_exit = 1;

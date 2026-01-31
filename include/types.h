@@ -1,5 +1,9 @@
 #pragma once
 
+// Feature test macros - must be before any includes
+// Required for pthread_barrier_t and other POSIX extensions
+#define _GNU_SOURCE
+
 #include <sys/types.h>
 #include <time.h>
 
@@ -62,6 +66,19 @@ typedef enum {
     TRAIL_BIKE_MEDIUM = 2,// Medium bike trail
     TRAIL_BIKE_SLOW = 3   // Slow bike trail
 } TrailType;
+
+typedef enum {
+    STAGE_AT_CASHIER = 0,               // Initial: at cashier (buying ticket after spawn)
+    STAGE_AT_ENTRY_GATES = 1,           // Sync 0: at entry gates (trying to pass)
+    STAGE_ENTERED_LOWER_STATION = 2,    // Sync 1: just entered lower station waiting room
+    STAGE_QUEUED_FOR_PLATFORM = 3,      // Sync 2: waiting in queue for platform access
+    STAGE_AT_LOWER_PLATFORM = 4,        // Sync 3: at lower platform (ready to board)
+    STAGE_ON_CHAIR = 5,                 // Sync 4: on the chairlift
+    STAGE_RIDE_COMPLETE = 6,            // Sync 5: ride complete, exiting chair
+    STAGE_AT_UPPER_PLATFORM_GATES = 7,  // Sync 6: queued at upper platform exit gates
+    STAGE_ON_TRAIL = 8,                 // Sync 7: on trail (descending back to entry gates)
+    STAGE_LEAVING = 9                   // Terminal: leaving (ticket invalid, station closing, or done)
+} TouristStage;
 
 // ============================================================================
 // Per-Tourist Tracking Entry
