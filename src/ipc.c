@@ -15,6 +15,7 @@ union semun {
     int val;
     struct semid_ds *buf;
     unsigned short *array;
+    struct seminfo *_buf;
 };
 
 int ipc_generate_keys(IPCKeys *keys, const char *path) {
@@ -296,6 +297,42 @@ int sem_post(int sem_id, int sem_num) {
             continue;  // Retry on interrupt
         }
         perror("sem_post: semop");
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * Atomically wait (decrement) a semaphore by count.
+ * Blocks until count slots are available, then acquires all at once.
+ */
+int sem_wait_n(int sem_id, int sem_num, int count) {
+    if (count <= 0) return 0;
+    struct sembuf sop = {sem_num, -count, 0};
+
+    while (semop(sem_id, &sop, 1) == -1) {
+        if (errno == EINTR) {
+            continue;  // Retry on interrupt
+        }
+        perror("sem_wait_n: semop");
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * Atomically post (increment) a semaphore by count.
+ * Releases count slots at once.
+ */
+int sem_post_n(int sem_id, int sem_num, int count) {
+    if (count <= 0) return 0;
+    struct sembuf sop = {sem_num, count, 0};
+
+    while (semop(sem_id, &sop, 1) == -1) {
+        if (errno == EINTR) {
+            continue;  // Retry on interrupt
+        }
+        perror("sem_post_n: semop");
         return -1;
     }
     return 0;

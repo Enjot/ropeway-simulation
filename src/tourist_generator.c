@@ -79,12 +79,6 @@ static int generate_kid_count(void) {
     return 2;              // 15% two kids
 }
 
-/**
- * Generate kid age (4-7 years old).
- */
-static int generate_kid_age(void) {
-    return 4 + (rand() % 4);  // 4, 5, 6, or 7
-}
 
 // Generate tourist type (walker or cyclist)
 static TouristType generate_type(SharedState *state) {
@@ -165,13 +159,8 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
 
         // Determine number of kids (only walkers 26+ can have kids)
         int kid_count = 0;
-        int kid_ages[MAX_KIDS_PER_ADULT] = {0, 0};
-
         if (type == TOURIST_WALKER && can_have_kids && age >= 26) {
             kid_count = generate_kid_count();
-            for (int i = 0; i < kid_count; i++) {
-                kid_ages[i] = generate_kid_age();
-            }
         }
 
         // Prepare arguments for exec
@@ -180,16 +169,12 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         char type_str[2];
         char vip_str[2];
         char kid_count_str[8];
-        char kid1_age_str[8];
-        char kid2_age_str[8];
 
         snprintf(id_str, sizeof(id_str), "%d", tourist_id);
         snprintf(age_str, sizeof(age_str), "%d", age);
         snprintf(type_str, sizeof(type_str), "%d", type);
         snprintf(vip_str, sizeof(vip_str), "%d", vip);
         snprintf(kid_count_str, sizeof(kid_count_str), "%d", kid_count);
-        snprintf(kid1_age_str, sizeof(kid1_age_str), "%d", kid_ages[0]);
-        snprintf(kid2_age_str, sizeof(kid2_age_str), "%d", kid_ages[1]);
 
         // Fork and exec tourist process
         pid_t pid = fork();
@@ -201,9 +186,9 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         }
 
         if (pid == 0) {
-            // Child process - exec tourist with extended arguments
+            // Child process - exec tourist
             execl(tourist_exe, "tourist", id_str, age_str, type_str, vip_str,
-                  kid_count_str, kid1_age_str, kid2_age_str, NULL);
+                  kid_count_str, NULL);
 
             // If exec fails
             perror("generator: execl");

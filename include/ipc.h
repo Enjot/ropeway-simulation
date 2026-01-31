@@ -28,6 +28,11 @@ int sem_wait(int sem_id, int sem_num);
 int sem_post(int sem_id, int sem_num);
 int sem_trywait(int sem_id, int sem_num);  // Non-blocking, returns -1 with EAGAIN if would block
 
+// Atomic multi-slot semaphore operations
+// Atomically acquire/release 'count' slots in a single syscall
+int sem_wait_n(int sem_id, int sem_num, int count);
+int sem_post_n(int sem_id, int sem_num, int count);
+
 // Get current semaphore value
 int sem_getval(int sem_id, int sem_num);
 

@@ -137,7 +137,6 @@ typedef struct {
     int ticket_type;                // TicketType (set by cashier in response)
     int ticket_valid_until;         // Sim minutes (for time-based tickets)
     int kid_count;                  // Number of kids (0-2) for family tickets
-    int kid_ages[2];                // Ages of kids (for discount calculation)
 } CashierMsg;
 
 // Message for platform/boarding communication

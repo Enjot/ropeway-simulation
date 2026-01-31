@@ -85,16 +85,17 @@ static int calculate_price(int age, TicketType ticket, int is_vip) {
 /**
  * Calculate total family ticket price.
  * Parent and kids all get the same ticket type.
- * Kids (4-7 years old) automatically get the under-10 discount.
+ * Kids (4-7 years old) always get the under-10 discount.
  */
 static int calculate_family_price(int parent_age, TicketType ticket, int is_vip,
-                                  int kid_count, int *kid_ages) {
+                                  int kid_count) {
     // Parent ticket
     int total = calculate_price(parent_age, ticket, is_vip);
 
-    // Kid tickets (same type, kids not VIP separately)
+    // Kid tickets - all kids are 4-7 years old, so always get under-10 discount
+    // Use age 5 as representative kid age (any value < 10 works)
     for (int i = 0; i < kid_count; i++) {
-        total += calculate_price(kid_ages[i], ticket, 0);
+        total += calculate_price(5, ticket, 0);
     }
 
     return total;
@@ -163,9 +164,8 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
         // Calculate price for whole family
         int price;
         if (request.kid_count > 0) {
-            int kid_ages[MAX_KIDS_PER_ADULT] = {request.kid_ages[0], request.kid_ages[1]};
             price = calculate_family_price(request.age, ticket, request.is_vip,
-                                           request.kid_count, kid_ages);
+                                           request.kid_count);
         } else {
             price = calculate_price(request.age, ticket, request.is_vip);
         }

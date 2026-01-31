@@ -24,7 +24,6 @@ typedef struct {
     int rides_completed;
     int slots_needed;        // 1 for walker, 2 for cyclist (includes kids)
     int kid_count;           // Number of kids (0-2)
-    int kid_ages[MAX_KIDS_PER_ADULT];  // Ages of kids
 } TouristData;
 
 // Forward declaration
@@ -48,14 +47,12 @@ typedef struct FamilyState {
     int ticket_valid_until;
 
     // Per-kid data
-    int kid_ages[MAX_KIDS_PER_ADULT];
     int kid_ids[MAX_KIDS_PER_ADULT];  // Generated IDs for logging
 } FamilyState;
 
 // Per-thread data for kid threads
 typedef struct {
     int kid_index;           // 0 or 1 for kids
-    int age;
     FamilyState *family;
 } KidThreadData;
 
@@ -69,11 +66,11 @@ static void signal_handler(int sig) {
 
 /**
  * Parse command line arguments for tourist process.
- * Extended format: tourist <id> <age> <type> <vip> <kid_count> <kid1_age> <kid2_age>
+ * Format: tourist <id> <age> <type> <vip> <kid_count>
  */
 static int parse_args(int argc, char *argv[], TouristData *data) {
-    if (argc != 8) {
-        fprintf(stderr, "Usage: tourist <id> <age> <type> <vip> <kid_count> <kid1_age> <kid2_age>\n");
+    if (argc != 6) {
+        fprintf(stderr, "Usage: tourist <id> <age> <type> <vip> <kid_count>\n");
         return -1;
     }
 
@@ -82,8 +79,6 @@ static int parse_args(int argc, char *argv[], TouristData *data) {
     data->type = atoi(argv[3]);
     data->is_vip = atoi(argv[4]);
     data->kid_count = atoi(argv[5]);
-    data->kid_ages[0] = atoi(argv[6]);
-    data->kid_ages[1] = atoi(argv[7]);
 
     data->rides_completed = 0;
     data->ticket_type = -1;  // Not yet purchased
@@ -133,8 +128,8 @@ static void *kid_thread_func(void *arg) {
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-    log_info("TOURIST", "Kid %d (age %d) of tourist %d started",
-             family->kid_ids[kid_idx], td->age, family->parent_id);
+    log_info("TOURIST", "Kid %d of tourist %d started",
+             family->kid_ids[kid_idx], family->parent_id);
 
     while (!family->should_exit) {
         // Wait at barrier for parent to complete each stage
@@ -150,8 +145,8 @@ static void *kid_thread_func(void *arg) {
                   family->kid_ids[kid_idx], family->current_stage, family->parent_id);
     }
 
-    log_info("TOURIST", "Kid %d (age %d) of tourist %d exiting",
-             family->kid_ids[kid_idx], td->age, family->parent_id);
+    log_info("TOURIST", "Kid %d of tourist %d exiting",
+             family->kid_ids[kid_idx], family->parent_id);
 
     return NULL;
 }
@@ -210,8 +205,6 @@ static int buy_ticket(IPCResources *res, TouristData *data) {
     request.age = data->age;
     request.is_vip = data->is_vip;
     request.kid_count = data->kid_count;
-    request.kid_ages[0] = data->kid_ages[0];
-    request.kid_ages[1] = data->kid_ages[1];
 
     // Send request
     if (msgsnd(res->mq_cashier_id, &request, sizeof(request) - sizeof(long), 0) == -1) {
@@ -479,7 +472,6 @@ int main(int argc, char *argv[]) {
 
     // Generate kid IDs for logging (e.g., parent 5 -> kids 501, 502)
     for (int i = 0; i < data.kid_count; i++) {
-        family.kid_ages[i] = data.kid_ages[i];
         family.kid_ids[i] = data.id * 100 + i + 1;
     }
 
@@ -498,7 +490,6 @@ int main(int argc, char *argv[]) {
         // Spawn kid threads
         for (int i = 0; i < data.kid_count; i++) {
             kid_data[i].kid_index = i;
-            kid_data[i].age = data.kid_ages[i];
             kid_data[i].family = &family;
 
             if (pthread_create(&kid_threads[i], NULL, kid_thread_func, &kid_data[i]) != 0) {
@@ -578,14 +569,16 @@ int main(int argc, char *argv[]) {
         log_debug("TOURIST", "Tourist %d entered through gate", data.id);
 
         // Enter lower station (wait if full)
-        if (sem_wait(res.sem_id, SEM_LOWER_STATION) == -1) {
+        // Family atomically acquires slots to enforce capacity correctly
+        int family_size = 1 + data.kid_count;
+        if (sem_wait_n(res.sem_id, SEM_LOWER_STATION, family_size) == -1) {
             sem_post(res.sem_id, SEM_ENTRY_GATES);
             break;
         }
 
         // Update station count for logging (count whole family)
         sem_wait(res.sem_id, SEM_STATE);
-        res.state->lower_station_count += (1 + data.kid_count);
+        res.state->lower_station_count += family_size;
         int count = res.state->lower_station_count;
         sem_post(res.sem_id, SEM_STATE);
 
@@ -606,9 +599,9 @@ int main(int argc, char *argv[]) {
         // Wait for platform gate (3 gates on lower platform)
         if (sem_wait(res.sem_id, SEM_PLATFORM_GATES) == -1) {
             sem_wait(res.sem_id, SEM_STATE);
-            res.state->lower_station_count -= (1 + data.kid_count);
+            res.state->lower_station_count -= family_size;
             sem_post(res.sem_id, SEM_STATE);
-            sem_post(res.sem_id, SEM_LOWER_STATION);
+            sem_post_n(res.sem_id, SEM_LOWER_STATION, family_size);
             break;
         }
 
@@ -618,23 +611,23 @@ int main(int argc, char *argv[]) {
 
         // Board chair (family boards together)
         if (board_chair(&res, &data) == -1) {
-            // Release platform gate and station slot
+            // Release platform gate and station slots
             sem_post(res.sem_id, SEM_PLATFORM_GATES);
             sem_wait(res.sem_id, SEM_STATE);
-            res.state->lower_station_count -= (1 + data.kid_count);
+            res.state->lower_station_count -= family_size;
             sem_post(res.sem_id, SEM_STATE);
-            sem_post(res.sem_id, SEM_LOWER_STATION);
+            sem_post_n(res.sem_id, SEM_LOWER_STATION, family_size);
             break;
         }
 
         // Release platform gate (now boarding chair)
         sem_post(res.sem_id, SEM_PLATFORM_GATES);
 
-        // Release station slot (now on chair)
+        // Release station slots (now on chair)
         sem_wait(res.sem_id, SEM_STATE);
-        res.state->lower_station_count -= (1 + data.kid_count);
+        res.state->lower_station_count -= family_size;
         sem_post(res.sem_id, SEM_STATE);
-        sem_post(res.sem_id, SEM_LOWER_STATION);
+        sem_post_n(res.sem_id, SEM_LOWER_STATION, family_size);
 
         if (data.kid_count > 0) {
             log_info("TOURIST", "Tourist %d + %d kids boarded chairlift", data.id, data.kid_count);
