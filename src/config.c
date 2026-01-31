@@ -28,6 +28,9 @@ void config_set_defaults(Config *cfg) {
     cfg->ticket_t1_duration = 60;   // 1 sim hour
     cfg->ticket_t2_duration = 120;  // 2 sim hours
     cfg->ticket_t3_duration = 180;  // 3 sim hours
+
+    cfg->danger_probability = 0;    // Disabled by default
+    cfg->danger_cooldown_sim = 30;  // 30 sim minutes cooldown
 }
 
 int config_load(const char *path, Config *cfg) {
@@ -109,6 +112,10 @@ int config_load(const char *path, Config *cfg) {
             cfg->ticket_t2_duration = atoi(value);
         } else if (strcmp(key, "TICKET_T3_DURATION_SIM_MINUTES") == 0) {
             cfg->ticket_t3_duration = atoi(value);
+        } else if (strcmp(key, "DANGER_PROBABILITY") == 0) {
+            cfg->danger_probability = atoi(value);
+        } else if (strcmp(key, "DANGER_COOLDOWN_SIM_MINUTES") == 0) {
+            cfg->danger_cooldown_sim = atoi(value);
         } else {
             fprintf(stderr, "config_load: unknown key at line %d: %s\n", line_num, key);
         }
@@ -187,6 +194,16 @@ int config_validate(const Config *cfg) {
 
     if (cfg->chair_travel_time_sim <= 0) {
         fprintf(stderr, "config: CHAIR_TRAVEL_TIME_SIM_MINUTES must be > 0\n");
+        valid = 0;
+    }
+
+    if (cfg->danger_probability < 0 || cfg->danger_probability > 100) {
+        fprintf(stderr, "config: DANGER_PROBABILITY must be 0-100\n");
+        valid = 0;
+    }
+
+    if (cfg->danger_cooldown_sim < 0) {
+        fprintf(stderr, "config: DANGER_COOLDOWN_SIM_MINUTES must be >= 0\n");
         valid = 0;
     }
 

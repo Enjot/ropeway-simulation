@@ -32,6 +32,10 @@ typedef struct {
     int ticket_t1_duration;         // Time-based T1
     int ticket_t2_duration;         // Time-based T2
     int ticket_t3_duration;         // Time-based T3
+
+    // Danger detection settings
+    int danger_probability;         // Probability per check (0-100), 0 = disabled
+    int danger_cooldown_sim;        // Simulated minutes between possible detections
 } Config;
 
 // Load configuration from file

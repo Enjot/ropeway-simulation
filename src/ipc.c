@@ -151,6 +151,8 @@ int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     res->state->ticket_t1_duration = cfg->ticket_t1_duration;
     res->state->ticket_t2_duration = cfg->ticket_t2_duration;
     res->state->ticket_t3_duration = cfg->ticket_t3_duration;
+    res->state->danger_probability = cfg->danger_probability;
+    res->state->danger_cooldown_sim = cfg->danger_cooldown_sim;
 
     // Set initial state
     res->state->running = 1;

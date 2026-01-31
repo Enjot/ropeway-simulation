@@ -14,6 +14,9 @@
 static int g_running = 1;
 static int g_emergency_signal = 0;
 static int g_resume_signal = 0;
+static time_t g_last_danger_time = 0;       // Last danger detection (real time)
+static time_t g_emergency_start_time = 0;   // When current emergency started
+static int g_is_emergency_initiator = 0;    // 1 if this worker detected danger
 
 static void signal_handler(int sig) {
     if (sig == SIGTERM || sig == SIGINT) {
@@ -27,30 +30,56 @@ static void signal_handler(int sig) {
     }
 }
 
-// Handle emergency stop
-static void handle_emergency_stop(IPCResources *res) {
-    log_warn("UPPER_WORKER", "Emergency stop acknowledged");
+/**
+ * Called when THIS worker detects danger.
+ * Sets emergency flag, sends SIGUSR1 to other worker, records start time.
+ */
+static void trigger_emergency_stop(IPCResources *res) {
+    log_warn("UPPER_WORKER", "Danger detected! Triggering emergency stop");
 
+    g_is_emergency_initiator = 1;
+    g_emergency_start_time = time(NULL);
+
+    // Set emergency flag
     if (sem_wait(res->sem_id, SEM_STATE) == -1) {
         return;  // Shutdown in progress
     }
     res->state->emergency_stop = 1;
     sem_post(res->sem_id, SEM_STATE);
+
+    // Signal lower worker about emergency
+    if (res->state->lower_worker_pid > 0) {
+        kill(res->state->lower_worker_pid, SIGUSR1);
+    }
 }
 
-// Issue #1 fix: Handle resume request with separate semaphores to avoid deadlock
-static void handle_resume(IPCResources *res) {
-    log_info("UPPER_WORKER", "Resume request received - signaling ready");
+/**
+ * Called when receiving SIGUSR1 from lower worker.
+ * Acknowledges emergency, blocks on semaphore until resume is initiated.
+ */
+static void acknowledge_emergency_stop(IPCResources *res) {
+    log_warn("UPPER_WORKER", "Emergency stop acknowledged from lower worker");
 
-    // Signal that upper worker is ready
-    sem_post(res->sem_id, SEM_UPPER_READY);
+    g_is_emergency_initiator = 0;
 
-    // Wait for lower worker to be ready
-    if (sem_wait(res->sem_id, SEM_LOWER_READY) == -1) {
+    // Set emergency flag
+    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        return;  // Shutdown in progress
+    }
+    res->state->emergency_stop = 1;
+    sem_post(res->sem_id, SEM_STATE);
+
+    // Block until detecting worker says we can resume
+    log_debug("UPPER_WORKER", "Waiting for resume signal from lower worker...");
+    if (sem_wait(res->sem_id, SEM_EMERGENCY_CLEAR) == -1) {
         return;  // Shutdown in progress
     }
 
-    // Clear emergency stop (lower worker also clears it, but be safe)
+    // Signal that we're ready to resume
+    log_debug("UPPER_WORKER", "Signaling ready to resume");
+    sem_post(res->sem_id, SEM_UPPER_READY);
+
+    // Clear emergency stop
     if (sem_wait(res->sem_id, SEM_STATE) == -1) {
         return;  // Shutdown in progress
     }
@@ -60,8 +89,76 @@ static void handle_resume(IPCResources *res) {
     log_info("UPPER_WORKER", "Chairlift resumed");
 }
 
+/**
+ * Called by detecting worker after cooldown to initiate resume.
+ * Wakes up receiving worker, waits for ready confirmation, sends SIGUSR2.
+ */
+static void initiate_resume(IPCResources *res) {
+    log_info("UPPER_WORKER", "Cooldown passed, initiating resume");
+
+    // Wake up the receiving worker
+    sem_post(res->sem_id, SEM_EMERGENCY_CLEAR);
+
+    // Wait for other worker to be ready
+    log_debug("UPPER_WORKER", "Waiting for lower worker to be ready...");
+    if (sem_wait(res->sem_id, SEM_LOWER_READY) == -1) {
+        return;  // Shutdown in progress
+    }
+
+    // Send SIGUSR2 to formally resume chairlift
+    if (res->state->lower_worker_pid > 0) {
+        kill(res->state->lower_worker_pid, SIGUSR2);
+    }
+
+    // Clear emergency stop
+    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+        return;  // Shutdown in progress
+    }
+    res->state->emergency_stop = 0;
+    sem_post(res->sem_id, SEM_STATE);
+
+    // Release any tourist waiters
+    ipc_release_emergency_waiters(res);
+
+    g_is_emergency_initiator = 0;
+    g_emergency_start_time = 0;
+
+    log_info("UPPER_WORKER", "Chairlift resumed");
+}
+
 // Issue #11 fix: Use consolidated ipc_check_pause() instead of duplicated code
 // See ipc.c for implementation
+
+/**
+ * Check for random danger and trigger emergency stop if detected.
+ * Returns 1 if danger was detected, 0 otherwise.
+ */
+static int check_for_danger(IPCResources *res) {
+    int probability = res->state->danger_probability;
+    if (probability <= 0) {
+        return 0;  // Danger detection disabled
+    }
+
+    // Check cooldown period (convert sim minutes to real seconds)
+    time_t now = time(NULL);
+    if (g_last_danger_time > 0) {
+        double time_accel = res->state->time_acceleration;
+        int cooldown_sim = res->state->danger_cooldown_sim;
+        double cooldown_real = (time_accel > 0) ? (cooldown_sim / time_accel) : 60.0;
+
+        if (now - g_last_danger_time < (time_t)cooldown_real) {
+            return 0;  // Still in cooldown
+        }
+    }
+
+    // Random check
+    if ((rand() % 100) < probability) {
+        g_last_danger_time = now;
+        trigger_emergency_stop(res);
+        return 1;
+    }
+    return 0;
+}
 
 void upper_worker_main(IPCResources *res, IPCKeys *keys) {
     (void)keys;
@@ -79,24 +176,48 @@ void upper_worker_main(IPCResources *res, IPCKeys *keys) {
     sigaction(SIGUSR1, &sa, NULL);
     sigaction(SIGUSR2, &sa, NULL);
 
+    // Seed random number generator for danger detection (different seed than lower worker)
+    srand((unsigned int)(time(NULL) ^ (getpid() << 1)));
+
     log_info("UPPER_WORKER", "Upper platform worker ready");
 
     int arrivals_count = 0;
 
     while (g_running && res->state->running) {
-        // Handle signals
+        // Handle SIGUSR1 - emergency stop from lower worker
         if (g_emergency_signal) {
             g_emergency_signal = 0;
-            handle_emergency_stop(res);
+            // Receiving worker: acknowledge and wait (blocks until resume)
+            acknowledge_emergency_stop(res);
+            continue;  // After resume, continue main loop
         }
 
+        // Handle SIGUSR2 - resume signal (only relevant for receiver, currently no-op)
         if (g_resume_signal) {
             g_resume_signal = 0;
-            handle_resume(res);
+            // Resume signal received - logging only, actual resume handled by semaphores
+            log_debug("UPPER_WORKER", "Resume signal (SIGUSR2) received");
         }
 
         // Issue #11 fix: Use consolidated pause check
         ipc_check_pause(res);
+
+        // Check if we're the emergency initiator and need to wait for cooldown
+        if (g_is_emergency_initiator && g_emergency_start_time > 0) {
+            time_t now = time(NULL);
+            double time_accel = res->state->time_acceleration;
+            int cooldown_sim = res->state->danger_cooldown_sim;
+            double cooldown_real = (time_accel > 0) ? (cooldown_sim / time_accel) : 60.0;
+
+            if ((now - g_emergency_start_time) >= (time_t)cooldown_real) {
+                // Cooldown passed - initiate resume
+                initiate_resume(res);
+            } else {
+                // Still in cooldown - sleep briefly (timing, not IPC sync)
+                usleep(100000);  // 100ms
+            }
+            continue;
+        }
 
         // Wait for tourist arrival notification
         ArrivalMsg msg;
@@ -124,6 +245,9 @@ void upper_worker_main(IPCResources *res, IPCKeys *keys) {
             log_info("UPPER_WORKER", "Tourist %d arrived at upper platform (total arrivals: %d)",
                      msg.tourist_id, arrivals_count);
         }
+
+        // Check for random danger after each arrival
+        check_for_danger(res);
     }
 
     log_info("UPPER_WORKER", "Upper platform worker shutting down (processed %d arrivals)",

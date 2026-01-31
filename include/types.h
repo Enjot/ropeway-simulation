@@ -147,6 +147,10 @@ typedef struct {
     int ticket_t2_duration;
     int ticket_t3_duration;
 
+    // Danger detection settings
+    int danger_probability;         // Probability per check (0-100), 0 = disabled
+    int danger_cooldown_sim;        // Simulated minutes between possible detections
+
     // Process IDs for signal handling
     pid_t main_pid;
     pid_t cashier_pid;
