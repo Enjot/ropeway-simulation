@@ -28,9 +28,6 @@ typedef struct {
     int kid_count;           // Number of kids (0-2)
 } TouristData;
 
-// Forward declaration
-struct FamilyState;
-
 // Family state for managing kid threads
 typedef struct FamilyState {
     pthread_mutex_t mutex;
@@ -288,7 +285,7 @@ static int board_chair(IPCResources *res, TouristData *data) {
 
     // Send "ready to board" message to lower worker
     PlatformMsg msg;
-    msg.mtype = data->is_vip ? 1 : 2;  // VIPs get priority
+    msg.mtype = 2;  // No VIP priority at boarding (VIPs skip entry gates instead)
     msg.tourist_id = data->id;
     msg.tourist_type = data->type;
     msg.slots_needed = data->slots_needed;  // Includes kids for families
@@ -598,9 +595,11 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        // Enter through entry gate
-        if (sem_wait(res.sem_id, SEM_ENTRY_GATES) == -1) {
-            break;
+        // Enter through entry gate (VIPs skip the queue)
+        if (!data.is_vip) {
+            if (sem_wait(res.sem_id, SEM_ENTRY_GATES) == -1) {
+                break;
+            }
         }
 
         check_pause(&res);
@@ -612,13 +611,13 @@ int main(int argc, char *argv[]) {
         // Family atomically acquires slots to enforce capacity correctly
         int family_size = 1 + data.kid_count;
         if (sem_wait_n(res.sem_id, SEM_LOWER_STATION, family_size) == -1) {
-            sem_post(res.sem_id, SEM_ENTRY_GATES);
+            if (!data.is_vip) sem_post(res.sem_id, SEM_ENTRY_GATES);
             break;
         }
 
         // Update station count for logging (count whole family)
         if (sem_wait(res.sem_id, SEM_STATE) == -1) {
-            sem_post(res.sem_id, SEM_ENTRY_GATES);
+            if (!data.is_vip) sem_post(res.sem_id, SEM_ENTRY_GATES);
             sem_post_n(res.sem_id, SEM_LOWER_STATION, family_size);
             break;
         }
@@ -626,8 +625,10 @@ int main(int argc, char *argv[]) {
         int count = res.state->lower_station_count;
         sem_post(res.sem_id, SEM_STATE);
 
-        // Release entry gate now that we're in station
-        sem_post(res.sem_id, SEM_ENTRY_GATES);
+        // Release entry gate now that we're in station (only if we acquired one)
+        if (!data.is_vip) {
+            sem_post(res.sem_id, SEM_ENTRY_GATES);
+        }
 
         if (data.kid_count > 0) {
             log_debug("TOURIST", "Tourist %d + %d kids in lower station (count: %d/%d)",
