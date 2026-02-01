@@ -96,7 +96,7 @@ typedef struct {
     int entry_time_sim;             // Simulated time of first entry (minutes from midnight)
     int total_rides;                // Number of rides completed
     int is_vip;                     // VIP status
-    int tourist_type;               // TouristType (walker/cyclist)
+    TouristType tourist_type;       // Walker/cyclist
     int kid_count;                  // Number of kids (for family tracking)
 } TouristEntry;
 
@@ -136,8 +136,8 @@ typedef struct {
 
     // Config values (read-only after init)
     int station_capacity;           // Max tourists in lower station
-    int tourist_spawn_rate;         // Tourists per second
-    int max_concurrent_tourists;    // Max active tourists
+    int tourists_to_generate;       // Total number of tourists to generate
+    int tourist_spawn_delay_us;     // Delay between spawns in microseconds (0 = no delay)
     int vip_percentage;             // VIP percentage (0-100)
     int walker_percentage;          // Walker percentage (0-100)
 
@@ -177,7 +177,7 @@ typedef struct {
 typedef struct {
     long mtype;                     // Message type (tourist_id for response)
     int tourist_id;
-    int tourist_type;               // TouristType
+    TouristType tourist_type;       // Walker/cyclist
     int age;
     int is_vip;
     int ticket_type;                // TicketType (set by cashier in response)
@@ -190,7 +190,7 @@ typedef struct {
     long mtype;                     // 1=VIP, 2=regular (for platform)
                                     // tourist_id (for boarding confirmation)
     int tourist_id;
-    int tourist_type;               // TouristType
+    TouristType tourist_type;       // Walker/cyclist
     int slots_needed;               // 1 for walker, 2 for cyclist (includes kids for families)
     int kid_count;                  // Number of kids in family group (0-2)
 } PlatformMsg;

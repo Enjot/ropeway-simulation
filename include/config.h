@@ -14,8 +14,8 @@ typedef struct {
     int chair_travel_time_sim;      // Simulated minutes for chair ride
 
     // Tourist generation
-    int tourist_spawn_rate;         // Tourists per second
-    int max_concurrent_tourists;    // Max active tourist processes
+    int total_tourists;             // Total number of tourists to generate
+    int tourist_spawn_delay_us;     // Delay between spawns in microseconds (0 = no delay)
     int max_tracked_tourists;       // Max tourists to track in report (default 5000)
 
     // Tourist distribution (percentages 0-100)

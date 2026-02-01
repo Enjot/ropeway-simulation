@@ -13,8 +13,8 @@ void config_set_defaults(Config *cfg) {
     cfg->sim_end_minute = 0;
     cfg->chair_travel_time_sim = 5;  // 5 sim minutes per ride
 
-    cfg->tourist_spawn_rate = 5;
-    cfg->max_concurrent_tourists = 100;
+    cfg->total_tourists = 100;
+    cfg->tourist_spawn_delay_us = 200000;  // 200ms default
     cfg->max_tracked_tourists = 5000;
 
     cfg->vip_percentage = 1;
@@ -88,10 +88,10 @@ int config_load(const char *path, Config *cfg) {
             cfg->sim_end_minute = atoi(value);
         } else if (strcmp(key, "CHAIR_TRAVEL_TIME_SIM_MINUTES") == 0) {
             cfg->chair_travel_time_sim = atoi(value);
-        } else if (strcmp(key, "TOURIST_SPAWN_RATE_PER_SECOND") == 0) {
-            cfg->tourist_spawn_rate = atoi(value);
-        } else if (strcmp(key, "MAX_CONCURRENT_TOURISTS") == 0) {
-            cfg->max_concurrent_tourists = atoi(value);
+        } else if (strcmp(key, "TOTAL_TOURISTS") == 0) {
+            cfg->total_tourists = atoi(value);
+        } else if (strcmp(key, "TOURIST_SPAWN_DELAY_US") == 0) {
+            cfg->tourist_spawn_delay_us = atoi(value);
         } else if (strcmp(key, "MAX_TRACKED_TOURISTS") == 0) {
             cfg->max_tracked_tourists = atoi(value);
         } else if (strcmp(key, "VIP_PERCENTAGE") == 0) {
@@ -167,13 +167,13 @@ int config_validate(const Config *cfg) {
         valid = 0;
     }
 
-    if (cfg->tourist_spawn_rate <= 0) {
-        fprintf(stderr, "config: TOURIST_SPAWN_RATE_PER_SECOND must be > 0\n");
+    if (cfg->total_tourists <= 0) {
+        fprintf(stderr, "config: TOTAL_TOURISTS must be > 0\n");
         valid = 0;
     }
 
-    if (cfg->max_concurrent_tourists <= 0) {
-        fprintf(stderr, "config: MAX_CONCURRENT_TOURISTS must be > 0\n");
+    if (cfg->tourist_spawn_delay_us < 0) {
+        fprintf(stderr, "config: TOURIST_SPAWN_DELAY_US must be >= 0\n");
         valid = 0;
     }
 

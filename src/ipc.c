@@ -146,8 +146,8 @@ int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
 
     // Copy config to shared state
     res->state->station_capacity = cfg->station_capacity;
-    res->state->tourist_spawn_rate = cfg->tourist_spawn_rate;
-    res->state->max_concurrent_tourists = cfg->max_concurrent_tourists;
+    res->state->tourists_to_generate = cfg->total_tourists;
+    res->state->tourist_spawn_delay_us = cfg->tourist_spawn_delay_us;
     res->state->max_tracked_tourists = cfg->max_tracked_tourists;
     res->state->tourist_entry_count = 0;
     res->state->vip_percentage = cfg->vip_percentage;

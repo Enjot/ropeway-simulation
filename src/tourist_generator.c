@@ -138,16 +138,15 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
     // Seed random number generator
     srand(time(NULL) ^ getpid());
 
-    log_info("GENERATOR", "Tourist generator started (rate: %d/sec, max: %d)",
-             res->state->tourist_spawn_rate, res->state->max_concurrent_tourists);
+    log_info("GENERATOR", "Tourist generator started (total: %d, delay: %d us)",
+             res->state->tourists_to_generate, res->state->tourist_spawn_delay_us);
 
     int tourist_id = 0;
     int active_tourists = 0;
+    int total_to_spawn = res->state->tourists_to_generate;
+    int spawn_delay_us = res->state->tourist_spawn_delay_us;
 
-    // Calculate spawn interval in microseconds
-    int spawn_interval_us = 1000000 / res->state->tourist_spawn_rate;
-
-    while (g_running && res->state->running) {
+    while (g_running && res->state->running && tourist_id < total_to_spawn) {
         // Reap zombie children and update active count
         int reaped = reap_zombies();
         active_tourists -= reaped;
@@ -160,12 +159,6 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         if (res->state->closing) {
             log_info("GENERATOR", "Station closing, stopping tourist generation");
             break;
-        }
-
-        // Check if we've reached max concurrent tourists
-        if (active_tourists >= res->state->max_concurrent_tourists) {
-            usleep(spawn_interval_us);
-            continue;
         }
 
         // Generate tourist attributes
@@ -202,7 +195,9 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
 
         if (pid == -1) {
             perror("generator: fork");
-            usleep(spawn_interval_us);
+            if (spawn_delay_us > 0) {
+                usleep(spawn_delay_us);
+            }
             continue;
         }
 
@@ -232,8 +227,10 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
                      tourist_id, age, type_name, vip ? "yes" : "no", ticket_names[ticket], pid);
         }
 
-        // Sleep before next spawn
-        usleep(spawn_interval_us);
+        // Sleep before next spawn (if delay configured)
+        if (spawn_delay_us > 0) {
+            usleep(spawn_delay_us);
+        }
     }
 
     log_info("GENERATOR", "Tourist generator shutting down (spawned %d tourists)", tourist_id);
