@@ -204,6 +204,54 @@ static int check_for_danger(IPCResources *res) {
     return 0;
 }
 
+// ============================================================================
+// Chair tracking for atomic SEM_CHAIRS release
+// ============================================================================
+
+#define MAX_ACTIVE_CHAIRS 64  // Track up to 64 chairs in transit
+
+typedef struct {
+    int chair_id;
+    int expected;   // tourists_on_chair
+    int arrived;    // count of tourists arrived so far
+} ChairTracker;
+
+static ChairTracker g_chairs[MAX_ACTIVE_CHAIRS];
+static int g_chair_count = 0;
+
+/**
+ * Find or create a tracker for a chair.
+ * Returns pointer to tracker, or NULL if tracking array is full.
+ */
+static ChairTracker* get_chair_tracker(int chair_id, int tourists_on_chair) {
+    // Find existing tracker
+    for (int i = 0; i < g_chair_count; i++) {
+        if (g_chairs[i].chair_id == chair_id) {
+            return &g_chairs[i];
+        }
+    }
+
+    // Create new tracker
+    if (g_chair_count < MAX_ACTIVE_CHAIRS) {
+        g_chairs[g_chair_count].chair_id = chair_id;
+        g_chairs[g_chair_count].expected = tourists_on_chair;
+        g_chairs[g_chair_count].arrived = 0;
+        return &g_chairs[g_chair_count++];
+    }
+
+    return NULL;  // Tracking array full (should not happen in normal operation)
+}
+
+/**
+ * Remove a completed chair from tracking by index.
+ * Uses swap-and-pop for O(1) removal.
+ */
+static void remove_chair_tracker(int idx) {
+    if (idx >= 0 && idx < g_chair_count) {
+        g_chairs[idx] = g_chairs[--g_chair_count];
+    }
+}
+
 void upper_worker_main(IPCResources *res, IPCKeys *keys) {
     (void)keys;
 
@@ -294,6 +342,28 @@ void upper_worker_main(IPCResources *res, IPCKeys *keys) {
         } else {
             log_info("UPPER_WORKER", "Tourist %d arrived at upper platform (total arrivals: %d)",
                      msg.tourist_id, arrivals_count);
+        }
+
+        // Track chair arrivals for atomic SEM_CHAIRS release
+        ChairTracker *tracker = get_chair_tracker(msg.chair_id, msg.tourists_on_chair);
+        if (tracker) {
+            tracker->arrived++;
+
+            // Check if all tourists from this chair have arrived
+            if (tracker->arrived >= tracker->expected) {
+                sem_post(res->sem_id, SEM_CHAIRS, 1);
+
+                // Get available chairs count after releasing (for logging)
+                int chairs_available = sem_getval(res->sem_id, SEM_CHAIRS);
+
+                log_debug("UPPER_WORKER", "Chair %d complete (%d/%d tourists), releasing slot [chairs available: %d/%d]",
+                          msg.chair_id, tracker->arrived, tracker->expected,
+                          chairs_available, MAX_CHAIRS_IN_TRANSIT);
+
+                // Remove from tracking
+                int idx = (int)(tracker - g_chairs);
+                remove_chair_tracker(idx);
+            }
         }
 
         // Check for random danger after each arrival

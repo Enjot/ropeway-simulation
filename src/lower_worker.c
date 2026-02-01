@@ -18,6 +18,16 @@ static time_t g_last_danger_time = 0;       // Last danger detection (real time)
 static time_t g_emergency_start_time = 0;   // When current emergency started
 static int g_is_emergency_initiator = 0;    // 1 if this worker detected danger
 
+// Buffer for tourists waiting on current chair (for synchronized departures)
+typedef struct {
+    int tourist_id;
+    int slots_needed;
+} PendingBoarding;
+
+#define MAX_PENDING_PER_CHAIR 4
+static PendingBoarding g_pending[MAX_PENDING_PER_CHAIR];
+static int g_pending_count = 0;
+
 static void signal_handler(int sig) {
     if (sig == SIGTERM || sig == SIGINT) {
         g_running = 0;
@@ -204,6 +214,53 @@ static int check_for_danger(IPCResources *res) {
     return 0;
 }
 
+/**
+ * Dispatch the current chair: acquire a chair slot, then send boarding confirmations
+ * to all buffered tourists with the same departure_time so they arrive together.
+ * The upper_worker will release the chair slot when all tourists have arrived.
+ */
+static void dispatch_chair(IPCResources *res, int chair_number, int slots_used) {
+    if (g_pending_count == 0) {
+        return;  // No tourists to dispatch
+    }
+
+    // Acquire chair slot (blocks if 36 chairs already in transit)
+    if (sem_wait_pauseable(res, SEM_CHAIRS, 1) == -1) {
+        return;  // Interrupted/shutdown
+    }
+
+    // Get available chairs count after acquiring (for logging)
+    int chairs_available = sem_getval(res->sem_id, SEM_CHAIRS);
+
+    time_t departure_time = time(NULL);
+    int tourists_on_chair = g_pending_count;
+
+    log_info("LOWER_WORKER", "Chair %d departed with %d tourists (%d/%d slots) [chairs available: %d/%d]",
+             chair_number, tourists_on_chair, slots_used, CHAIR_CAPACITY,
+             chairs_available, MAX_CHAIRS_IN_TRANSIT);
+
+    // Send boarding confirmations to all buffered tourists
+    for (int i = 0; i < g_pending_count; i++) {
+        PlatformMsg response;
+        memset(&response, 0, sizeof(response));
+        response.mtype = g_pending[i].tourist_id;
+        response.tourist_id = g_pending[i].tourist_id;
+        response.departure_time = departure_time;
+        response.chair_id = chair_number;
+        response.tourists_on_chair = tourists_on_chair;
+
+        if (msgsnd(res->mq_boarding_id, &response, sizeof(response) - sizeof(long), 0) == -1) {
+            // EINVAL can occur during shutdown when queue is being destroyed
+            if (errno != EINTR && errno != EIDRM && errno != EINVAL) {
+                perror("lower_worker: msgsnd boarding dispatch");
+            }
+            break;  // Stop trying to send if queue is gone
+        }
+    }
+
+    g_pending_count = 0;
+}
+
 void lower_worker_main(IPCResources *res, IPCKeys *keys) {
     (void)keys;
 
@@ -285,10 +342,21 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
 
         // Issue #16 fix: Clarify comment - msgrcv with -2 returns lowest mtype first
         // (1=VIP before 2=regular, so VIPs are processed first)
+        // Use IPC_NOWAIT for polling - dispatch chair when queue is empty
         PlatformMsg msg;
-        ssize_t ret = msgrcv(res->mq_platform_id, &msg, sizeof(msg) - sizeof(long), -2, 0);
+        ssize_t ret = msgrcv(res->mq_platform_id, &msg, sizeof(msg) - sizeof(long), -2, IPC_NOWAIT);
 
         if (ret == -1) {
+            if (errno == ENOMSG) {
+                // Queue empty - dispatch any pending chair
+                if (g_pending_count > 0) {
+                    dispatch_chair(res, chair_number, current_chair_slots);
+                    current_chair_slots = 0;
+                    chair_number++;
+                }
+                usleep(100000);  // 100ms polling interval
+                continue;
+            }
             if (errno == EINTR) {
                 continue;  // Interrupted by signal
             }
@@ -322,10 +390,9 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
 
         // Check if tourist fits on current chair
         if (current_chair_slots + slots_needed > CHAIR_CAPACITY) {
-            // Doesn't fit - dispatch current chair, start new one
-            if (current_chair_slots > 0) {
-                log_info("LOWER_WORKER", "Chair %d departed with %d/%d slots",
-                        chair_number, current_chair_slots, CHAIR_CAPACITY);
+            // Doesn't fit - dispatch current chair with buffered tourists, start new one
+            if (g_pending_count > 0) {
+                dispatch_chair(res, chair_number, current_chair_slots);
             }
             current_chair_slots = 0;
             chair_number++;
@@ -345,20 +412,11 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
             continue;
         }
 
-        // Tourist fits - confirm boarding
-        PlatformMsg response;
-        response.mtype = msg.tourist_id;
-        response.tourist_id = msg.tourist_id;
-
-        if (msgsnd(res->mq_boarding_id, &response, sizeof(response) - sizeof(long), 0) == -1) {
-            if (errno == EINTR) continue;
-            // Issue #6 fix: Check for EIDRM
-            if (errno == EIDRM) {
-                log_debug("LOWER_WORKER", "Boarding queue removed");
-                break;
-            }
-            perror("lower_worker: msgsnd boarding");
-            continue;
+        // Tourist fits - buffer them (don't send confirmation yet)
+        if (g_pending_count < MAX_PENDING_PER_CHAIR) {
+            g_pending[g_pending_count].tourist_id = msg.tourist_id;
+            g_pending[g_pending_count].slots_needed = slots_needed;
+            g_pending_count++;
         }
 
         current_chair_slots += slots_needed;
@@ -376,13 +434,18 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
 
         // If chair is full, dispatch and reset
         if (current_chair_slots >= CHAIR_CAPACITY) {
-            log_info("LOWER_WORKER", "Chair %d full, departing", chair_number);
+            dispatch_chair(res, chair_number, current_chair_slots);
             current_chair_slots = 0;
             chair_number++;
         }
 
         // Check for random danger after each boarding
         check_for_danger(res);
+    }
+
+    // Dispatch any remaining pending tourists before shutdown
+    if (g_pending_count > 0) {
+        dispatch_chair(res, chair_number, current_chair_slots);
     }
 
     log_info("LOWER_WORKER", "Lower platform worker shutting down");

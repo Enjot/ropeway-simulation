@@ -192,12 +192,15 @@ typedef struct {
 
 // Message for platform/boarding communication
 typedef struct {
-    long mtype;                     // 1=VIP, 2=regular (for platform)
+    long mtype;                     // 1=VIP/requeued, 2=regular (for platform)
                                     // tourist_id (for boarding confirmation)
     int tourist_id;
     TouristType tourist_type;       // Walker/cyclist
     int slots_needed;               // 1 for walker, 2 for cyclist (includes kids for families)
     int kid_count;                  // Number of kids in family group (0-2)
+    time_t departure_time;          // Real timestamp when chair departed (in boarding confirmation)
+    int chair_id;                   // Which chair this tourist is on (for tracking)
+    int tourists_on_chair;          // Total tourists on this chair
 } PlatformMsg;
 
 // Message for arrival notification
@@ -205,6 +208,8 @@ typedef struct {
     long mtype;                     // Always 1
     int tourist_id;
     int kid_count;                  // Number of kids arriving with parent (for logging)
+    int chair_id;                   // Which chair arrived (for tracking)
+    int tourists_on_chair;          // Total tourists expected from this chair
 } ArrivalMsg;
 
 // Message for worker-to-worker emergency communication

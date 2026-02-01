@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <time.h>
 #include <sys/wait.h>
+#include <sys/msg.h>
 
 static int g_running = 1;
 static int g_child_exited = 0;
@@ -224,41 +225,31 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
 
     log_info("GENERATOR", "Tourist generator shutting down (spawned %d tourists)", tourist_id);
 
-    // Send SIGTERM to all tourist processes via process group
-    if (g_tourist_pgid > 0) {
-        log_debug("GENERATOR", "Sending SIGTERM to tourist process group %d", g_tourist_pgid);
-        killpg(g_tourist_pgid, SIGTERM);
-    }
-
-    // Wait for tourists to exit with non-blocking waitpid first
-    log_debug("GENERATOR", "Waiting for %d tourists to exit...", active_tourists);
+    // Wait for tourists to exit naturally (they exit when ticket expires or simulation ends)
+    // Don't send SIGTERM - let tourists complete their ride loops
+    log_debug("GENERATOR", "Waiting for %d tourists to exit naturally...", active_tourists);
 
     int status;
     pid_t pid;
-    int wait_cycles = 0;
-    const int max_wait_cycles = 10;  // ~1 second total
 
-    // Non-blocking wait loop to allow graceful exit
-    while (active_tourists > 0 && wait_cycles < max_wait_cycles) {
+    // Wait for all tourists to exit (blocking wait with zombie reaping)
+    while (active_tourists > 0) {
+        // Check for zombie children (non-blocking first to handle accumulated exits)
         while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
             active_tourists--;
             log_debug("GENERATOR", "Tourist exited (PID %d), %d remaining", (int)pid, active_tourists);
         }
+
         if (active_tourists > 0) {
-            usleep(100000);  // 100ms
-            wait_cycles++;
-        }
-    }
+            // Check pause and simulation state
+            ipc_check_pause(res);
 
-    // If still have remaining tourists, force kill via process group
-    if (active_tourists > 0 && g_tourist_pgid > 0) {
-        log_debug("GENERATOR", "Force killing %d remaining tourists...", active_tourists);
-        killpg(g_tourist_pgid, SIGKILL);
-
-        // Reap the killed processes
-        while ((pid = waitpid(-1, &status, 0)) > 0) {
-            active_tourists--;
-            log_debug("GENERATOR", "Tourist killed (PID %d), %d remaining", (int)pid, active_tourists);
+            // If simulation ended, wait for remaining tourists with timeout
+            if (!res->state->running) {
+                usleep(100000);  // 100ms between checks
+            } else {
+                usleep(50000);  // 50ms between checks during normal operation
+            }
         }
     }
 

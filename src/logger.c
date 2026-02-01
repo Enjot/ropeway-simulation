@@ -38,20 +38,21 @@ void logger_set_debug_enabled(int enabled) {
 // Issue #12 fix: Removed duplicated get_sim_minutes() - use time_get_sim_minutes() instead
 
 // Format sim time as HH:MM:SS
-// Issue #12 fix: Uses time_get_sim_minutes() instead of duplicated logic
+// Issue #12 fix: Uses time_get_sim_minutes_f() for accurate seconds
 static void format_sim_time(char *buf, int buf_size) {
-    int total_minutes = g_state ? time_get_sim_minutes(g_state) : 0;
+    double total_sim_minutes = g_state ? time_get_sim_minutes_f(g_state) : 0.0;
+    int total_minutes = (int)total_sim_minutes;
     int hours = total_minutes / 60;
     int minutes = total_minutes % 60;
 
-    // Simulated seconds based on fractional sim time
-    // For simplicity, we'll just use real seconds mod 60
-    time_t now = time(NULL);
-    int seconds = (int)(now % 60);
+    // Calculate simulated seconds from fractional minutes
+    int seconds = (int)((total_sim_minutes - total_minutes) * 60);
 
-    // Clamp hours to 0-23
+    // Clamp values
     if (hours > 23) hours = 23;
     if (hours < 0) hours = 0;
+    if (seconds > 59) seconds = 59;
+    if (seconds < 0) seconds = 0;
 
     snprintf(buf, buf_size, "%02d:%02d:%02d", hours, minutes, seconds);
 }

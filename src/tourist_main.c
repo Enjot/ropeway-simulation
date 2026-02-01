@@ -272,17 +272,17 @@ static int is_station_closing(IPCResources *res) {
 }
 
 // Wait in station for chair
-static int board_chair(IPCResources *res, TouristData *data) {
-    // Get a chair slot (blocks if all in use)
-    if (sem_wait_pauseable(res, SEM_CHAIRS, 1) == -1) {
-        return -1;
-    }
+// departure_time_out: receives the chair's departure timestamp for synchronized arrival
+// chair_id_out, tourists_on_chair_out: for upper worker tracking (to release SEM_CHAIRS atomically)
+static int board_chair(IPCResources *res, TouristData *data, time_t *departure_time_out,
+                       int *chair_id_out, int *tourists_on_chair_out) {
+    // Note: SEM_CHAIRS is now acquired by lower_worker when chair departs,
+    // and released by upper_worker when all tourists from that chair arrive.
 
     check_pause(res);
 
     // Issue #2, #4 fix: Check emergency stop with semaphore protection and blocking
     if (sem_wait_pauseable(res, SEM_STATE, 1) == -1) {
-        sem_post(res->sem_id, SEM_CHAIRS, 1);  // Release chair on failure
         return -1;
     }
     int emergency = res->state->emergency_stop;
@@ -295,6 +295,7 @@ static int board_chair(IPCResources *res, TouristData *data) {
 
     // Send "ready to board" message to lower worker
     PlatformMsg msg;
+    memset(&msg, 0, sizeof(msg));
     msg.mtype = 2;  // No VIP priority at boarding (VIPs skip entry gates instead)
     msg.tourist_id = data->id;
     msg.tourist_type = data->type;
@@ -305,11 +306,9 @@ static int board_chair(IPCResources *res, TouristData *data) {
         if (errno == EINTR) return -1;
         // Issue #6 fix: Check for EIDRM
         if (errno == EIDRM) {
-            sem_post(res->sem_id, SEM_CHAIRS, 1);
             return -1;
         }
         perror("tourist: msgsnd platform");
-        sem_post(res->sem_id, SEM_CHAIRS, 1);  // Release chair slot
         return -1;
     }
 
@@ -325,36 +324,48 @@ static int board_chair(IPCResources *res, TouristData *data) {
             }
             // Issue #6 fix: Check for EIDRM
             if (errno == EIDRM) {
-                sem_post(res->sem_id, SEM_CHAIRS, 1);
                 return -1;
             }
             perror("tourist: msgrcv boarding");
-            sem_post(res->sem_id, SEM_CHAIRS, 1);
             return -1;
         }
         break;
     }
 
+    // Return the departure time and chair info for synchronized arrival
+    if (departure_time_out) *departure_time_out = response.departure_time;
+    if (chair_id_out) *chair_id_out = response.chair_id;
+    if (tourists_on_chair_out) *tourists_on_chair_out = response.tourists_on_chair;
+
     return 0;
 }
 
-// Ride the chairlift
-static int ride_chairlift(IPCResources *res, TouristData *data) {
-    (void)data;
+// Ride the chairlift (synchronized with other passengers via departure_time)
+static int ride_chairlift(IPCResources *res, TouristData *data, time_t departure_time) {
+    // Calculate expected arrival time
+    double travel_seconds = time_sim_to_real_seconds(res->state, res->state->chair_travel_time_sim);
+    time_t arrival_time = departure_time + (time_t)travel_seconds;
 
-    // Calculate ride time
-    double ride_seconds = time_sim_to_real_seconds(res->state, res->state->chair_travel_time_sim);
+    // Calculate how long we still need to wait
+    time_t now = time(NULL);
+    double remaining = (double)(arrival_time - now);
 
     log_info("TOURIST", "%d riding chairlift (%.1f real seconds)",
-             data->id, ride_seconds);
+             data->id, travel_seconds);
 
-    return pauseable_sleep(res, ride_seconds);
+    // Only sleep if we haven't already reached arrival time
+    if (remaining > 0) {
+        return pauseable_sleep(res, remaining);
+    }
+
+    return 0;
 }
 
 // Arrive at upper platform
-static int arrive_upper(IPCResources *res, TouristData *data) {
-    // Release chair slot
-    sem_post(res->sem_id, SEM_CHAIRS, 1);
+// chair_id and tourists_on_chair are passed to upper_worker for atomic SEM_CHAIRS release
+static int arrive_upper(IPCResources *res, TouristData *data,
+                        int chair_id, int tourists_on_chair) {
+    // Note: SEM_CHAIRS is released by upper_worker when all tourists from chair arrive
 
     // Wait for exit gate
     if (sem_wait_pauseable(res, SEM_EXIT_GATES, 1) == -1) {
@@ -363,11 +374,13 @@ static int arrive_upper(IPCResources *res, TouristData *data) {
 
     check_pause(res);
 
-    // Notify upper worker of arrival
+    // Notify upper worker of arrival (with chair info for tracking)
     ArrivalMsg msg;
     msg.mtype = 1;
     msg.tourist_id = data->id;
     msg.kid_count = data->kid_count;  // For family logging at upper platform
+    msg.chair_id = chair_id;
+    msg.tourists_on_chair = tourists_on_chair;
 
     if (msgsnd(res->mq_arrivals_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
         // Issue #6 fix: Check for EIDRM (queue removed during shutdown)
@@ -655,13 +668,14 @@ int main(int argc, char *argv[]) {
         check_pause(&res);
         sync_with_kids(&family, STAGE_QUEUED_FOR_PLATFORM);
 
-        // ~10% of first-time visitors decide not to use the chairlift
-        if (data.rides_completed == 0 && (rand() % 10) == 0) {
+        // ~10% chance to leave: before first ride (too scared) or after first ride (was too scary)
+        if ((data.rides_completed == 0 || data.rides_completed == 1) && (rand() % 10) == 0) {
+            const char *reason = (data.rides_completed == 0) ? "too scared to ride" : "that was too scary";
             if (data.kid_count > 0) {
-                log_info("TOURIST", "%d + %d kids leaving lower station (decided not to ride)",
-                         data.id, data.kid_count);
+                log_info("TOURIST", "%d + %d kids leaving lower station (%s)",
+                         data.id, data.kid_count, reason);
             } else {
-                log_info("TOURIST", "%d leaving lower station (decided not to ride)", data.id);
+                log_info("TOURIST", "%d leaving lower station (%s)", data.id, reason);
             }
             // Release lower station slots (skip state update if shutdown)
             if (sem_wait_pauseable(&res, SEM_STATE, 1) == 0) {
@@ -684,30 +698,30 @@ int main(int argc, char *argv[]) {
         }
 
         log_info("TOURIST", "%d passed through platform gate", data.id);
-        check_pause(&res);
-        sync_with_kids(&family, STAGE_AT_LOWER_PLATFORM);
 
-        // Board chair (family boards together)
-        if (board_chair(&res, &data) == -1) {
-            // Release platform gate and station slots (skip state update if shutdown)
-            sem_post(res.sem_id, SEM_PLATFORM_GATES, 1);
-            if (sem_wait_pauseable(&res, SEM_STATE, 1) == 0) {
-                res.state->lower_station_count -= family_size;
-                sem_post(res.sem_id, SEM_STATE, 1);
-            }
-            sem_post(res.sem_id, SEM_LOWER_STATION, family_size);
-            break;
-        }
-
-        // Release platform gate (now boarding chair)
-        sem_post(res.sem_id, SEM_PLATFORM_GATES, 1);
-
-        // Release station slots (now on chair)
+        // Release station slots now that we're past the platform gate
+        // (we're committed to boarding, so free up station capacity for others)
         if (sem_wait_pauseable(&res, SEM_STATE, 1) == 0) {
             res.state->lower_station_count -= family_size;
             sem_post(res.sem_id, SEM_STATE, 1);
         }
         sem_post(res.sem_id, SEM_LOWER_STATION, family_size);
+
+        check_pause(&res);
+        sync_with_kids(&family, STAGE_AT_LOWER_PLATFORM);
+
+        // Board chair (family boards together)
+        time_t departure_time = 0;
+        int chair_id = 0;
+        int tourists_on_chair = 0;
+        if (board_chair(&res, &data, &departure_time, &chair_id, &tourists_on_chair) == -1) {
+            // Release platform gate only (station slots already released after platform gate)
+            sem_post(res.sem_id, SEM_PLATFORM_GATES, 1);
+            break;
+        }
+
+        // Release platform gate (now boarding chair)
+        sem_post(res.sem_id, SEM_PLATFORM_GATES, 1);
 
         if (data.kid_count > 0) {
             log_info("TOURIST", "%d + %d kids boarded chairlift", data.id, data.kid_count);
@@ -716,16 +730,15 @@ int main(int argc, char *argv[]) {
         }
         sync_with_kids(&family, STAGE_ON_CHAIR);
 
-        // Ride chairlift
-        if (ride_chairlift(&res, &data) == -1) {
-            // Still need to release chair and arrive
-            sem_post(res.sem_id, SEM_CHAIRS, 1);
+        // Ride chairlift (synchronized with other passengers via departure_time)
+        if (ride_chairlift(&res, &data, departure_time) == -1) {
+            // Note: SEM_CHAIRS is managed by lower_worker/upper_worker, not tourist
             break;
         }
         sync_with_kids(&family, STAGE_RIDE_COMPLETE);
 
-        // Arrive at upper platform
-        if (arrive_upper(&res, &data) == -1) {
+        // Arrive at upper platform (pass chair info for atomic SEM_CHAIRS release)
+        if (arrive_upper(&res, &data, chair_id, tourists_on_chair) == -1) {
             break;
         }
         sync_with_kids(&family, STAGE_AT_UPPER_PLATFORM_GATES);

@@ -13,6 +13,7 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/sem.h>
+#include <sys/shm.h>
 #include <errno.h>
 #include <time.h>
 
@@ -26,6 +27,7 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
 static IPCResources g_res;
 static int g_running = 1;
 static int g_child_exited = 0;
+static pid_t g_main_pid = 0;  // Set in main() to identify main process
 
 // Issue #3, #5 fix: Signal flags instead of direct shared state modification
 static volatile sig_atomic_t g_sigtstp_received = 0;
@@ -40,7 +42,45 @@ static void sigchld_handler(int sig) {
 static void sigterm_handler(int sig) {
     (void)sig;
     g_running = 0;
-    write(STDERR_FILENO, "[SIGNAL] Shutdown requested\n", 28);
+
+    // Only main process should clean up IPC resources
+    if (getpid() != g_main_pid) {
+        write(STDERR_FILENO, "[SIGNAL] Child shutdown\n", 24);
+        return;
+    }
+
+    // Clean up IPC resources directly in signal handler (async-signal-safe)
+    // This ensures cleanup even if main loop is stuck
+    if (g_res.mq_cashier_id != -1) {
+        msgctl(g_res.mq_cashier_id, IPC_RMID, NULL);
+        g_res.mq_cashier_id = -1;
+    }
+    if (g_res.mq_platform_id != -1) {
+        msgctl(g_res.mq_platform_id, IPC_RMID, NULL);
+        g_res.mq_platform_id = -1;
+    }
+    if (g_res.mq_boarding_id != -1) {
+        msgctl(g_res.mq_boarding_id, IPC_RMID, NULL);
+        g_res.mq_boarding_id = -1;
+    }
+    if (g_res.mq_arrivals_id != -1) {
+        msgctl(g_res.mq_arrivals_id, IPC_RMID, NULL);
+        g_res.mq_arrivals_id = -1;
+    }
+    if (g_res.mq_worker_id != -1) {
+        msgctl(g_res.mq_worker_id, IPC_RMID, NULL);
+        g_res.mq_worker_id = -1;
+    }
+    if (g_res.sem_id != -1) {
+        semctl(g_res.sem_id, 0, IPC_RMID);
+        g_res.sem_id = -1;
+    }
+    if (g_res.shm_id != -1) {
+        shmctl(g_res.shm_id, IPC_RMID, NULL);
+        g_res.shm_id = -1;
+    }
+
+    write(STDERR_FILENO, "[SIGNAL] Shutdown requested, IPC cleaned\n", 41);
 }
 
 // Forward declaration for reinstallation in sigcont_handler
@@ -48,9 +88,13 @@ static void sigtstp_handler(int sig);
 
 // Issue #3, #5 fix: Signal handler sets flag, then actually stops the process
 // We reset to SIG_DFL and re-raise SIGTSTP so the process actually suspends
+// Capture pause_start_time here (time() is async-signal-safe) so the offset is correct
+static time_t g_pause_start_time_capture = 0;
+
 static void sigtstp_handler(int sig) {
     (void)sig;
     g_sigtstp_received = 1;
+    g_pause_start_time_capture = time(NULL);  // Capture NOW before stopping
     write(STDERR_FILENO, "[SIGNAL] SIGTSTP received\n", 26);
 
     // Reset SIGTSTP to default handler and re-raise to actually stop
@@ -84,7 +128,8 @@ static void handle_pause_signal(void) {
             return;  // Shutdown in progress
         }
         g_res.state->paused = 1;
-        g_res.state->pause_start_time = time(NULL);
+        // Use the time captured in signal handler, not current time
+        g_res.state->pause_start_time = g_pause_start_time_capture;
         sem_post(g_res.sem_id, SEM_STATE, 1);
     }
     write(STDERR_FILENO, "[MAIN] Simulation paused\n", 25);
@@ -317,8 +362,9 @@ int main(int argc, char *argv[]) {
     // Initialize time
     time_init(g_res.state, &cfg);
 
-    // Store main PID
-    g_res.state->main_pid = getpid();
+    // Store main PID (both in shared state and global for signal handler)
+    g_main_pid = getpid();
+    g_res.state->main_pid = g_main_pid;
 
     log_debug("MAIN", "Simulation starting at %02d:%02d",
              cfg.sim_start_hour, cfg.sim_start_minute);

@@ -10,6 +10,10 @@ void time_init(SharedState *state, const Config *cfg);
 // Get current simulated time in minutes from midnight
 int time_get_sim_minutes(SharedState *state);
 
+// Get current simulated time in minutes from midnight (with fractional part)
+// Used for calculating simulated seconds in logger
+double time_get_sim_minutes_f(SharedState *state);
+
 // Check if simulation time has ended (past sim_end_minutes)
 int time_is_simulation_over(SharedState *state);
 

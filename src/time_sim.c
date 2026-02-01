@@ -58,6 +58,27 @@ int time_get_sim_minutes(SharedState *state) {
     return state->sim_start_minutes + (int)sim_elapsed;
 }
 
+double time_get_sim_minutes_f(SharedState *state) {
+    time_t now = time(NULL);
+
+    // Calculate effective elapsed real time (excluding pauses)
+    time_t effective_elapsed = (now - state->real_start_time) - state->total_pause_offset;
+
+    // If currently paused, also subtract current pause duration
+    if (state->paused && state->pause_start_time > 0) {
+        effective_elapsed -= (now - state->pause_start_time);
+    }
+
+    // Handle negative elapsed time
+    if (effective_elapsed < 0) {
+        effective_elapsed = 0;
+    }
+
+    // Convert to sim minutes using acceleration (keep fractional part)
+    double sim_elapsed = (double)effective_elapsed * state->time_acceleration;
+    return (double)state->sim_start_minutes + sim_elapsed;
+}
+
 int time_is_simulation_over(SharedState *state) {
     return time_get_sim_minutes(state) >= state->sim_end_minutes;
 }
