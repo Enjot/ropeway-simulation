@@ -20,19 +20,6 @@ static void signal_handler(int sig) {
     }
 }
 
-// Determine ticket type for a tourist
-static TicketType select_ticket_type(SharedState *state) {
-    (void)state;  // Future use: could vary ticket distribution based on time
-    int r = rand() % 100;
-
-    // Distribution: 30% single, 20% T1, 20% T2, 15% T3, 15% daily
-    if (r < 30) return TICKET_SINGLE;
-    if (r < 50) return TICKET_TIME_T1;
-    if (r < 70) return TICKET_TIME_T2;
-    if (r < 85) return TICKET_TIME_T3;
-    return TICKET_DAILY;
-}
-
 // Calculate ticket valid until time (for time-based tickets)
 static int calculate_ticket_validity(SharedState *state, TicketType ticket) {
     int current_minutes = time_get_sim_minutes(state);
@@ -160,8 +147,8 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
             continue;
         }
 
-        // Determine ticket type (same for parent and kids)
-        TicketType ticket = select_ticket_type(res->state);
+        // Use ticket type requested by tourist
+        TicketType ticket = request.ticket_type;
         int valid_until = calculate_ticket_validity(res->state, ticket);
 
         // Calculate price for whole family

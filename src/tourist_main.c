@@ -62,11 +62,11 @@ static void signal_handler(int sig) {
 
 /**
  * Parse command line arguments for tourist process.
- * Format: tourist <id> <age> <type> <vip> <kid_count>
+ * Format: tourist <id> <age> <type> <vip> <kid_count> <ticket_type>
  */
 static int parse_args(int argc, char *argv[], TouristData *data) {
-    if (argc != 6) {
-        fprintf(stderr, "Usage: tourist <id> <age> <type> <vip> <kid_count>\n");
+    if (argc != 7) {
+        fprintf(stderr, "Usage: tourist <id> <age> <type> <vip> <kid_count> <ticket_type>\n");
         return -1;
     }
 
@@ -75,9 +75,9 @@ static int parse_args(int argc, char *argv[], TouristData *data) {
     data->type = atoi(argv[3]);
     data->is_vip = atoi(argv[4]);
     data->kid_count = atoi(argv[5]);
+    data->ticket_type = atoi(argv[6]);
 
     data->rides_completed = 0;
-    data->ticket_type = -1;  // Not yet purchased
     data->ticket_valid_until = 0;
 
     // Validate constraints
@@ -201,6 +201,7 @@ static int buy_ticket(IPCResources *res, TouristData *data) {
     request.age = data->age;
     request.is_vip = data->is_vip;
     request.kid_count = data->kid_count;
+    request.ticket_type = data->ticket_type;
 
     // Send request
     if (msgsnd(res->mq_cashier_id, &request, sizeof(request) - sizeof(long), 0) == -1) {

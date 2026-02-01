@@ -85,6 +85,19 @@ static TouristType generate_type(SharedState *state) {
     return (rand() % 100) < state->walker_percentage ? TOURIST_WALKER : TOURIST_CYCLIST;
 }
 
+/**
+ * Select ticket type for a tourist.
+ * Distribution: 30% single, 20% T1, 20% T2, 15% T3, 15% daily
+ */
+static TicketType select_ticket_type(void) {
+    int r = rand() % 100;
+    if (r < 30) return TICKET_SINGLE;
+    if (r < 50) return TICKET_TIME_T1;
+    if (r < 70) return TICKET_TIME_T2;
+    if (r < 85) return TICKET_TIME_T3;
+    return TICKET_DAILY;
+}
+
 // Check if tourist is VIP
 static int is_vip(SharedState *state) {
     return (rand() % 100) < state->vip_percentage;
@@ -161,6 +174,7 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         int age = generate_age(&can_have_kids);
         TouristType type = generate_type(res->state);
         int vip = is_vip(res->state);
+        TicketType ticket = select_ticket_type();
 
         // Determine number of kids (only walkers 26+ can have kids)
         int kid_count = 0;
@@ -174,12 +188,14 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         char type_str[2];
         char vip_str[2];
         char kid_count_str[8];
+        char ticket_str[2];
 
         snprintf(id_str, sizeof(id_str), "%d", tourist_id);
         snprintf(age_str, sizeof(age_str), "%d", age);
         snprintf(type_str, sizeof(type_str), "%d", type);
         snprintf(vip_str, sizeof(vip_str), "%d", vip);
         snprintf(kid_count_str, sizeof(kid_count_str), "%d", kid_count);
+        snprintf(ticket_str, sizeof(ticket_str), "%d", ticket);
 
         // Fork and exec tourist process
         pid_t pid = fork();
@@ -193,7 +209,7 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         if (pid == 0) {
             // Child process - exec tourist
             execl(tourist_exe, "tourist", id_str, age_str, type_str, vip_str,
-                  kid_count_str, NULL);
+                  kid_count_str, ticket_str, NULL);
 
             // If exec fails
             perror("generator: execl");
@@ -207,12 +223,13 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         }
 
         const char *type_name = type == TOURIST_WALKER ? "walker" : "cyclist";
+        const char *ticket_names[] = {"SINGLE", "T1", "T2", "T3", "DAILY"};
         if (kid_count > 0) {
-            log_debug("GENERATOR", "Spawned tourist %d: age=%d, type=%s, vip=%s, kids=%d (PID %d)",
-                     tourist_id, age, type_name, vip ? "yes" : "no", kid_count, pid);
+            log_debug("GENERATOR", "Spawned tourist %d: age=%d, type=%s, vip=%s, kids=%d, ticket=%s (PID %d)",
+                     tourist_id, age, type_name, vip ? "yes" : "no", kid_count, ticket_names[ticket], pid);
         } else {
-            log_debug("GENERATOR", "Spawned tourist %d: age=%d, type=%s, vip=%s (PID %d)",
-                     tourist_id, age, type_name, vip ? "yes" : "no", pid);
+            log_debug("GENERATOR", "Spawned tourist %d: age=%d, type=%s, vip=%s, ticket=%s (PID %d)",
+                     tourist_id, age, type_name, vip ? "yes" : "no", ticket_names[ticket], pid);
         }
 
         // Sleep before next spawn
