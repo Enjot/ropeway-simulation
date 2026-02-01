@@ -85,6 +85,12 @@ typedef enum {
     STAGE_LEAVING = 9                   // Terminal: leaving (ticket invalid, station closing, or done)
 } TouristStage;
 
+// Cashier message queue mtype values
+typedef enum {
+    MSG_CASHIER_REQUEST = 1,            // All tourists send requests with this mtype
+    MSG_CASHIER_RESPONSE_BASE = 1000    // Responses use BASE + tourist_id
+} CashierMsgType;
+
 // ============================================================================
 // Per-Tourist Tracking Entry
 // ============================================================================

@@ -115,9 +115,10 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
             break;
         }
 
-        // Wait for ticket request
+        // Wait for ticket request (only receive requests, not responses)
         CashierMsg request;
-        ssize_t ret = msgrcv(res->mq_cashier_id, &request, sizeof(request) - sizeof(long), 0, 0);
+        ssize_t ret = msgrcv(res->mq_cashier_id, &request, sizeof(request) - sizeof(long),
+                             MSG_CASHIER_REQUEST, 0);
 
         if (ret == -1) {
             if (errno == EINTR) {
@@ -135,9 +136,9 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
         if (res->state->closing) {
             log_info("CASHIER", "Station closing, refusing ticket for tourist %d", request.tourist_id);
 
-            // Send rejection (mtype = tourist_id, ticket_type = -1)
+            // Send rejection (mtype = response base + tourist_id, ticket_type = -1)
             CashierMsg response = request;
-            response.mtype = request.tourist_id;
+            response.mtype = MSG_CASHIER_RESPONSE_BASE + request.tourist_id;
             response.ticket_type = -1;
 
             if (msgsnd(res->mq_cashier_id, &response, sizeof(response) - sizeof(long), 0) == -1) {
@@ -169,9 +170,9 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
         res->state->tourists_by_ticket[ticket] += (1 + request.kid_count);
         sem_post(res->sem_id, SEM_STATS, 1);
 
-        // Send ticket response
+        // Send ticket response (mtype = response base + tourist_id)
         CashierMsg response = request;
-        response.mtype = request.tourist_id;
+        response.mtype = MSG_CASHIER_RESPONSE_BASE + request.tourist_id;
         response.ticket_type = ticket;
         response.ticket_valid_until = valid_until;
 

@@ -195,7 +195,7 @@ static int pauseable_sleep(IPCResources *res, double real_seconds) {
  */
 static int buy_ticket(IPCResources *res, TouristData *data) {
     CashierMsg request;
-    request.mtype = 1;  // Any positive value
+    request.mtype = MSG_CASHIER_REQUEST;
     request.tourist_id = data->id;
     request.tourist_type = data->type;
     request.age = data->age;
@@ -211,11 +211,12 @@ static int buy_ticket(IPCResources *res, TouristData *data) {
         return -1;
     }
 
-    // Wait for response (mtype = tourist_id)
+    // Wait for response (mtype = MSG_CASHIER_RESPONSE_BASE + tourist_id)
     CashierMsg response;
     while (1) {
         ssize_t ret = msgrcv(res->mq_cashier_id, &response,
-                             sizeof(response) - sizeof(long), data->id, 0);
+                             sizeof(response) - sizeof(long),
+                             MSG_CASHIER_RESPONSE_BASE + data->id, 0);
         if (ret == -1) {
             if (errno == EINTR) continue;
             // Issue #6 fix: Check for EIDRM
