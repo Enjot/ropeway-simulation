@@ -99,20 +99,6 @@ static int is_vip(SharedState *state) {
     return (rand() % 100) < state->vip_percentage;
 }
 
-// Check pause state
-static void check_pause(IPCResources *res) {
-    if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
-        return;  // Shutdown in progress
-    }
-    int paused = res->state->paused;
-    sem_post(res->sem_id, SEM_STATE, 1);
-
-    if (paused) {
-        log_debug("GENERATOR", "Paused, waiting for resume...");
-        sem_wait(res->sem_id, SEM_PAUSE, 1);  // May fail on shutdown, OK
-        log_debug("GENERATOR", "Resumed");
-    }
-}
 
 void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *tourist_exe) {
     (void)keys;
@@ -149,7 +135,7 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         if (active_tourists < 0) active_tourists = 0;
 
         // Check pause
-        check_pause(res);
+        ipc_check_pause(res);
 
         // Check if closing
         if (res->state->closing) {

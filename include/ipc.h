@@ -29,6 +29,11 @@ int sem_wait(int sem_id, int sem_num, int count);
 int sem_post(int sem_id, int sem_num, int count);
 int sem_trywait(int sem_id, int sem_num);  // Non-blocking, returns -1 with EAGAIN if would block
 
+// Pause-aware semaphore wait (for tourists, generator, cashier)
+// On SIGTSTP (EINTR), blocks until SIGCONT then retries
+// Only returns -1 on shutdown (EIDRM) or other errors
+int sem_wait_pauseable(IPCResources *res, int sem_num, int count);
+
 // Get current semaphore value
 int sem_getval(int sem_id, int sem_num);
 

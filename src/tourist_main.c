@@ -251,7 +251,7 @@ static int is_ticket_valid(IPCResources *res, TouristData *data) {
 
 // Check if station is closing
 static int is_station_closing(IPCResources *res) {
-    if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
+    if (sem_wait_pauseable(res, SEM_STATE, 1) == -1) {
         return 1;  // Assume closing on failure (shutdown)
     }
     int closing = res->state->closing;
@@ -262,14 +262,14 @@ static int is_station_closing(IPCResources *res) {
 // Wait in station for chair
 static int board_chair(IPCResources *res, TouristData *data) {
     // Get a chair slot (blocks if all in use)
-    if (sem_wait(res->sem_id, SEM_CHAIRS, 1) == -1) {
+    if (sem_wait_pauseable(res, SEM_CHAIRS, 1) == -1) {
         return -1;
     }
 
     check_pause(res);
 
     // Issue #2, #4 fix: Check emergency stop with semaphore protection and blocking
-    if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
+    if (sem_wait_pauseable(res, SEM_STATE, 1) == -1) {
         sem_post(res->sem_id, SEM_CHAIRS, 1);  // Release chair on failure
         return -1;
     }
@@ -345,7 +345,7 @@ static int arrive_upper(IPCResources *res, TouristData *data) {
     sem_post(res->sem_id, SEM_CHAIRS, 1);
 
     // Wait for exit gate
-    if (sem_wait(res->sem_id, SEM_EXIT_GATES, 1) == -1) {
+    if (sem_wait_pauseable(res, SEM_EXIT_GATES, 1) == -1) {
         return -1;
     }
 
@@ -405,7 +405,7 @@ static int descend_trail(IPCResources *res, TouristData *data) {
  * Called once when tourist first enters the system with valid ticket.
  */
 static void record_tourist_entry(IPCResources *res, TouristData *data) {
-    if (sem_wait(res->sem_id, SEM_STATS, 1) == -1) {
+    if (sem_wait_pauseable(res, SEM_STATS, 1) == -1) {
         return;  // Shutdown in progress
     }
 
@@ -434,7 +434,7 @@ static void record_tourist_entry(IPCResources *res, TouristData *data) {
  * Counts rides for parent and all kids in the family.
  */
 static void update_stats(IPCResources *res, TouristData *data) {
-    if (sem_wait(res->sem_id, SEM_STATS, 1) == -1) {
+    if (sem_wait_pauseable(res, SEM_STATS, 1) == -1) {
         return;  // Shutdown in progress
     }
 
@@ -591,7 +591,7 @@ int main(int argc, char *argv[]) {
 
         // Enter through entry gate (VIPs skip the queue)
         if (!data.is_vip) {
-            if (sem_wait(res.sem_id, SEM_ENTRY_GATES, 1) == -1) {
+            if (sem_wait_pauseable(&res, SEM_ENTRY_GATES, 1) == -1) {
                 break;
             }
         }
@@ -604,13 +604,13 @@ int main(int argc, char *argv[]) {
         // Enter lower station (wait if full)
         // Family atomically acquires slots to enforce capacity correctly
         int family_size = 1 + data.kid_count;
-        if (sem_wait(res.sem_id, SEM_LOWER_STATION, family_size) == -1) {
+        if (sem_wait_pauseable(&res, SEM_LOWER_STATION, family_size) == -1) {
             if (!data.is_vip) sem_post(res.sem_id, SEM_ENTRY_GATES, 1);
             break;
         }
 
         // Update station count for logging (count whole family)
-        if (sem_wait(res.sem_id, SEM_STATE, 1) == -1) {
+        if (sem_wait_pauseable(&res, SEM_STATE, 1) == -1) {
             if (!data.is_vip) sem_post(res.sem_id, SEM_ENTRY_GATES, 1);
             sem_post(res.sem_id, SEM_LOWER_STATION, family_size);
             break;
@@ -644,7 +644,7 @@ int main(int argc, char *argv[]) {
                 log_info("TOURIST", "Tourist %d leaving lower station (decided not to ride)", data.id);
             }
             // Release lower station slots (skip state update if shutdown)
-            if (sem_wait(res.sem_id, SEM_STATE, 1) == 0) {
+            if (sem_wait_pauseable(&res, SEM_STATE, 1) == 0) {
                 res.state->lower_station_count -= family_size;
                 sem_post(res.sem_id, SEM_STATE, 1);
             }
@@ -653,9 +653,9 @@ int main(int argc, char *argv[]) {
         }
 
         // Wait for platform gate (3 gates on lower platform)
-        if (sem_wait(res.sem_id, SEM_PLATFORM_GATES, 1) == -1) {
+        if (sem_wait_pauseable(&res, SEM_PLATFORM_GATES, 1) == -1) {
             // Cleanup on failure - skip state update if shutdown
-            if (sem_wait(res.sem_id, SEM_STATE, 1) == 0) {
+            if (sem_wait_pauseable(&res, SEM_STATE, 1) == 0) {
                 res.state->lower_station_count -= family_size;
                 sem_post(res.sem_id, SEM_STATE, 1);
             }
@@ -671,7 +671,7 @@ int main(int argc, char *argv[]) {
         if (board_chair(&res, &data) == -1) {
             // Release platform gate and station slots (skip state update if shutdown)
             sem_post(res.sem_id, SEM_PLATFORM_GATES, 1);
-            if (sem_wait(res.sem_id, SEM_STATE, 1) == 0) {
+            if (sem_wait_pauseable(&res, SEM_STATE, 1) == 0) {
                 res.state->lower_station_count -= family_size;
                 sem_post(res.sem_id, SEM_STATE, 1);
             }
@@ -683,7 +683,7 @@ int main(int argc, char *argv[]) {
         sem_post(res.sem_id, SEM_PLATFORM_GATES, 1);
 
         // Release station slots (now on chair)
-        if (sem_wait(res.sem_id, SEM_STATE, 1) == 0) {
+        if (sem_wait_pauseable(&res, SEM_STATE, 1) == 0) {
             res.state->lower_station_count -= family_size;
             sem_post(res.sem_id, SEM_STATE, 1);
         }
