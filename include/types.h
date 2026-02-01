@@ -26,21 +26,26 @@
 #define SEM_EXIT_GATES 3      // Exit gates capacity (2)
 #define SEM_LOWER_STATION 4   // Lower station capacity (N)
 #define SEM_CHAIRS 5          // Chair availability (36)
+#define SEM_WORKER_READY 6    // (DEPRECATED - unused)
 #define SEM_PAUSE 7           // Pause sync (SIGTSTP)
 #define SEM_PLATFORM_GATES 8  // Platform gates capacity (3)
-#define SEM_LOWER_READY 9     // Lower worker ready for resume (issue #1 fix)
-#define SEM_UPPER_READY 10    // Upper worker ready for resume (issue #1 fix)
-#define SEM_EMERGENCY_CLEAR 11 // Released when emergency cleared (issue #4 fix)
-#define SEM_COUNT 12          // Total number of semaphores
-
-// Deprecated - kept for backwards compatibility, use SEM_LOWER_READY/SEM_UPPER_READY
-#define SEM_WORKER_READY 6    // Emergency resume sync (DEPRECATED)
+#define SEM_EMERGENCY_CLEAR 9 // Released when emergency cleared (for tourist waiters)
+#define SEM_COUNT 10          // Total number of semaphores
 
 // Message queue IDs (for ftok project_id)
 #define MQ_CASHIER_ID 1       // Tourist <-> Cashier
 #define MQ_PLATFORM_ID 2      // Tourist -> Lower Worker (ready to board)
 #define MQ_BOARDING_ID 3      // Lower Worker -> Tourist (boarding confirmation)
 #define MQ_ARRIVALS_ID 4      // Tourist -> Upper Worker (arrival notification)
+#define MQ_WORKER_ID 5        // Worker <-> Worker emergency communication
+
+// Worker message types (for WorkerMsg.msg_type)
+#define WORKER_MSG_READY_TO_RESUME 1  // Detecting worker -> Receiving worker
+#define WORKER_MSG_I_AM_READY 2       // Receiving worker -> Detecting worker
+
+// Worker message destination (for WorkerMsg.mtype)
+#define WORKER_DEST_LOWER 1           // Message to lower worker
+#define WORKER_DEST_UPPER 2           // Message to upper worker
 
 // ============================================================================
 // Enums
@@ -197,6 +202,12 @@ typedef struct {
     int kid_count;                  // Number of kids arriving with parent (for logging)
 } ArrivalMsg;
 
+// Message for worker-to-worker emergency communication
+typedef struct {
+    long mtype;                     // WORKER_DEST_LOWER or WORKER_DEST_UPPER
+    int msg_type;                   // WORKER_MSG_READY_TO_RESUME or WORKER_MSG_I_AM_READY
+} WorkerMsg;
+
 // ============================================================================
 // IPC Keys Structure
 // ============================================================================
@@ -208,6 +219,7 @@ typedef struct {
     key_t mq_platform_key;
     key_t mq_boarding_key;
     key_t mq_arrivals_key;
+    key_t mq_worker_key;
 } IPCKeys;
 
 // ============================================================================
@@ -221,5 +233,6 @@ typedef struct {
     int mq_platform_id;
     int mq_boarding_id;
     int mq_arrivals_id;
+    int mq_worker_id;
     SharedState *state;  // Attached shared memory pointer
 } IPCResources;

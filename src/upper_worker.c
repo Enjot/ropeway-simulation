@@ -42,11 +42,11 @@ static void trigger_emergency_stop(IPCResources *res) {
     g_emergency_start_time = time(NULL) - res->state->total_pause_offset;
 
     // Set emergency flag
-    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+    if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
         return;  // Shutdown in progress
     }
     res->state->emergency_stop = 1;
-    sem_post(res->sem_id, SEM_STATE);
+    sem_post(res->sem_id, SEM_STATE, 1);
 
     // Signal lower worker about emergency
     if (res->state->lower_worker_pid > 0) {
@@ -56,7 +56,7 @@ static void trigger_emergency_stop(IPCResources *res) {
 
 /**
  * Called when receiving SIGUSR1 from lower worker.
- * Acknowledges emergency, blocks on semaphore until resume is initiated.
+ * Acknowledges emergency, blocks on message queue until resume is initiated.
  * Handles SIGTSTP (EINTR) by checking pause and retrying.
  */
 static void acknowledge_emergency_stop(IPCResources *res) {
@@ -65,51 +65,83 @@ static void acknowledge_emergency_stop(IPCResources *res) {
     g_is_emergency_initiator = 0;
 
     // Set emergency flag
-    while (sem_wait(res->sem_id, SEM_STATE) == -1) {
+    while (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
         if (errno != EINTR) return;  // Shutdown in progress
         ipc_check_pause(res);  // Handle SIGTSTP
     }
     res->state->emergency_stop = 1;
-    sem_post(res->sem_id, SEM_STATE);
+    sem_post(res->sem_id, SEM_STATE, 1);
 
-    // Block until detecting worker says we can resume
-    log_debug("UPPER_WORKER", "Waiting for resume signal from lower worker...");
-    while (sem_wait(res->sem_id, SEM_EMERGENCY_CLEAR) == -1) {
-        if (errno != EINTR) return;  // Shutdown in progress
+    // Block until detecting worker says we can resume (via message queue)
+    log_debug("UPPER_WORKER", "Waiting for resume message from lower worker...");
+    WorkerMsg msg;
+    while (msgrcv(res->mq_worker_id, &msg, sizeof(msg) - sizeof(long), WORKER_DEST_UPPER, 0) == -1) {
+        if (errno == EIDRM) return;  // Queue removed, shutdown
+        if (errno != EINTR) {
+            perror("upper_worker: msgrcv worker");
+            return;
+        }
         ipc_check_pause(res);  // Handle SIGTSTP while waiting
     }
 
-    // Signal that we're ready to resume
+    // Verify message type (should be READY_TO_RESUME)
+    if (msg.msg_type != WORKER_MSG_READY_TO_RESUME) {
+        log_warn("UPPER_WORKER", "Unexpected message type %d, expected READY_TO_RESUME", msg.msg_type);
+    }
+
+    // Signal that we're ready to resume (via message queue)
     log_debug("UPPER_WORKER", "Signaling ready to resume");
-    sem_post(res->sem_id, SEM_UPPER_READY);
+    WorkerMsg response = { .mtype = WORKER_DEST_LOWER, .msg_type = WORKER_MSG_I_AM_READY };
+    if (msgsnd(res->mq_worker_id, &response, sizeof(response) - sizeof(long), 0) == -1) {
+        if (errno != EINTR && errno != EIDRM) {
+            perror("upper_worker: msgsnd I_AM_READY");
+        }
+        return;
+    }
 
     // Clear emergency stop
-    while (sem_wait(res->sem_id, SEM_STATE) == -1) {
+    while (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
         if (errno != EINTR) return;  // Shutdown in progress
         ipc_check_pause(res);  // Handle SIGTSTP
     }
     res->state->emergency_stop = 0;
-    sem_post(res->sem_id, SEM_STATE);
+    sem_post(res->sem_id, SEM_STATE, 1);
 
     log_info("UPPER_WORKER", "Chairlift resumed");
 }
 
 /**
  * Called by detecting worker after cooldown to initiate resume.
- * Wakes up receiving worker, waits for ready confirmation, sends SIGUSR2.
+ * Wakes up receiving worker via message queue, waits for ready confirmation, sends SIGUSR2.
  * Handles SIGTSTP (EINTR) by checking pause and retrying.
  */
 static void initiate_resume(IPCResources *res) {
     log_info("UPPER_WORKER", "Cooldown passed, initiating resume");
 
-    // Wake up the receiving worker
-    sem_post(res->sem_id, SEM_EMERGENCY_CLEAR);
+    // Send READY_TO_RESUME to receiving worker (via message queue)
+    WorkerMsg msg = { .mtype = WORKER_DEST_LOWER, .msg_type = WORKER_MSG_READY_TO_RESUME };
+    if (msgsnd(res->mq_worker_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
+        if (errno != EINTR && errno != EIDRM) {
+            perror("upper_worker: msgsnd READY_TO_RESUME");
+        }
+        return;
+    }
 
-    // Wait for other worker to be ready
+    // Wait for I_AM_READY response from other worker (via message queue)
     log_debug("UPPER_WORKER", "Waiting for lower worker to be ready...");
-    while (sem_wait(res->sem_id, SEM_LOWER_READY) == -1) {
-        if (errno != EINTR) return;  // Shutdown in progress
+    WorkerMsg response;
+    while (msgrcv(res->mq_worker_id, &response, sizeof(response) - sizeof(long), WORKER_DEST_UPPER, 0) == -1) {
+        if (errno == EIDRM) return;  // Queue removed, shutdown
+        if (errno != EINTR) {
+            perror("upper_worker: msgrcv I_AM_READY");
+            return;
+        }
         ipc_check_pause(res);  // Handle SIGTSTP while waiting
+    }
+
+    // Verify message type (should be I_AM_READY)
+    if (response.msg_type != WORKER_MSG_I_AM_READY) {
+        log_warn("UPPER_WORKER", "Unexpected message type %d, expected I_AM_READY", response.msg_type);
     }
 
     // Send SIGUSR2 to formally resume chairlift
@@ -118,12 +150,12 @@ static void initiate_resume(IPCResources *res) {
     }
 
     // Clear emergency stop
-    while (sem_wait(res->sem_id, SEM_STATE) == -1) {
+    while (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
         if (errno != EINTR) return;  // Shutdown in progress
         ipc_check_pause(res);  // Handle SIGTSTP
     }
     res->state->emergency_stop = 0;
-    sem_post(res->sem_id, SEM_STATE);
+    sem_post(res->sem_id, SEM_STATE, 1);
 
     // Release any tourist waiters
     ipc_release_emergency_waiters(res);

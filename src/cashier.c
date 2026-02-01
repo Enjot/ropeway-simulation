@@ -174,12 +174,12 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
         }
 
         // Update statistics (count parent + kids as separate tourists)
-        if (sem_wait(res->sem_id, SEM_STATS) == -1) {
+        if (sem_wait(res->sem_id, SEM_STATS, 1) == -1) {
             continue;  // Check loop condition on failure
         }
         res->state->total_tourists += (1 + request.kid_count);
         res->state->tourists_by_ticket[ticket] += (1 + request.kid_count);
-        sem_post(res->sem_id, SEM_STATS);
+        sem_post(res->sem_id, SEM_STATS, 1);
 
         // Send ticket response
         CashierMsg response = request;

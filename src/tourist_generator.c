@@ -92,15 +92,15 @@ static int is_vip(SharedState *state) {
 
 // Check pause state
 static void check_pause(IPCResources *res) {
-    if (sem_wait(res->sem_id, SEM_STATE) == -1) {
+    if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
         return;  // Shutdown in progress
     }
     int paused = res->state->paused;
-    sem_post(res->sem_id, SEM_STATE);
+    sem_post(res->sem_id, SEM_STATE, 1);
 
     if (paused) {
         log_debug("GENERATOR", "Paused, waiting for resume...");
-        sem_wait(res->sem_id, SEM_PAUSE);  // May fail on shutdown, OK
+        sem_wait(res->sem_id, SEM_PAUSE, 1);  // May fail on shutdown, OK
         log_debug("GENERATOR", "Resumed");
     }
 }

@@ -80,12 +80,12 @@ static void handle_pause_signal(void) {
 
     if (g_res.state) {
         // Protected access to shared state
-        if (sem_wait(g_res.sem_id, SEM_STATE) == -1) {
+        if (sem_wait(g_res.sem_id, SEM_STATE, 1) == -1) {
             return;  // Shutdown in progress
         }
         g_res.state->paused = 1;
         g_res.state->pause_start_time = time(NULL);
-        sem_post(g_res.sem_id, SEM_STATE);
+        sem_post(g_res.sem_id, SEM_STATE, 1);
     }
     write(STDERR_FILENO, "[MAIN] Simulation paused\n", 25);
 }
@@ -96,7 +96,7 @@ static void handle_resume_signal(void) {
     g_sigcont_received = 0;
 
     if (g_res.state) {
-        if (sem_wait(g_res.sem_id, SEM_STATE) == -1) {
+        if (sem_wait(g_res.sem_id, SEM_STATE, 1) == -1) {
             return;  // Shutdown in progress
         }
         if (g_res.state->paused) {
@@ -105,7 +105,7 @@ static void handle_resume_signal(void) {
             g_res.state->pause_start_time = 0;
             g_res.state->paused = 0;
         }
-        sem_post(g_res.sem_id, SEM_STATE);
+        sem_post(g_res.sem_id, SEM_STATE, 1);
 
         // Issue #7 fix: Release pause waiters using tracked count
         ipc_release_pause_waiters(&g_res);

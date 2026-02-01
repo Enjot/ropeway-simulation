@@ -83,7 +83,7 @@ This document provides a detailed flowchart of the tourist flow through the rope
 │                                                             │     │
 │  ┌─────────────────────────────────────────────────────┐    │     │
 │  │  ATOMIC FAMILY SLOT ACQUISITION                     │    │     │
-│  │  sem_wait_n(SEM_LOWER_STATION, family_size)         │    │     │
+│  │  sem_wait(SEM_LOWER_STATION, family_size)           │    │     │
 │  │                                                     │    │     │
 │  │  family_size = 1 (parent) + kid_count               │    │     │
 │  │  Prevents race conditions where families exceed N   │    │     │
@@ -149,8 +149,8 @@ This document provides a detailed flowchart of the tourist flow through the rope
 │  └─────────────────────────────────────────────────────┘    │     │
 │                                                             │     │
 │  [!] EMERGENCY STOP: SIGUSR1 → stops chairlift              │     │
-│  ✓  RESUME: Coordinates with Upper Worker via semaphores    │     │
-│     SEM_LOWER_READY + SEM_UPPER_READY → both ready          │     │
+│  ✓  RESUME: Coordinates with Upper Worker via MQ_WORKER     │     │
+│     READY_TO_RESUME msg → I_AM_READY response               │     │
 │     → SIGUSR2 → resumes chairlift                           │     │
 └──────────────────────────┬──────────────────────────────────┘     │
                            │                                        │
@@ -288,29 +288,29 @@ Response Message:
 
 ### Stage 3: Entry Gates (4 gates)
 ```
-sem_wait(SEM_ENTRY_GATES)
+sem_wait(SEM_ENTRY_GATES, 1)
 ├── Wait for available gate (4 slots)
 ├── sync_with_kids(stage=1)
 ├── Record entry in tourist_entries[]
-└── sem_post(SEM_ENTRY_GATES)
+└── sem_post(SEM_ENTRY_GATES, 1)
 ```
 
 ### Stage 4: Lower Station
 ```
-sem_wait_n(SEM_LOWER_STATION, family_size)
+sem_wait(SEM_LOWER_STATION, family_size)
 ├── Atomic acquisition of N slots (prevents exceeding capacity)
 ├── Update lower_station_count
 ├── sync_with_kids(stage=2)
 ├── IF first ride AND random(10) == 0:
 │   ├── Decide not to ride (~10%)
-│   ├── sem_post_n(SEM_LOWER_STATION, family_size)
+│   ├── sem_post(SEM_LOWER_STATION, family_size)
 │   └── LEAVE
 └── Proceed to platform gates
 ```
 
 ### Stage 5: Platform Gates (3 gates)
 ```
-sem_wait(SEM_PLATFORM_GATES)
+sem_wait(SEM_PLATFORM_GATES, 1)
 ├── Wait for available platform gate (3 slots)
 ├── sync_with_kids(stage=3)
 └── Proceed to boarding
@@ -326,9 +326,9 @@ Tourist Side:
 │   ├── slots_needed (walker=1, cyclist=2, + kid_count)
 │   └── kid_count
 ├── Wait for confirmation on MQ_BOARDING (mtype=tourist_id)
-├── sem_post(SEM_PLATFORM_GATES)
-├── sem_post_n(SEM_LOWER_STATION, family_size)
-├── sem_wait(SEM_CHAIRS)
+├── sem_post(SEM_PLATFORM_GATES, 1)
+├── sem_post(SEM_LOWER_STATION, family_size)
+├── sem_wait(SEM_CHAIRS, 1)
 └── sync_with_kids(stage=4)
 
 Lower Worker Side:
@@ -347,17 +347,17 @@ Lower Worker Side:
 ```
 ├── Sleep for chair_travel_time (simulated → real seconds)
 ├── sync_with_kids(stage=5)
-└── sem_post(SEM_CHAIRS)  // Release chair slot on arrival
+└── sem_post(SEM_CHAIRS, 1)  // Release chair slot on arrival
 ```
 
 ### Stage 8: Upper Platform
 ```
-sem_wait(SEM_EXIT_GATES)
+sem_wait(SEM_EXIT_GATES, 1)
 ├── Wait for exit gate (2 slots)
 ├── Send ArrivalMsg to MQ_ARRIVALS
 │   ├── tourist_id
 │   └── kid_count
-├── sem_post(SEM_EXIT_GATES)
+├── sem_post(SEM_EXIT_GATES, 1)
 └── sync_with_kids(stage=6)
 ```
 
