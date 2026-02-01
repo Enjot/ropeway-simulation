@@ -156,6 +156,9 @@ typedef struct {
     int danger_probability;         // Probability per check (0-100), 0 = disabled
     int danger_cooldown_sim;        // Simulated minutes between possible detections
 
+    // Logging settings
+    int debug_logs_enabled;         // 1 = show debug logs, 0 = hide debug logs
+
     // Process IDs for signal handling
     pid_t main_pid;
     pid_t cashier_pid;

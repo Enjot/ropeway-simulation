@@ -30,6 +30,8 @@ void config_set_defaults(Config *cfg) {
 
     cfg->danger_probability = 0;    // Disabled by default
     cfg->danger_cooldown_sim = 30;  // 30 sim minutes cooldown
+
+    cfg->debug_logs_enabled = 1;    // Debug logs enabled by default
 }
 
 int config_load(const char *path, Config *cfg) {
@@ -113,6 +115,8 @@ int config_load(const char *path, Config *cfg) {
             cfg->danger_probability = atoi(value);
         } else if (strcmp(key, "DANGER_COOLDOWN_SIM_MINUTES") == 0) {
             cfg->danger_cooldown_sim = atoi(value);
+        } else if (strcmp(key, "DEBUG_LOGS_ENABLED") == 0) {
+            cfg->debug_logs_enabled = atoi(value);
         } else {
             fprintf(stderr, "config_load: unknown key at line %d: %s\n", line_num, key);
         }

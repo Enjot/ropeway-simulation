@@ -308,6 +308,7 @@ int main(int argc, char *argv[]) {
 
     // Initialize logger with shared state
     logger_init(g_res.state, LOG_MAIN);
+    logger_set_debug_enabled(cfg.debug_logs_enabled);
 
     // Initialize time
     time_init(g_res.state, &cfg);

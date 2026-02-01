@@ -9,6 +9,7 @@
 static SharedState *g_state = NULL;
 static int g_use_colors = 0;
 static LogComponent g_component = LOG_UNKNOWN;
+static int g_debug_enabled = 1;
 
 #define COLOR_RESET "\033[0m"
 
@@ -28,6 +29,10 @@ void logger_init(SharedState *state, LogComponent comp) {
     g_state = state;
     g_component = comp;
     g_use_colors = isatty(STDERR_FILENO);
+}
+
+void logger_set_debug_enabled(int enabled) {
+    g_debug_enabled = enabled;
 }
 
 // Issue #12 fix: Removed duplicated get_sim_minutes() - use time_get_sim_minutes() instead
@@ -52,6 +57,11 @@ static void format_sim_time(char *buf, int buf_size) {
 }
 
 void log_msg(const char *level, const char *component, const char *fmt, ...) {
+    // Skip debug logs if disabled
+    if (!g_debug_enabled && strcmp(level, LOG_DEBUG) == 0) {
+        return;
+    }
+
     char buf[512];
     char time_buf[16];
     int len = 0;

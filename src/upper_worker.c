@@ -209,6 +209,7 @@ void upper_worker_main(IPCResources *res, IPCKeys *keys) {
 
     // Initialize logger with component type
     logger_init(res->state, LOG_UPPER_WORKER);
+    logger_set_debug_enabled(res->state->debug_logs_enabled);
 
     // Install signal handlers
     struct sigaction sa;

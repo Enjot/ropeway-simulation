@@ -24,6 +24,9 @@ typedef enum {
 // Initialize logger with shared state and component type (for colored output)
 void logger_init(SharedState *state, LogComponent comp);
 
+// Enable or disable debug logs (default: enabled)
+void logger_set_debug_enabled(int enabled);
+
 // Main logging function (NOT signal-safe, uses snprintf)
 // Format: [HH:MM:SS] [LEVEL] [COMPONENT] message
 void log_msg(const char *level, const char *component, const char *fmt, ...);
