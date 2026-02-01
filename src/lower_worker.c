@@ -227,7 +227,7 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
     log_info("LOWER_WORKER", "Lower platform worker ready");
 
     int current_chair_slots = 0;  // Slots used on current chair being loaded
-    int chair_number = 0;         // For logging
+    int chair_number = 1;         // For logging (1-indexed for user-friendliness)
 
     while (g_running && res->state->running) {
         // Handle SIGUSR1 - emergency stop from upper worker
@@ -324,8 +324,8 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
         if (current_chair_slots + slots_needed > CHAIR_CAPACITY) {
             // Doesn't fit - dispatch current chair, start new one
             if (current_chair_slots > 0) {
-                log_debug("LOWER_WORKER", "Chair %d departed with %d/%d slots",
-                         chair_number, current_chair_slots, CHAIR_CAPACITY);
+                log_info("LOWER_WORKER", "Chair %d departed with %d/%d slots",
+                        chair_number, current_chair_slots, CHAIR_CAPACITY);
             }
             current_chair_slots = 0;
             chair_number++;
@@ -376,7 +376,7 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
 
         // If chair is full, dispatch and reset
         if (current_chair_slots >= CHAIR_CAPACITY) {
-            log_debug("LOWER_WORKER", "Chair %d full, departing", chair_number);
+            log_info("LOWER_WORKER", "Chair %d full, departing", chair_number);
             current_chair_slots = 0;
             chair_number++;
         }

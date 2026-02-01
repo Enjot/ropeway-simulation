@@ -35,10 +35,7 @@ int ipc_generate_keys(IPCKeys *keys, const char *path) {
         return -1;
     }
 
-    log_debug("IPC", "Generated IPC keys: shm=%d sem=%d mq_c=%d mq_p=%d mq_b=%d mq_a=%d mq_w=%d",
-              keys->shm_key, keys->sem_key,
-              keys->mq_cashier_key, keys->mq_platform_key,
-              keys->mq_boarding_key, keys->mq_arrivals_key, keys->mq_worker_key);
+    // Note: Keys are logged in ipc_create() to avoid duplicate logs from child processes
 
     return 0;
 }
@@ -53,6 +50,11 @@ int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     res->mq_arrivals_id = -1;
     res->mq_worker_id = -1;
     res->state = NULL;
+
+    log_debug("IPC", "Generated IPC keys: shm=%d sem=%d mq_c=%d mq_p=%d mq_b=%d mq_a=%d mq_w=%d",
+              keys->shm_key, keys->sem_key,
+              keys->mq_cashier_key, keys->mq_platform_key,
+              keys->mq_boarding_key, keys->mq_arrivals_key, keys->mq_worker_key);
 
     // Calculate shared memory size (base + flexible array for tourist entries)
     size_t shm_size = sizeof(SharedState) + (cfg->total_tourists * sizeof(TouristEntry));
@@ -169,7 +171,7 @@ int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     res->state->emergency_stop = 0;
     res->state->paused = 0;
 
-    log_info("IPC", "All IPC resources created successfully");
+    log_debug("IPC", "All IPC resources created successfully");
     return 0;
 
 cleanup:

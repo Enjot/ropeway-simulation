@@ -144,7 +144,7 @@ static pid_t spawn_worker(void (*worker_func)(IPCResources*, IPCKeys*),
 
     if (pid == 0) {
         // Child process
-        log_info("MAIN", "%s process started (PID %d)", name, getpid());
+        log_debug("MAIN", "%s process started (PID %d)", name, getpid());
         worker_func(res, keys);
         exit(0);
     }
@@ -320,7 +320,7 @@ int main(int argc, char *argv[]) {
     // Store main PID
     g_res.state->main_pid = getpid();
 
-    log_info("MAIN", "Simulation starting at %02d:%02d",
+    log_debug("MAIN", "Simulation starting at %02d:%02d",
              cfg.sim_start_hour, cfg.sim_start_minute);
 
     // Install signal handlers
@@ -359,7 +359,7 @@ int main(int argc, char *argv[]) {
         g_res.state->running = 0;
     }
 
-    log_info("MAIN", "All workers spawned, simulation running");
+    log_debug("MAIN", "All workers spawned, simulation running");
 
     // Main loop - handle signals and reap zombies
     while (g_running && g_res.state->running) {
