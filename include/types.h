@@ -1,9 +1,5 @@
 #pragma once
 
-// Feature test macros - must be before any includes
-// Required for pthread_barrier_t and other POSIX extensions
-#define _GNU_SOURCE
-
 #include <sys/types.h>
 #include <time.h>
 

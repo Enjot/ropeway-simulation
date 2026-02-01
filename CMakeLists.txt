@@ -51,13 +51,3 @@ target_link_libraries(tourist pthread)
 add_custom_command(TARGET tourist POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tourist> ${CMAKE_BINARY_DIR}/tourist
 )
-
-# Create config directory in build if it doesn't exist
-add_custom_command(TARGET ropeway_simulation POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/config
-)
-
-# Copy config files to build directory
-add_custom_command(TARGET ropeway_simulation POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/config ${CMAKE_BINARY_DIR}/config
-)

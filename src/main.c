@@ -249,12 +249,13 @@ static void print_report(SharedState *state) {
 }
 
 static void print_usage(const char *prog) {
-    fprintf(stderr, "Usage: %s [config_file]\n", prog);
-    fprintf(stderr, "  config_file: Path to configuration file (default: config/default.conf)\n");
+    fprintf(stderr, "Usage: %s [config_name]\n", prog);
+    fprintf(stderr, "  config_name: Config file in ../config/ (default: default.conf)\n");
 }
 
 int main(int argc, char *argv[]) {
-    const char *config_path = "config/default.conf";
+    static char config_path[256];
+    const char *config_name = "default.conf";
     const char *tourist_exe = "./tourist";
 
     // Parse arguments
@@ -263,8 +264,11 @@ int main(int argc, char *argv[]) {
             print_usage(argv[0]);
             return 0;
         }
-        config_path = argv[1];
+        config_name = argv[1];
     }
+
+    // Build config path
+    snprintf(config_path, sizeof(config_path), "../config/%s", config_name);
 
     // Check tourist executable exists
     if (access(tourist_exe, X_OK) == -1) {
