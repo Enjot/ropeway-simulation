@@ -14,11 +14,7 @@
 
 static int g_running = 1;
 static int g_child_exited = 0;
-
-// Track child PIDs for cleanup (match max_tracked_tourists default)
-#define MAX_CHILD_PIDS 5000
-static pid_t g_child_pids[MAX_CHILD_PIDS];
-static int g_child_count = 0;
+static pid_t g_tourist_pgid = 0;  // Process group for all tourists
 
 static void signal_handler(int sig) {
     if (sig == SIGTERM || sig == SIGINT) {
@@ -202,7 +198,11 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         }
 
         if (pid == 0) {
-            // Child process - exec tourist
+            // Child process - join tourist process group
+            if (g_tourist_pgid > 0) {
+                setpgid(0, g_tourist_pgid);
+            }
+            // exec tourist
             execl(tourist_exe, "tourist", id_str, age_str, type_str, vip_str,
                   kid_count_str, ticket_str, NULL);
 
@@ -211,11 +211,13 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
             _exit(1);
         }
 
-        // Parent process - track PID for cleanup
+        // Parent process - set up process group
         active_tourists++;
-        if (g_child_count < MAX_CHILD_PIDS) {
-            g_child_pids[g_child_count++] = pid;
+        if (g_tourist_pgid == 0) {
+            // First tourist becomes process group leader
+            g_tourist_pgid = pid;
         }
+        setpgid(pid, g_tourist_pgid);  // Add to tourist process group
 
         const char *type_name = type == TOURIST_WALKER ? "walker" : "cyclist";
         const char *ticket_names[] = {"SINGLE", "T1", "T2", "T3", "DAILY"};
@@ -235,12 +237,10 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
 
     log_info("GENERATOR", "Tourist generator shutting down (spawned %d tourists)", tourist_id);
 
-    // Send SIGTERM to all tracked tourist processes
-    log_debug("GENERATOR", "Sending SIGTERM to %d tourists...", g_child_count);
-    for (int i = 0; i < g_child_count; i++) {
-        if (g_child_pids[i] > 0) {
-            kill(g_child_pids[i], SIGTERM);
-        }
+    // Send SIGTERM to all tourist processes via process group
+    if (g_tourist_pgid > 0) {
+        log_debug("GENERATOR", "Sending SIGTERM to tourist process group %d", g_tourist_pgid);
+        killpg(g_tourist_pgid, SIGTERM);
     }
 
     // Wait for tourists to exit with non-blocking waitpid first
@@ -263,14 +263,10 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         }
     }
 
-    // If still have remaining tourists, force kill them individually
-    if (active_tourists > 0) {
+    // If still have remaining tourists, force kill via process group
+    if (active_tourists > 0 && g_tourist_pgid > 0) {
         log_debug("GENERATOR", "Force killing %d remaining tourists...", active_tourists);
-        for (int i = 0; i < g_child_count; i++) {
-            if (g_child_pids[i] > 0) {
-                kill(g_child_pids[i], SIGKILL);
-            }
-        }
+        killpg(g_tourist_pgid, SIGKILL);
 
         // Reap the killed processes
         while ((pid = waitpid(-1, &status, 0)) > 0) {

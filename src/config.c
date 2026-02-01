@@ -15,7 +15,6 @@ void config_set_defaults(Config *cfg) {
 
     cfg->total_tourists = 100;
     cfg->tourist_spawn_delay_us = 200000;  // 200ms default
-    cfg->max_tracked_tourists = 5000;
 
     cfg->vip_percentage = 1;
     cfg->walker_percentage = 50;
@@ -92,8 +91,6 @@ int config_load(const char *path, Config *cfg) {
             cfg->total_tourists = atoi(value);
         } else if (strcmp(key, "TOURIST_SPAWN_DELAY_US") == 0) {
             cfg->tourist_spawn_delay_us = atoi(value);
-        } else if (strcmp(key, "MAX_TRACKED_TOURISTS") == 0) {
-            cfg->max_tracked_tourists = atoi(value);
         } else if (strcmp(key, "VIP_PERCENTAGE") == 0) {
             cfg->vip_percentage = atoi(value);
         } else if (strcmp(key, "WALKER_PERCENTAGE") == 0) {
@@ -174,11 +171,6 @@ int config_validate(const Config *cfg) {
 
     if (cfg->tourist_spawn_delay_us < 0) {
         fprintf(stderr, "config: TOURIST_SPAWN_DELAY_US must be >= 0\n");
-        valid = 0;
-    }
-
-    if (cfg->max_tracked_tourists <= 0) {
-        fprintf(stderr, "config: MAX_TRACKED_TOURISTS must be > 0\n");
         valid = 0;
     }
 

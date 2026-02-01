@@ -55,7 +55,7 @@ int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     res->state = NULL;
 
     // Calculate shared memory size (base + flexible array for tourist entries)
-    size_t shm_size = sizeof(SharedState) + (cfg->max_tracked_tourists * sizeof(TouristEntry));
+    size_t shm_size = sizeof(SharedState) + (cfg->total_tourists * sizeof(TouristEntry));
 
     // Create shared memory
     res->shm_id = shmget(keys->shm_key, shm_size, IPC_CREAT | IPC_EXCL | 0666);
@@ -148,7 +148,7 @@ int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     res->state->station_capacity = cfg->station_capacity;
     res->state->tourists_to_generate = cfg->total_tourists;
     res->state->tourist_spawn_delay_us = cfg->tourist_spawn_delay_us;
-    res->state->max_tracked_tourists = cfg->max_tracked_tourists;
+    res->state->max_tracked_tourists = cfg->total_tourists;
     res->state->tourist_entry_count = 0;
     res->state->vip_percentage = cfg->vip_percentage;
     res->state->walker_percentage = cfg->walker_percentage;
@@ -317,6 +317,29 @@ int sem_wait(int sem_id, int sem_num, int count) {
             return -1;  // Let caller check g_running / handle shutdown
         }
         perror("sem_wait: semop");
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * Pause-aware semaphore wait.
+ * On SIGTSTP (EINTR), blocks until SIGCONT then retries.
+ * Only returns -1 on shutdown (EIDRM) or other errors.
+ */
+int sem_wait_pauseable(IPCResources *res, int sem_num, int count) {
+    if (count <= 0) return 0;
+    struct sembuf sop = {sem_num, -count, 0};
+
+    while (semop(res->sem_id, &sop, 1) == -1) {
+        if (errno == EIDRM) {
+            return -1;  // Shutdown - IPC destroyed
+        }
+        if (errno == EINTR) {
+            ipc_check_pause(res);  // Block if paused
+            continue;              // Retry semop
+        }
+        perror("sem_wait_pauseable: semop");
         return -1;
     }
     return 0;

@@ -16,7 +16,6 @@ typedef struct {
     // Tourist generation
     int total_tourists;             // Total number of tourists to generate
     int tourist_spawn_delay_us;     // Delay between spawns in microseconds (0 = no delay)
-    int max_tracked_tourists;       // Max tourists to track in report (default 5000)
 
     // Tourist distribution (percentages 0-100)
     int vip_percentage;
