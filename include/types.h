@@ -2,6 +2,7 @@
 
 #include <sys/types.h>
 #include <time.h>
+#include <stdint.h>
 
 // ============================================================================
 // Constants
@@ -23,7 +24,7 @@
 #define SEM_LOWER_STATION 4   // Lower station capacity (N)
 #define SEM_CHAIRS 5          // Chair availability (36)
 #define SEM_WORKER_READY 6    // (DEPRECATED - unused)
-#define SEM_PAUSE 7           // Pause sync (SIGTSTP)
+#define SEM_PAUSE 7           // (DEPRECATED - kernel handles SIGTSTP now)
 #define SEM_PLATFORM_GATES 8  // Platform gates capacity (3)
 #define SEM_EMERGENCY_CLEAR 9 // Released when emergency cleared (for tourist waiters)
 #define SEM_COUNT 10          // Total number of semaphores
@@ -115,16 +116,13 @@ typedef struct {
     double time_acceleration;       // Sim minutes per real second
     int chair_travel_time_sim;      // Simulated minutes for ride
 
-    // SIGTSTP/SIGCONT pause handling
-    time_t pause_start_time;        // When SIGTSTP received (0 = not paused)
-    time_t total_pause_offset;      // Accumulated pause time in seconds
+    // Time Server manages this atomically (no locks needed to read)
+    int64_t current_sim_time_ms;    // Current simulated time in milliseconds
 
     // Simulation state (protected by SEM_STATE)
     int running;                    // 0 = shutdown
     int closing;                    // 1 = stop accepting new tourists
     int emergency_stop;             // 1 = chairlift stopped (SIGUSR1)
-    int paused;                     // 1 = simulation paused (SIGTSTP)
-    int pause_waiters;              // Count of processes waiting on SEM_PAUSE (issue #7 fix)
     int emergency_waiters;          // Count of processes waiting on SEM_EMERGENCY_CLEAR (issue #4 fix)
 
     // Statistics (protected by SEM_STATS)
@@ -164,6 +162,7 @@ typedef struct {
 
     // Process IDs for signal handling
     pid_t main_pid;
+    pid_t time_server_pid;
     pid_t cashier_pid;
     pid_t lower_worker_pid;
     pid_t upper_worker_pid;

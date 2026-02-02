@@ -98,7 +98,7 @@ int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     sem_values[SEM_LOWER_STATION] = cfg->station_capacity;
     sem_values[SEM_CHAIRS] = MAX_CHAIRS_IN_TRANSIT;     // 36
     sem_values[SEM_WORKER_READY] = 0;                   // (deprecated/unused)
-    sem_values[SEM_PAUSE] = 0;                          // Pause sync
+    sem_values[SEM_PAUSE] = 0;                          // (deprecated - kernel handles SIGTSTP)
     sem_values[SEM_PLATFORM_GATES] = PLATFORM_GATES;    // 3 platform gates
     sem_values[SEM_EMERGENCY_CLEAR] = 0;                // Emergency clear (tourist waiters)
 
@@ -169,7 +169,6 @@ int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     res->state->running = 1;
     res->state->closing = 0;
     res->state->emergency_stop = 0;
-    res->state->paused = 0;
 
     log_debug("IPC", "All IPC resources created successfully");
     return 0;
@@ -329,8 +328,8 @@ int sem_wait(int sem_id, int sem_num, int count) {
 }
 
 /**
- * Pause-aware semaphore wait.
- * On SIGTSTP (EINTR), blocks until SIGCONT then retries.
+ * Semaphore wait with EINTR handling.
+ * Kernel handles SIGTSTP/SIGCONT automatically (process gets suspended).
  * Only returns -1 on shutdown (EIDRM) or other errors.
  */
 int sem_wait_pauseable(IPCResources *res, int sem_num, int count) {
@@ -344,8 +343,9 @@ int sem_wait_pauseable(IPCResources *res, int sem_num, int count) {
             return -1;  // Shutdown - IPC destroyed
         }
         if (errno == EINTR) {
-            ipc_check_pause(res);  // Block if paused
-            continue;              // Retry semop
+            // Signal interrupted us - just retry
+            // Kernel handles SIGTSTP/SIGCONT automatically
+            continue;
         }
         perror("sem_wait_pauseable: semop");
         return -1;
@@ -399,26 +399,8 @@ int sem_getval(int sem_id, int sem_num) {
     return val;
 }
 
-/**
- * Check pause state and block if paused.
- * Properly tracks pause_waiters for reliable wakeup (issue #7, #11 fix).
- */
-void ipc_check_pause(IPCResources *res) {
-    if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
-        return;  // Shutdown in progress
-    }
-    int paused = res->state->paused;
-    if (paused) {
-        // Track that we're waiting
-        res->state->pause_waiters++;
-    }
-    sem_post(res->sem_id, SEM_STATE, 1);
-
-    if (paused) {
-        // Block until SIGCONT releases us
-        sem_wait(res->sem_id, SEM_PAUSE, 1);  // May fail on shutdown, OK
-    }
-}
+// Note: ipc_check_pause() removed - kernel handles SIGTSTP/SIGCONT automatically.
+// Time Server process handles pause offset calculation.
 
 /**
  * Wait for emergency stop to clear.
@@ -460,21 +442,4 @@ void ipc_release_emergency_waiters(IPCResources *res) {
     }
 }
 
-/**
- * Release all processes waiting for pause to end.
- * Called on SIGCONT in main process.
- */
-void ipc_release_pause_waiters(IPCResources *res) {
-    if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
-        return;  // Shutdown in progress
-    }
-    int waiters = res->state->pause_waiters;
-    res->state->pause_waiters = 0;
-    sem_post(res->sem_id, SEM_STATE, 1);
-
-    // Release all waiters
-    if (waiters > 0) {
-        sem_post(res->sem_id, SEM_PAUSE, waiters);
-        log_debug("IPC", "Released %d pause waiters", waiters);
-    }
-}
+// Note: ipc_release_pause_waiters() removed - kernel handles SIGTSTP/SIGCONT automatically.

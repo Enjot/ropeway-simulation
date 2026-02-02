@@ -29,17 +29,12 @@ int sem_wait(int sem_id, int sem_num, int count);
 int sem_post(int sem_id, int sem_num, int count);
 int sem_trywait(int sem_id, int sem_num);  // Non-blocking, returns -1 with EAGAIN if would block
 
-// Pause-aware semaphore wait (for tourists, generator, cashier)
-// On SIGTSTP (EINTR), blocks until SIGCONT then retries
+// Semaphore wait with EINTR handling (kernel handles SIGTSTP automatically)
 // Only returns -1 on shutdown (EIDRM) or other errors
 int sem_wait_pauseable(IPCResources *res, int sem_num, int count);
 
 // Get current semaphore value
 int sem_getval(int sem_id, int sem_num);
-
-// Check pause state and block if paused (issue #11 fix - consolidated)
-// Properly tracks pause_waiters for reliable wakeup
-void ipc_check_pause(IPCResources *res);
 
 // Wait for emergency stop to clear (issue #4 fix - replaces usleep polling)
 // Properly tracks emergency_waiters for reliable wakeup
@@ -47,6 +42,3 @@ void ipc_wait_emergency_clear(IPCResources *res);
 
 // Release all emergency waiters (called when emergency clears)
 void ipc_release_emergency_waiters(IPCResources *res);
-
-// Release all pause waiters (called on SIGCONT)
-void ipc_release_pause_waiters(IPCResources *res);

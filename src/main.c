@@ -18,6 +18,7 @@
 #include <time.h>
 
 // Forward declarations for worker entry points
+void time_server_main(IPCResources *res, IPCKeys *keys);
 void cashier_main(IPCResources *res, IPCKeys *keys);
 void lower_worker_main(IPCResources *res, IPCKeys *keys);
 void upper_worker_main(IPCResources *res, IPCKeys *keys);
@@ -28,10 +29,6 @@ static IPCResources g_res;
 static int g_running = 1;
 static int g_child_exited = 0;
 static pid_t g_main_pid = 0;  // Set in main() to identify main process
-
-// Issue #3, #5 fix: Signal flags instead of direct shared state modification
-static volatile sig_atomic_t g_sigtstp_received = 0;
-static volatile sig_atomic_t g_sigcont_received = 0;
 
 // Signal-safe flag setting
 static void sigchld_handler(int sig) {
@@ -83,80 +80,14 @@ static void sigterm_handler(int sig) {
     write(STDERR_FILENO, "[SIGNAL] Shutdown requested, IPC cleaned\n", 41);
 }
 
-// Forward declaration for reinstallation in sigcont_handler
-static void sigtstp_handler(int sig);
-
-// Issue #3, #5 fix: Signal handler sets flag, then actually stops the process
-// We reset to SIG_DFL and re-raise SIGTSTP so the process actually suspends
-// Capture pause_start_time here (time() is async-signal-safe) so the offset is correct
-static time_t g_pause_start_time_capture = 0;
-
-static void sigtstp_handler(int sig) {
-    (void)sig;
-    g_sigtstp_received = 1;
-    g_pause_start_time_capture = time(NULL);  // Capture NOW before stopping
-    write(STDERR_FILENO, "[SIGNAL] SIGTSTP received\n", 26);
-
-    // Reset SIGTSTP to default handler and re-raise to actually stop
-    signal(SIGTSTP, SIG_DFL);
-    raise(SIGTSTP);
-}
-
-static void sigcont_handler(int sig) {
-    (void)sig;
-    g_sigcont_received = 1;
-    write(STDERR_FILENO, "[SIGNAL] SIGCONT received\n", 26);
-
-    // Reinstall our custom SIGTSTP handler (was reset to SIG_DFL before stopping)
-    signal(SIGTSTP, sigtstp_handler);
-}
-
 // SIGALRM handler - just wakes up from pause() to check simulation time
 static void sigalrm_handler(int sig) {
     (void)sig;
     // Nothing to do - just wake up from pause()
 }
 
-// Issue #3 fix: Handle pause state changes outside signal handler (safe IPC)
-static void handle_pause_signal(void) {
-    if (!g_sigtstp_received) return;
-    g_sigtstp_received = 0;
-
-    if (g_res.state) {
-        // Protected access to shared state
-        if (sem_wait(g_res.sem_id, SEM_STATE, 1) == -1) {
-            return;  // Shutdown in progress
-        }
-        g_res.state->paused = 1;
-        // Use the time captured in signal handler, not current time
-        g_res.state->pause_start_time = g_pause_start_time_capture;
-        sem_post(g_res.sem_id, SEM_STATE, 1);
-    }
-    write(STDERR_FILENO, "[MAIN] Simulation paused\n", 25);
-}
-
-// Issue #3, #7 fix: Handle resume with proper pause waiter tracking
-static void handle_resume_signal(void) {
-    if (!g_sigcont_received) return;
-    g_sigcont_received = 0;
-
-    if (g_res.state) {
-        if (sem_wait(g_res.sem_id, SEM_STATE, 1) == -1) {
-            return;  // Shutdown in progress
-        }
-        if (g_res.state->paused) {
-            time_t pause_duration = time(NULL) - g_res.state->pause_start_time;
-            g_res.state->total_pause_offset += pause_duration;
-            g_res.state->pause_start_time = 0;
-            g_res.state->paused = 0;
-        }
-        sem_post(g_res.sem_id, SEM_STATE, 1);
-
-        // Issue #7 fix: Release pause waiters using tracked count
-        ipc_release_pause_waiters(&g_res);
-    }
-    write(STDERR_FILENO, "[MAIN] Simulation resumed\n", 26);
-}
+// Note: SIGTSTP/SIGCONT pause handling is now done by the Time Server process.
+// The kernel handles stopping/resuming all processes automatically.
 
 // Reap zombie processes
 // Issue #15 fix: Use snprintf instead of strcat for safety
@@ -382,22 +313,23 @@ int main(int argc, char *argv[]) {
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
 
-    sa.sa_handler = sigtstp_handler;
-    sigaction(SIGTSTP, &sa, NULL);
-
-    sa.sa_handler = sigcont_handler;
-    sigaction(SIGCONT, &sa, NULL);
+    // Note: SIGTSTP/SIGCONT are handled by Time Server for pause offset tracking.
+    // Main process uses default handling (kernel suspends us).
 
     sa.sa_handler = sigalrm_handler;
     sigaction(SIGALRM, &sa, NULL);
 
-    // Spawn workers
+    // Spawn Time Server first (handles time tracking and pause offset)
+    g_res.state->time_server_pid = spawn_worker(time_server_main, &g_res, &keys, "TimeServer");
+
+    // Spawn other workers
     g_res.state->cashier_pid = spawn_worker(cashier_main, &g_res, &keys, "Cashier");
     g_res.state->lower_worker_pid = spawn_worker(lower_worker_main, &g_res, &keys, "LowerWorker");
     g_res.state->upper_worker_pid = spawn_worker(upper_worker_main, &g_res, &keys, "UpperWorker");
     g_res.state->generator_pid = spawn_generator(&g_res, &keys, tourist_exe);
 
-    if (g_res.state->cashier_pid == -1 ||
+    if (g_res.state->time_server_pid == -1 ||
+        g_res.state->cashier_pid == -1 ||
         g_res.state->lower_worker_pid == -1 ||
         g_res.state->upper_worker_pid == -1 ||
         g_res.state->generator_pid == -1) {
@@ -408,11 +340,8 @@ int main(int argc, char *argv[]) {
     log_debug("MAIN", "All workers spawned, simulation running");
 
     // Main loop - handle signals and reap zombies
+    // Note: Pause handling is done by Time Server; main just gets suspended by kernel
     while (g_running && g_res.state->running) {
-        // Handle pause/resume signals (issue #3 fix - outside signal handler)
-        handle_pause_signal();
-        handle_resume_signal();
-
         // Reap zombies
         reap_zombies();
 
@@ -436,6 +365,7 @@ int main(int argc, char *argv[]) {
     g_res.state->running = 0;
 
     // Send SIGTERM to worker processes
+    if (g_res.state->time_server_pid > 0) kill(g_res.state->time_server_pid, SIGTERM);
     if (g_res.state->cashier_pid > 0) kill(g_res.state->cashier_pid, SIGTERM);
     if (g_res.state->lower_worker_pid > 0) kill(g_res.state->lower_worker_pid, SIGTERM);
     if (g_res.state->upper_worker_pid > 0) kill(g_res.state->upper_worker_pid, SIGTERM);
@@ -458,6 +388,10 @@ int main(int argc, char *argv[]) {
     if (g_res.mq_arrivals_id != -1) {
         msgctl(g_res.mq_arrivals_id, IPC_RMID, NULL);
         g_res.mq_arrivals_id = -1;
+    }
+    if (g_res.mq_worker_id != -1) {
+        msgctl(g_res.mq_worker_id, IPC_RMID, NULL);
+        g_res.mq_worker_id = -1;
     }
 
     // Destroy semaphores to unblock any stuck semop operations

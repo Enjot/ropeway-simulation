@@ -14,9 +14,9 @@
 static int g_running = 1;
 static int g_emergency_signal = 0;
 static int g_resume_signal = 0;
-static time_t g_last_danger_time = 0;       // Last danger detection (real time)
-static time_t g_emergency_start_time = 0;   // When current emergency started
-static int g_is_emergency_initiator = 0;    // 1 if this worker detected danger
+static double g_last_danger_time_sim = 0.0;       // Last danger detection (sim minutes)
+static double g_emergency_start_time_sim = 0.0;  // When current emergency started (sim minutes)
+static int g_is_emergency_initiator = 0;         // 1 if this worker detected danger
 
 // Buffer for tourists waiting on current chair (for synchronized departures)
 typedef struct {
@@ -58,8 +58,8 @@ static void trigger_emergency_stop(IPCResources *res) {
     log_warn("LOWER_WORKER", "Danger detected! Triggering emergency stop");
 
     g_is_emergency_initiator = 1;
-    // Store pause-adjusted start time for consistent cooldown calculation
-    g_emergency_start_time = time(NULL) - res->state->total_pause_offset;
+    // Store simulated time for consistent cooldown calculation (already accounts for pause)
+    g_emergency_start_time_sim = time_get_sim_minutes_f(res->state);
 
     // Set emergency flag
     if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
@@ -87,7 +87,7 @@ static void acknowledge_emergency_stop(IPCResources *res) {
     // Set emergency flag
     while (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
         if (errno != EINTR) return;  // Shutdown in progress
-        ipc_check_pause(res);  // Handle SIGTSTP
+        // Kernel handles SIGTSTP automatically
     }
     res->state->emergency_stop = 1;
     sem_post(res->sem_id, SEM_STATE, 1);
@@ -101,7 +101,7 @@ static void acknowledge_emergency_stop(IPCResources *res) {
             perror("lower_worker: msgrcv worker");
             return;
         }
-        ipc_check_pause(res);  // Handle SIGTSTP while waiting
+        // Kernel handles SIGTSTP automatically while waiting
     }
 
     // Verify message type (should be READY_TO_RESUME)
@@ -122,7 +122,7 @@ static void acknowledge_emergency_stop(IPCResources *res) {
     // Clear emergency stop
     while (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
         if (errno != EINTR) return;  // Shutdown in progress
-        ipc_check_pause(res);  // Handle SIGTSTP
+        // Kernel handles SIGTSTP automatically
     }
     res->state->emergency_stop = 0;
     sem_post(res->sem_id, SEM_STATE, 1);
@@ -156,7 +156,7 @@ static void initiate_resume(IPCResources *res) {
             perror("lower_worker: msgrcv I_AM_READY");
             return;
         }
-        ipc_check_pause(res);  // Handle SIGTSTP while waiting
+        // Kernel handles SIGTSTP automatically while waiting
     }
 
     // Verify message type (should be I_AM_READY)
@@ -172,7 +172,7 @@ static void initiate_resume(IPCResources *res) {
     // Clear emergency stop
     while (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
         if (errno != EINTR) return;  // Shutdown in progress
-        ipc_check_pause(res);  // Handle SIGTSTP
+        // Kernel handles SIGTSTP automatically
     }
     res->state->emergency_stop = 0;
     sem_post(res->sem_id, SEM_STATE, 1);
@@ -181,13 +181,13 @@ static void initiate_resume(IPCResources *res) {
     ipc_release_emergency_waiters(res);
 
     g_is_emergency_initiator = 0;
-    g_emergency_start_time = 0;
+    g_emergency_start_time_sim = 0.0;
 
     log_info("LOWER_WORKER", "Chairlift resumed");
 }
 
-// Issue #11 fix: Use consolidated ipc_check_pause() instead of duplicated code
-// See ipc.c for implementation
+// Note: ipc_check_pause() removed - kernel handles SIGTSTP/SIGCONT automatically.
+// Time Server handles pause offset calculation.
 
 /**
  * Check for random danger and trigger emergency stop if detected.
@@ -200,24 +200,19 @@ static int check_for_danger(IPCResources *res) {
         return 0;  // Danger detection disabled
     }
 
-    // Check cooldown period (convert sim minutes to real seconds)
-    // Use pause-adjusted time for consistent cooldown tracking
-    time_t now = time(NULL);
-    time_t adjusted_now = now - res->state->total_pause_offset;
+    // Check cooldown period using simulated time (already accounts for pause)
+    double now_sim = time_get_sim_minutes_f(res->state);
+    int cooldown_sim = res->state->danger_cooldown_sim;
 
-    if (g_last_danger_time > 0) {
-        double time_accel = res->state->time_acceleration;
-        int cooldown_sim = res->state->danger_cooldown_sim;
-        double cooldown_real = (time_accel > 0) ? (cooldown_sim / time_accel) : 60.0;
-
-        if (adjusted_now - g_last_danger_time < (time_t)cooldown_real) {
+    if (g_last_danger_time_sim > 0) {
+        if ((now_sim - g_last_danger_time_sim) < cooldown_sim) {
             return 0;  // Still in cooldown
         }
     }
 
     // Random check
     if ((rand() % 100) < probability) {
-        g_last_danger_time = adjusted_now;  // Store pause-adjusted time
+        g_last_danger_time_sim = now_sim;  // Store simulated time
         trigger_emergency_stop(res);
         return 1;
     }
@@ -312,26 +307,20 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
             log_debug("LOWER_WORKER", "Resume signal (SIGUSR2) received");
         }
 
-        // Issue #11 fix: Use consolidated pause check
-        ipc_check_pause(res);
+        // Kernel handles SIGTSTP/SIGCONT automatically
 
         // Check if we're the emergency initiator and need to wait for cooldown
-        if (g_is_emergency_initiator && g_emergency_start_time > 0) {
-            // Account for pause time in cooldown calculation
-            time_t now = time(NULL);
-            time_t pause_offset = res->state->total_pause_offset;
-            time_t adjusted_now = now - pause_offset;
-
-            double time_accel = res->state->time_acceleration;
+        if (g_is_emergency_initiator && g_emergency_start_time_sim > 0) {
+            // Use simulated time for cooldown (already accounts for pause)
+            double now_sim = time_get_sim_minutes_f(res->state);
             int cooldown_sim = res->state->danger_cooldown_sim;
-            double cooldown_real = (time_accel > 0) ? (cooldown_sim / time_accel) : 60.0;
 
-            if ((adjusted_now - g_emergency_start_time) >= (time_t)cooldown_real) {
+            if ((now_sim - g_emergency_start_time_sim) >= cooldown_sim) {
                 // Cooldown passed - initiate resume
                 initiate_resume(res);
             } else {
-                // Still in cooldown - check for pause and sleep briefly
-                ipc_check_pause(res);
+                // Still in cooldown - sleep briefly
+                // Kernel handles SIGTSTP/SIGCONT automatically
                 usleep(100000);  // 100ms (timing only, not IPC sync)
             }
             continue;

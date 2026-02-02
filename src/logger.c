@@ -22,6 +22,7 @@ static const char *g_component_colors[LOG_COMPONENT_COUNT] = {
     [LOG_GENERATOR]    = "\033[35m",  // magenta
     [LOG_MAIN]         = "\033[37m",  // white
     [LOG_IPC]          = "\033[90m",  // gray
+    [LOG_TIME_SERVER]  = "\033[93m",  // bright yellow
     [LOG_UNKNOWN]      = "\033[39m",  // default
 };
 

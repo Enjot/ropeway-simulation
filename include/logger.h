@@ -17,6 +17,7 @@ typedef enum {
     LOG_GENERATOR,
     LOG_MAIN,
     LOG_IPC,
+    LOG_TIME_SERVER,
     LOG_UNKNOWN,
     LOG_COMPONENT_COUNT
 } LogComponent;

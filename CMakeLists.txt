@@ -30,6 +30,7 @@ set(MAIN_SOURCES
     src/lower_worker.c
     src/upper_worker.c
     src/tourist_generator.c
+    src/time_server.c
     ${COMMON_SOURCES}
 )
 

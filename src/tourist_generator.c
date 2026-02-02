@@ -136,8 +136,7 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         active_tourists -= reaped;
         if (active_tourists < 0) active_tourists = 0;
 
-        // Check pause
-        ipc_check_pause(res);
+        // Kernel handles SIGTSTP/SIGCONT automatically
 
         // Check if closing
         if (res->state->closing) {
@@ -246,8 +245,7 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         }
 
         if (active_tourists > 0) {
-            // Check pause and simulation state
-            ipc_check_pause(res);
+            // Kernel handles SIGTSTP/SIGCONT automatically
 
             // If simulation ended, wait for remaining tourists with timeout
             if (!res->state->running) {

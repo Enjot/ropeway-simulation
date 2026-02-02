@@ -113,11 +113,8 @@ static int parse_args(int argc, char *argv[], TouristData *data) {
     return 0;
 }
 
-// Issue #11 fix: Use consolidated ipc_check_pause() instead of duplicated code
-// See ipc.c for implementation - wrapper for consistency
-static void check_pause(IPCResources *res) {
-    ipc_check_pause(res);
-}
+// Note: check_pause() removed - kernel handles SIGTSTP/SIGCONT automatically.
+// Time Server handles pause offset calculation.
 
 /**
  * Kid thread function.
@@ -165,7 +162,7 @@ static int pauseable_sleep(IPCResources *res, double real_seconds) {
 
         if (ret == -1 && errno == EINTR) {
             // Check if paused
-            check_pause(res);
+            // Kernel handles SIGTSTP automatically
             // Recalculate remaining
             remaining = real_seconds - (double)(time(NULL) - start);
         } else {
@@ -255,7 +252,7 @@ static int board_chair(IPCResources *res, TouristData *data, time_t *departure_t
     // Note: SEM_CHAIRS is now acquired by lower_worker when chair departs,
     // and released by upper_worker when all tourists from that chair arrive.
 
-    check_pause(res);
+    // Kernel handles SIGTSTP automatically
 
     // Issue #2, #4 fix: Check emergency stop with semaphore protection and blocking
     if (sem_wait_pauseable(res, SEM_STATE, 1) == -1) {
@@ -295,7 +292,7 @@ static int board_chair(IPCResources *res, TouristData *data, time_t *departure_t
                              sizeof(response) - sizeof(long), data->id, 0);
         if (ret == -1) {
             if (errno == EINTR) {
-                check_pause(res);
+                // Kernel handles SIGTSTP automatically
                 continue;
             }
             // Issue #6 fix: Check for EIDRM
@@ -348,7 +345,7 @@ static int arrive_upper(IPCResources *res, TouristData *data,
         return -1;
     }
 
-    check_pause(res);
+    // Kernel handles SIGTSTP automatically
 
     // Notify upper worker of arrival (with chair info for tracking)
     ArrivalMsg msg;
@@ -579,7 +576,7 @@ int main(int argc, char *argv[]) {
 
     // Main ride loop
     while (g_running && res.state->running) {
-        check_pause(&res);
+        // Kernel handles SIGTSTP automatically
 
         // Check exit conditions
         if (!is_ticket_valid(&res, &data)) {
@@ -599,7 +596,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        check_pause(&res);
+        // Kernel handles SIGTSTP automatically
 
         log_info(tag, "%d entered through gate", data.id);
 
@@ -633,7 +630,7 @@ int main(int argc, char *argv[]) {
                      data.id, count, res.state->station_capacity);
         }
 
-        check_pause(&res);
+        // Kernel handles SIGTSTP automatically
 
         // ~10% chance to leave: before first ride (too scared) or after first ride (was too scary)
         if ((data.rides_completed == 0 || data.rides_completed == 1) && (rand() % 10) == 0) {
@@ -674,7 +671,7 @@ int main(int argc, char *argv[]) {
         }
         sem_post(res.sem_id, SEM_LOWER_STATION, data.station_slots);
 
-        check_pause(&res);
+        // Kernel handles SIGTSTP automatically
 
         // Board chair (family boards together)
         time_t departure_time = 0;
