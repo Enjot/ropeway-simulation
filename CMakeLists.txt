@@ -31,6 +31,10 @@ set(COMMON_SOURCES
 # Main executable sources
 set(MAIN_SOURCES
     src/main.c
+    src/report.c
+    src/lifecycle/process_signals.c
+    src/lifecycle/process_manager.c
+    src/lifecycle/zombie_reaper.c
     src/cashier.c
     src/lower_worker.c
     src/upper_worker.c
