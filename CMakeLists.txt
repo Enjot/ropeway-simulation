@@ -37,7 +37,13 @@ set(MAIN_SOURCES
 
 # Tourist executable sources
 set(TOURIST_SOURCES
-    src/tourist_main.c
+    src/tourist/main.c
+    src/tourist/init.c
+    src/tourist/threads.c
+    src/tourist/lifecycle.c
+    src/tourist/boarding.c
+    src/tourist/movement.c
+    src/tourist/stats.c
     ${COMMON_SOURCES}
 )
 
