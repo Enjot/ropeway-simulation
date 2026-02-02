@@ -277,6 +277,8 @@ void upper_worker_main(IPCResources *res, IPCKeys *keys) {
     // Seed random number generator for danger detection (different seed than lower worker)
     srand((unsigned int)(time(NULL) ^ (getpid() << 1)));
 
+    // Signal that this worker is ready (startup barrier)
+    ipc_signal_worker_ready(res);
     log_info("UPPER_WORKER", "Upper platform worker ready");
 
     int arrivals_count = 0;

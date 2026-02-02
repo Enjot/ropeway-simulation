@@ -23,8 +23,12 @@
 #define SEM_EXIT_GATES 3      // Exit gates capacity (2)
 #define SEM_LOWER_STATION 4   // Lower station capacity (N)
 #define SEM_CHAIRS 5          // Chair availability (36)
-#define SEM_WORKER_READY 6    // (DEPRECATED - unused)
+#define SEM_WORKER_READY 6    // Startup barrier: workers post when ready
 #define SEM_PAUSE 7           // (DEPRECATED - kernel handles SIGTSTP now)
+
+// Number of workers that must signal ready before generator starts
+// (TimeServer, Cashier, LowerWorker, UpperWorker)
+#define WORKER_COUNT_FOR_BARRIER 4
 #define SEM_PLATFORM_GATES 8  // Platform gates capacity (3)
 #define SEM_EMERGENCY_CLEAR 9 // Released when emergency cleared (for tourist waiters)
 #define SEM_COUNT 10          // Total number of semaphores

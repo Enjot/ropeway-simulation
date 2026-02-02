@@ -106,6 +106,8 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
     // Seed random number generator
     srand(time(NULL) ^ getpid());
 
+    // Signal that this worker is ready (startup barrier)
+    ipc_signal_worker_ready(res);
     log_info("CASHIER", "Cashier ready to serve tourists");
 
     while (g_running && res->state->running) {

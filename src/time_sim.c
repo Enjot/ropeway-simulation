@@ -121,7 +121,14 @@ int time_sleep_sim_minutes(SharedState *state, int sem_id, int sim_minutes) {
     (void)sem_id;  // Unused - kernel handles pause
 
     double real_seconds = time_sim_to_real_seconds(state, sim_minutes);
-    time_t start = time(NULL);
+
+    // Use high-precision clock for accurate timing with accelerated simulation
+    struct timespec start_ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &start_ts) == -1) {
+        perror("time_sleep_sim_minutes: clock_gettime start");
+        return -1;
+    }
+    double start_sec = start_ts.tv_sec + start_ts.tv_nsec / 1e9;
     double remaining = real_seconds;
 
     while (remaining > 0) {
@@ -137,11 +144,16 @@ int time_sleep_sim_minutes(SharedState *state, int sem_id, int sim_minutes) {
         int ret = nanosleep(&ts, &ts);
 
         if (ret == -1 && errno == EINTR) {
-            // Interrupted by signal - recalculate remaining time
+            // Interrupted by signal - recalculate remaining time with high precision
             // Note: If SIGTSTP stopped us, the pause time is NOT counted
             // because nanosleep pauses with the process
-            time_t now = time(NULL);
-            remaining = real_seconds - (double)(now - start);
+            struct timespec now_ts;
+            if (clock_gettime(CLOCK_MONOTONIC, &now_ts) == -1) {
+                perror("time_sleep_sim_minutes: clock_gettime now");
+                return -1;
+            }
+            double now_sec = now_ts.tv_sec + now_ts.tv_nsec / 1e9;
+            remaining = real_seconds - (now_sec - start_sec);
         } else {
             break;  // Sleep completed
         }

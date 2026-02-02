@@ -33,30 +33,42 @@ static double g_total_pause_offset = 0.0;  // In seconds
 // Real start time with high precision
 static struct timespec g_real_start_time;
 
+// Saved sigaction for SIGTSTP reinstallation (used in SIGCONT handler)
+static struct sigaction g_sigtstp_action;
+
 /**
  * @brief SIGTSTP handler - capture pause start time and suspend
+ *
+ * Note: Uses SA_RESETHAND so handler is automatically reset to SIG_DFL
+ * before this handler runs. After capture, we raise SIGTSTP again to
+ * actually suspend the process. SIGCONT handler will reinstall this handler.
  */
 static void sigtstp_handler(int sig) {
     (void)sig;
-    clock_gettime(CLOCK_MONOTONIC, &g_pause_start);
+    if (clock_gettime(CLOCK_MONOTONIC, &g_pause_start) == -1) {
+        // Fallback: mark as paused anyway, offset calculation may be inaccurate
+        write(STDERR_FILENO, "[SIGNAL] [TIME_SERVER] clock_gettime failed\n", 44);
+    }
     g_paused = 1;
     write(STDERR_FILENO, "[SIGNAL] [TIME_SERVER] SIGTSTP received\n", 40);
 
-    // Reset to default handler and re-raise to actually stop
-    signal(SIGTSTP, SIG_DFL);
+    // Re-raise SIGTSTP to actually stop (handler was reset to SIG_DFL by SA_RESETHAND)
     raise(SIGTSTP);
 }
 
 /**
  * @brief SIGCONT handler - calculate pause offset and resume
+ *
+ * Note: sigaction() is async-signal-safe (POSIX.1-2008), so we can
+ * safely reinstall the SIGTSTP handler here.
  */
 static void sigcont_handler(int sig) {
     (void)sig;
     g_sigcont_received = 1;
     write(STDERR_FILENO, "[SIGNAL] [TIME_SERVER] SIGCONT received\n", 40);
 
-    // Reinstall our SIGTSTP handler
-    signal(SIGTSTP, sigtstp_handler);
+    // Reinstall our SIGTSTP handler using sigaction (async-signal-safe)
+    sigaction(SIGTSTP, &g_sigtstp_action, NULL);
 }
 
 /**
@@ -84,7 +96,12 @@ static void handle_resume(void) {
 
     if (g_paused) {
         struct timespec now;
-        clock_gettime(CLOCK_MONOTONIC, &now);
+        if (clock_gettime(CLOCK_MONOTONIC, &now) == -1) {
+            perror("time_server: clock_gettime in handle_resume");
+            // Fallback: just mark as unpaused, offset calculation may be inaccurate
+            g_paused = 0;
+            return;
+        }
 
         double pause_duration = (now.tv_sec - g_pause_start.tv_sec)
                               + (now.tv_nsec - g_pause_start.tv_nsec) / 1e9;
@@ -101,7 +118,10 @@ static void handle_resume(void) {
  */
 static void update_sim_time(SharedState *state) {
     struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
+    if (clock_gettime(CLOCK_MONOTONIC, &now) == -1) {
+        // Don't spam errors on every tick - just skip this update
+        return;
+    }
 
     // Calculate effective elapsed time (excluding pauses)
     double now_sec = now.tv_sec + now.tv_nsec / 1e9;
@@ -143,17 +163,26 @@ void time_server_main(IPCResources *res, IPCKeys *keys) {
     log_info("TIME_SERVER", "Time Server started (PID %d)", getpid());
 
     // Capture start time with high precision
-    clock_gettime(CLOCK_MONOTONIC, &g_real_start_time);
+    if (clock_gettime(CLOCK_MONOTONIC, &g_real_start_time) == -1) {
+        perror("time_server: clock_gettime for start time");
+        log_error("TIME_SERVER", "Failed to get start time, exiting");
+        return;
+    }
 
     // Install signal handlers
     struct sigaction sa;
 
-    sa.sa_handler = sigtstp_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGTSTP, &sa, NULL);
+    // SIGTSTP: Use SA_RESETHAND so handler resets to SIG_DFL before running.
+    // This allows raise(SIGTSTP) to actually suspend the process.
+    // We save the action in g_sigtstp_action so SIGCONT can reinstall it.
+    g_sigtstp_action.sa_handler = sigtstp_handler;
+    sigemptyset(&g_sigtstp_action.sa_mask);
+    g_sigtstp_action.sa_flags = SA_RESETHAND;
+    sigaction(SIGTSTP, &g_sigtstp_action, NULL);
 
     sa.sa_handler = sigcont_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
     sigaction(SIGCONT, &sa, NULL);
 
     sa.sa_handler = sigterm_handler;
@@ -175,6 +204,10 @@ void time_server_main(IPCResources *res, IPCKeys *keys) {
     }
 
     log_debug("TIME_SERVER", "Timer started (10ms interval)");
+
+    // Signal that this worker is ready (startup barrier)
+    ipc_signal_worker_ready(res);
+    log_info("TIME_SERVER", "Time Server ready");
 
     // Initial time update
     update_sim_time(state);

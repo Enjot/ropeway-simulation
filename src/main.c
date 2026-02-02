@@ -40,8 +40,12 @@ static void sigterm_handler(int sig) {
     (void)sig;
     g_running = 0;
 
-    // Only main process should clean up IPC resources
-    if (getpid() != g_main_pid) {
+    // Only main process should clean up IPC resources.
+    // Note: getpid() is async-signal-safe per POSIX.1-2008, but we use
+    // the cached g_main_pid comparison which is more efficient and avoids
+    // any syscall. Child processes inherit this handler but g_main_pid
+    // remains set to the main process's PID.
+    if (g_main_pid == 0 || getpid() != g_main_pid) {
         write(STDERR_FILENO, "[SIGNAL] Child shutdown\n", 24);
         return;
     }
@@ -326,15 +330,31 @@ int main(int argc, char *argv[]) {
     g_res.state->cashier_pid = spawn_worker(cashier_main, &g_res, &keys, "Cashier");
     g_res.state->lower_worker_pid = spawn_worker(lower_worker_main, &g_res, &keys, "LowerWorker");
     g_res.state->upper_worker_pid = spawn_worker(upper_worker_main, &g_res, &keys, "UpperWorker");
-    g_res.state->generator_pid = spawn_generator(&g_res, &keys, tourist_exe);
 
     if (g_res.state->time_server_pid == -1 ||
         g_res.state->cashier_pid == -1 ||
         g_res.state->lower_worker_pid == -1 ||
-        g_res.state->upper_worker_pid == -1 ||
-        g_res.state->generator_pid == -1) {
+        g_res.state->upper_worker_pid == -1) {
         log_error("MAIN", "Failed to spawn one or more workers");
         g_res.state->running = 0;
+    }
+
+    // Wait for all workers to be ready before starting tourist generator
+    // This prevents race conditions where tourists try to use IPC before workers are ready
+    if (g_res.state->running) {
+        if (ipc_wait_workers_ready(&g_res, WORKER_COUNT_FOR_BARRIER) == -1) {
+            log_error("MAIN", "Failed to wait for workers to be ready");
+            g_res.state->running = 0;
+        }
+    }
+
+    // Now spawn the tourist generator (workers are guaranteed to be ready)
+    if (g_res.state->running) {
+        g_res.state->generator_pid = spawn_generator(&g_res, &keys, tourist_exe);
+        if (g_res.state->generator_pid == -1) {
+            log_error("MAIN", "Failed to spawn tourist generator");
+            g_res.state->running = 0;
+        }
     }
 
     log_debug("MAIN", "All workers spawned, simulation running");
@@ -365,11 +385,32 @@ int main(int argc, char *argv[]) {
     g_res.state->running = 0;
 
     // Send SIGTERM to worker processes
-    if (g_res.state->time_server_pid > 0) kill(g_res.state->time_server_pid, SIGTERM);
-    if (g_res.state->cashier_pid > 0) kill(g_res.state->cashier_pid, SIGTERM);
-    if (g_res.state->lower_worker_pid > 0) kill(g_res.state->lower_worker_pid, SIGTERM);
-    if (g_res.state->upper_worker_pid > 0) kill(g_res.state->upper_worker_pid, SIGTERM);
-    if (g_res.state->generator_pid > 0) kill(g_res.state->generator_pid, SIGTERM);
+    // Note: ESRCH (no such process) is expected if process already exited
+    if (g_res.state->time_server_pid > 0) {
+        if (kill(g_res.state->time_server_pid, SIGTERM) == -1 && errno != ESRCH) {
+            perror("main: kill time_server");
+        }
+    }
+    if (g_res.state->cashier_pid > 0) {
+        if (kill(g_res.state->cashier_pid, SIGTERM) == -1 && errno != ESRCH) {
+            perror("main: kill cashier");
+        }
+    }
+    if (g_res.state->lower_worker_pid > 0) {
+        if (kill(g_res.state->lower_worker_pid, SIGTERM) == -1 && errno != ESRCH) {
+            perror("main: kill lower_worker");
+        }
+    }
+    if (g_res.state->upper_worker_pid > 0) {
+        if (kill(g_res.state->upper_worker_pid, SIGTERM) == -1 && errno != ESRCH) {
+            perror("main: kill upper_worker");
+        }
+    }
+    if (g_res.state->generator_pid > 0) {
+        if (kill(g_res.state->generator_pid, SIGTERM) == -1 && errno != ESRCH) {
+            perror("main: kill generator");
+        }
+    }
 
     // Destroy message queues to unblock any stuck msgrcv/msgsnd operations
     // Processes will get EIDRM and should exit gracefully

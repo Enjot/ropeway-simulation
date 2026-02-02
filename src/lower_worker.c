@@ -286,6 +286,8 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
     // Seed random number generator for danger detection
     srand((unsigned int)(time(NULL) ^ getpid()));
 
+    // Signal that this worker is ready (startup barrier)
+    ipc_signal_worker_ready(res);
     log_info("LOWER_WORKER", "Lower platform worker ready");
 
     int current_chair_slots = 0;  // Slots used on current chair being loaded
