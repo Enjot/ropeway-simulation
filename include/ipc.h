@@ -22,6 +22,11 @@ void ipc_detach(IPCResources *res);
 // Destroy all IPC resources (for main process cleanup)
 void ipc_destroy(IPCResources *res);
 
+// Signal-safe IPC cleanup (for use in signal handlers)
+// Only uses async-signal-safe syscalls (msgctl, semctl, shmctl)
+// No logging, no memory allocation
+void ipc_cleanup_signal_safe(IPCResources *res);
+
 // Semaphore operations with EINTR handling
 // Atomically acquire/release 'count' slots in a single syscall
 // Returns 0 on success, -1 on error

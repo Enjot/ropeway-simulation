@@ -307,6 +307,47 @@ void ipc_destroy(IPCResources *res) {
 }
 
 /**
+ * Signal-safe IPC cleanup for use in signal handlers.
+ * Only uses async-signal-safe syscalls (msgctl, semctl, shmctl).
+ * Cleanup order: MQ -> Semaphores -> SHM (unblocks waiting processes first).
+ */
+void ipc_cleanup_signal_safe(IPCResources *res) {
+    // Clean up message queues first (unblocks msgrcv/msgsnd)
+    if (res->mq_cashier_id != -1) {
+        msgctl(res->mq_cashier_id, IPC_RMID, NULL);
+        res->mq_cashier_id = -1;
+    }
+    if (res->mq_platform_id != -1) {
+        msgctl(res->mq_platform_id, IPC_RMID, NULL);
+        res->mq_platform_id = -1;
+    }
+    if (res->mq_boarding_id != -1) {
+        msgctl(res->mq_boarding_id, IPC_RMID, NULL);
+        res->mq_boarding_id = -1;
+    }
+    if (res->mq_arrivals_id != -1) {
+        msgctl(res->mq_arrivals_id, IPC_RMID, NULL);
+        res->mq_arrivals_id = -1;
+    }
+    if (res->mq_worker_id != -1) {
+        msgctl(res->mq_worker_id, IPC_RMID, NULL);
+        res->mq_worker_id = -1;
+    }
+
+    // Clean up semaphores (unblocks semop)
+    if (res->sem_id != -1) {
+        semctl(res->sem_id, 0, IPC_RMID);
+        res->sem_id = -1;
+    }
+
+    // Clean up shared memory
+    if (res->shm_id != -1) {
+        shmctl(res->shm_id, IPC_RMID, NULL);
+        res->shm_id = -1;
+    }
+}
+
+/**
  * Atomically wait (decrement) a semaphore by count.
  * Blocks until count slots are available, then acquires all at once.
  */

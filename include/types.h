@@ -75,6 +75,11 @@ typedef enum {
 } TrailType;
 
 typedef enum {
+    WORKER_LOWER = 0,     // Lower platform worker
+    WORKER_UPPER = 1      // Upper platform worker
+} WorkerRole;
+
+typedef enum {
     STAGE_AT_CASHIER = 0,               // Initial: at cashier (buying ticket after spawn)
     STAGE_AT_ENTRY_GATES = 1,           // Sync 0: at entry gates (trying to pass)
     STAGE_ENTERED_LOWER_STATION = 2,    // Sync 1: just entered lower station waiting room

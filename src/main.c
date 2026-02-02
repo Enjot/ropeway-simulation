@@ -52,34 +52,7 @@ static void sigterm_handler(int sig) {
 
     // Clean up IPC resources directly in signal handler (async-signal-safe)
     // This ensures cleanup even if main loop is stuck
-    if (g_res.mq_cashier_id != -1) {
-        msgctl(g_res.mq_cashier_id, IPC_RMID, NULL);
-        g_res.mq_cashier_id = -1;
-    }
-    if (g_res.mq_platform_id != -1) {
-        msgctl(g_res.mq_platform_id, IPC_RMID, NULL);
-        g_res.mq_platform_id = -1;
-    }
-    if (g_res.mq_boarding_id != -1) {
-        msgctl(g_res.mq_boarding_id, IPC_RMID, NULL);
-        g_res.mq_boarding_id = -1;
-    }
-    if (g_res.mq_arrivals_id != -1) {
-        msgctl(g_res.mq_arrivals_id, IPC_RMID, NULL);
-        g_res.mq_arrivals_id = -1;
-    }
-    if (g_res.mq_worker_id != -1) {
-        msgctl(g_res.mq_worker_id, IPC_RMID, NULL);
-        g_res.mq_worker_id = -1;
-    }
-    if (g_res.sem_id != -1) {
-        semctl(g_res.sem_id, 0, IPC_RMID);
-        g_res.sem_id = -1;
-    }
-    if (g_res.shm_id != -1) {
-        shmctl(g_res.shm_id, IPC_RMID, NULL);
-        g_res.shm_id = -1;
-    }
+    ipc_cleanup_signal_safe(&g_res);
 
     write(STDERR_FILENO, "[SIGNAL] Shutdown requested, IPC cleaned\n", 41);
 }

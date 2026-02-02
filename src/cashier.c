@@ -2,6 +2,7 @@
 #include "ipc.h"
 #include "logger.h"
 #include "time_sim.h"
+#include "signal_common.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,11 +15,8 @@
 
 static int g_running = 1;
 
-static void signal_handler(int sig) {
-    if (sig == SIGTERM || sig == SIGINT) {
-        g_running = 0;
-    }
-}
+// Use macro-generated signal handler for basic shutdown handling
+DEFINE_BASIC_SIGNAL_HANDLER(signal_handler)
 
 // Calculate ticket valid until time (for time-based tickets)
 static int calculate_ticket_validity(SharedState *state, TicketType ticket) {

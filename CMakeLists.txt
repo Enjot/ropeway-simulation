@@ -29,6 +29,7 @@ set(MAIN_SOURCES
     src/cashier.c
     src/lower_worker.c
     src/upper_worker.c
+    src/worker_emergency.c
     src/tourist_generator.c
     src/time_server.c
     ${COMMON_SOURCES}
