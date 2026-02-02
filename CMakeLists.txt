@@ -20,7 +20,12 @@ set(COMMON_SOURCES
     src/config.c
     src/logger.c
     src/time_sim.c
-    src/ipc.c
+    src/ipc/ipc.c
+    src/ipc/keys.c
+    src/ipc/sem.c
+    src/ipc/mq.c
+    src/ipc/shm.c
+    src/ipc/sync.c
 )
 
 # Main executable sources
