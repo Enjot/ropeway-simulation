@@ -5,7 +5,7 @@
 
 #include "tourist/boarding.h"
 #include "ipc/messages.h"
-#include "logger.h"
+#include "core/logger.h"
 
 #include <errno.h>
 #include <stdio.h>

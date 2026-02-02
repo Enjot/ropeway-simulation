@@ -1,7 +1,7 @@
 #include "constants.h"
 #include "ipc/ipc.h"
-#include "logger.h"
-#include "time_sim.h"
+#include "core/logger.h"
+#include "core/time_sim.h"
 
 #include <stdio.h>
 #include <stdlib.h>

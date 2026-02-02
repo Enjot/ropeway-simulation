@@ -9,7 +9,7 @@
  */
 
 #include "ipc/resources.h"
-#include "config.h"
+#include "core/config.h"
 
 // ============================================================================
 // Shared Memory (shm.c)

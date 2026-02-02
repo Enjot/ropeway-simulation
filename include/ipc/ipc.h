@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ipc/resources.h"
-#include "config.h"
+#include "core/config.h"
 
 // Generate IPC keys using ftok
 // Returns 0 on success, -1 on error

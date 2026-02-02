@@ -1,7 +1,7 @@
-#include "worker_emergency.h"
+#include "common/worker_emergency.h"
 #include "ipc/messages.h"
-#include "logger.h"
-#include "time_sim.h"
+#include "core/logger.h"
+#include "core/time_sim.h"
 
 #include <stdio.h>
 #include <errno.h>

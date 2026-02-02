@@ -3,9 +3,9 @@
  * @brief Final simulation report generation.
  */
 
-#include "report.h"
+#include "core/report.h"
 #include "constants.h"
-#include "time_sim.h"
+#include "core/time_sim.h"
 
 #include <stdio.h>
 #include <string.h>

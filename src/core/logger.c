@@ -1,5 +1,5 @@
-#include "logger.h"
-#include "time_sim.h"  // Issue #12 fix: Use time_sim functions instead of duplicating
+#include "core/logger.h"
+#include "core/time_sim.h"  // Issue #12 fix: Use time_sim functions instead of duplicating
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>

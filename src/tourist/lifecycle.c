@@ -5,7 +5,7 @@
 
 #include "tourist/lifecycle.h"
 #include "ipc/messages.h"
-#include "time_sim.h"
+#include "core/time_sim.h"
 
 #include <errno.h>
 #include <stdio.h>

@@ -17,9 +17,9 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # Common source files (shared between main and tourist)
 set(COMMON_SOURCES
-    src/config.c
-    src/logger.c
-    src/time_sim.c
+    src/core/config.c
+    src/core/logger.c
+    src/core/time_sim.c
     src/ipc/ipc.c
     src/ipc/keys.c
     src/ipc/sem.c
@@ -31,16 +31,16 @@ set(COMMON_SOURCES
 # Main executable sources
 set(MAIN_SOURCES
     src/main.c
-    src/report.c
+    src/core/report.c
     src/lifecycle/process_signals.c
     src/lifecycle/process_manager.c
     src/lifecycle/zombie_reaper.c
-    src/cashier.c
-    src/lower_worker.c
-    src/upper_worker.c
-    src/worker_emergency.c
-    src/tourist_generator.c
-    src/time_server.c
+    src/processes/cashier.c
+    src/processes/lower_worker.c
+    src/processes/upper_worker.c
+    src/common/worker_emergency.c
+    src/processes/tourist_generator.c
+    src/processes/time_server.c
     ${COMMON_SOURCES}
 )
 

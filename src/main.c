@@ -4,10 +4,10 @@
  */
 
 #include "constants.h"
-#include "config.h"
-#include "logger.h"
-#include "time_sim.h"
-#include "report.h"
+#include "core/config.h"
+#include "core/logger.h"
+#include "core/time_sim.h"
+#include "core/report.h"
 #include "ipc/ipc.h"
 #include "lifecycle/process_signals.h"
 #include "lifecycle/process_manager.h"

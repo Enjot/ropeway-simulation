@@ -5,8 +5,8 @@
 
 #include "tourist/movement.h"
 #include "tourist/init.h"
-#include "time_sim.h"
-#include "logger.h"
+#include "core/time_sim.h"
+#include "core/logger.h"
 
 #include <errno.h>
 #include <stdlib.h>

@@ -4,7 +4,7 @@
  */
 
 #include "tourist/threads.h"
-#include "logger.h"
+#include "core/logger.h"
 
 #include <stdio.h>
 

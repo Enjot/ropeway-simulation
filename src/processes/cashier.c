@@ -1,9 +1,9 @@
 #include "constants.h"
 #include "ipc/messages.h"
 #include "ipc/ipc.h"
-#include "logger.h"
-#include "time_sim.h"
-#include "signal_common.h"
+#include "core/logger.h"
+#include "core/time_sim.h"
+#include "common/signal_common.h"
 
 #include <stdio.h>
 #include <stdlib.h>

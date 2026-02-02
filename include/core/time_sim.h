@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ipc/shared_state.h"
-#include "config.h"
+#include "core/config.h"
 
 // Initialize time acceleration in shared state
 // Called once at startup by main process

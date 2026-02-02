@@ -11,7 +11,7 @@
  */
 
 #include "ipc/ipc.h"
-#include "logger.h"
+#include "core/logger.h"
 
 #include <signal.h>
 #include <stdio.h>

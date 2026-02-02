@@ -11,7 +11,7 @@
 #include "tourist/movement.h"
 #include "tourist/stats.h"
 #include "ipc/ipc.h"
-#include "logger.h"
+#include "core/logger.h"
 
 #include <stdio.h>
 #include <stdlib.h>

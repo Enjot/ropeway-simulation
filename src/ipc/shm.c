@@ -4,7 +4,7 @@
  */
 
 #include "ipc/ipc.h"
-#include "logger.h"
+#include "core/logger.h"
 
 #include <stdio.h>
 #include <string.h>

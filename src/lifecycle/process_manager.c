@@ -4,7 +4,7 @@
  */
 
 #include "lifecycle/process_manager.h"
-#include "logger.h"
+#include "core/logger.h"
 
 #include <stdio.h>
 #include <stdlib.h>

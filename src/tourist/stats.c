@@ -4,7 +4,7 @@
  */
 
 #include "tourist/stats.h"
-#include "time_sim.h"
+#include "core/time_sim.h"
 
 void tourist_record_entry(IPCResources *res, TouristData *data) {
     if (sem_wait_pauseable(res, SEM_STATS, 1) == -1) {

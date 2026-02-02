@@ -6,7 +6,7 @@
  * atomically. Other processes simply read this value - no pause offset calculation needed.
  */
 
-#include "time_sim.h"
+#include "core/time_sim.h"
 #include <stdio.h>
 #include <time.h>
 #include <errno.h>
