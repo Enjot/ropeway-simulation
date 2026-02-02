@@ -7,6 +7,11 @@
 // Returns 0 on success, -1 on error
 int ipc_generate_keys(IPCKeys *keys, const char *path);
 
+// Clean up stale IPC resources from a previous crashed run
+// Checks if shared memory exists and if the main_pid stored in it is dead
+// Returns: 1 if stale resources cleaned, 0 if no stale resources, -1 on error
+int ipc_cleanup_stale(const IPCKeys *keys);
+
 // Create all IPC resources (shared memory, semaphores, message queues)
 // Should only be called by main process
 // Returns 0 on success, -1 on error

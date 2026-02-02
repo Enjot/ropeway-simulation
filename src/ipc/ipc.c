@@ -7,9 +7,77 @@
 #include "ipc/internal.h"
 #include "logger.h"
 
+#include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/msg.h>
+#include <sys/sem.h>
+#include <sys/shm.h>
 #include <unistd.h>
+
+/**
+ * Clean up stale IPC resources from a previous crashed run.
+ * Checks if shared memory exists and if the stored main_pid is dead.
+ * Returns: 1 if stale resources cleaned, 0 if no stale resources, -1 on error
+ */
+int ipc_cleanup_stale(const IPCKeys *keys) {
+    // Try to access existing shared memory (without IPC_CREAT)
+    int shm_id = shmget(keys->shm_key, 0, 0666);
+    if (shm_id == -1) {
+        if (errno == ENOENT) {
+            return 0;  // No existing shared memory - nothing to clean
+        }
+        // Other errors (permission, etc.) - report but don't fail
+        perror("ipc_cleanup_stale: shmget check");
+        return 0;
+    }
+
+    // Shared memory exists - attach and check if main process is alive
+    SharedState *state = (SharedState *)shmat(shm_id, NULL, SHM_RDONLY);
+    if (state == (void *)-1) {
+        perror("ipc_cleanup_stale: shmat");
+        return 0;
+    }
+
+    pid_t main_pid = state->main_pid;
+    shmdt(state);
+
+    // Check if main process is still alive (kill with signal 0 checks existence)
+    if (main_pid > 0 && kill(main_pid, 0) == 0) {
+        // Process still exists - resources are in use
+        log_debug("IPC", "Found active simulation (PID %d), not cleaning", main_pid);
+        return 0;
+    }
+
+    // Main process is dead - clean up orphaned resources
+    write(STDERR_FILENO, "[INFO] [IPC] Cleaning stale IPC resources from previous run\n", 60);
+
+    // Remove message queues
+    int mq_ids[] = {
+        msgget(keys->mq_cashier_key, 0666),
+        msgget(keys->mq_platform_key, 0666),
+        msgget(keys->mq_boarding_key, 0666),
+        msgget(keys->mq_arrivals_key, 0666),
+        msgget(keys->mq_worker_key, 0666)
+    };
+    for (int i = 0; i < 5; i++) {
+        if (mq_ids[i] != -1) {
+            msgctl(mq_ids[i], IPC_RMID, NULL);
+        }
+    }
+
+    // Remove semaphores
+    int sem_id = semget(keys->sem_key, 0, 0666);
+    if (sem_id != -1) {
+        semctl(sem_id, 0, IPC_RMID);
+    }
+
+    // Remove shared memory
+    shmctl(shm_id, IPC_RMID, NULL);
+
+    return 1;
+}
 
 int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     memset(res, 0, sizeof(IPCResources));

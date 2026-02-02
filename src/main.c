@@ -257,6 +257,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // Clean up stale IPC resources from previous crashed run
+    ipc_cleanup_stale(&keys);
+
     // Create IPC resources
     if (ipc_create(&g_res, &keys, &cfg) == -1) {
         fprintf(stderr, "Error: Failed to create IPC resources\n");
