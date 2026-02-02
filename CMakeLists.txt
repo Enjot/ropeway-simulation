@@ -60,6 +60,11 @@ set(TOURIST_SOURCES
 add_executable(ropeway_simulation ${MAIN_SOURCES})
 target_link_libraries(ropeway_simulation pthread)
 
+# Define tourist executable path for the main simulation
+target_compile_definitions(ropeway_simulation PRIVATE
+    TOURIST_EXE_PATH="${CMAKE_BINARY_DIR}/tourist"
+)
+
 # Tourist executable (separate process, exec'd by generator)
 add_executable(tourist ${TOURIST_SOURCES})
 target_link_libraries(tourist pthread)

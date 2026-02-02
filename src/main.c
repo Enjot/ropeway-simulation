@@ -100,7 +100,10 @@ static void shutdown_workers(void) {
 int main(int argc, char *argv[]) {
     static char config_path[256];
     const char *config_name = "default.conf";
-    const char *tourist_exe = "./tourist";
+#ifndef TOURIST_EXE_PATH
+#error "TOURIST_EXE_PATH must be defined by CMake"
+#endif
+    const char *tourist_exe = TOURIST_EXE_PATH;
 
     // Parse arguments
     if (argc > 1) {
