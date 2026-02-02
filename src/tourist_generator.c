@@ -15,7 +15,6 @@
 
 static int g_running = 1;
 static int g_child_exited = 0;
-static pid_t g_tourist_pgid = 0;  // Process group for all tourists
 
 static void signal_handler(int sig) {
     if (sig == SIGTERM || sig == SIGINT) {
@@ -189,10 +188,7 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         }
 
         if (pid == 0) {
-            // Child process - join tourist process group
-            if (g_tourist_pgid > 0) {
-                setpgid(0, g_tourist_pgid);
-            }
+            // Child process - stays in foreground process group for SIGTSTP
             // exec tourist
             execl(tourist_exe, "tourist", id_str, age_str, type_str, vip_str,
                   kid_count_str, ticket_str, NULL);
@@ -202,13 +198,8 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
             _exit(1);
         }
 
-        // Parent process - set up process group
+        // Parent process - tourists stay in foreground group for SIGTSTP
         active_tourists++;
-        if (g_tourist_pgid == 0) {
-            // First tourist becomes process group leader
-            g_tourist_pgid = pid;
-        }
-        setpgid(pid, g_tourist_pgid);  // Add to tourist process group
 
         const char *type_names[] = {"walker", "cyclist", "family"};
         const char *type_name = type_names[type];
