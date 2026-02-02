@@ -51,6 +51,16 @@ typedef struct BikeThreadData {
 
 static int g_running = 1;
 
+/**
+ * Get the appropriate logging tag based on tourist type.
+ * Returns "FAMILY" for families, "CYCLIST" for cyclists, "TOURIST" for solo walkers.
+ */
+static const char *get_tourist_tag(const TouristData *data) {
+    if (data->type == TOURIST_CYCLIST) return "CYCLIST";
+    if (data->type == TOURIST_FAMILY) return "FAMILY";
+    return "TOURIST";
+}
+
 static void signal_handler(int sig) {
     if (sig == SIGTERM || sig == SIGINT) {
         g_running = 0;
@@ -79,8 +89,8 @@ static int parse_args(int argc, char *argv[], TouristData *data) {
 
     // Validate constraints
     if (data->kid_count > 0) {
-        if (data->type != TOURIST_WALKER) {
-            fprintf(stderr, "Error: Only walkers can have kids\n");
+        if (data->type != TOURIST_FAMILY) {
+            fprintf(stderr, "Error: Only family type can have kids\n");
             return -1;
         }
         if (data->age < 26) {
@@ -316,7 +326,7 @@ static int ride_chairlift(IPCResources *res, TouristData *data, time_t departure
     time_t now = time(NULL);
     double remaining = (double)(arrival_time - now);
 
-    log_info("TOURIST", "%d riding chairlift (%.1f real seconds)",
+    log_info(get_tourist_tag(data), "%d riding chairlift (%.1f real seconds)",
              data->id, travel_seconds);
 
     // Only sleep if we haven't already reached arrival time
@@ -344,6 +354,7 @@ static int arrive_upper(IPCResources *res, TouristData *data,
     ArrivalMsg msg;
     msg.mtype = 1;
     msg.tourist_id = data->id;
+    msg.tourist_type = data->type;    // For logging tag determination
     msg.kid_count = data->kid_count;  // For family logging at upper platform
     msg.chair_id = chair_id;
     msg.tourists_on_chair = tourists_on_chair;
@@ -365,10 +376,8 @@ static int arrive_upper(IPCResources *res, TouristData *data,
 static int descend_trail(IPCResources *res, TouristData *data) {
     int trail_time_sim;
 
-    if (data->type == TOURIST_WALKER) {
-        trail_time_sim = res->state->trail_walk_time;
-    } else {
-        // Cyclists randomly pick a trail
+    if (data->type == TOURIST_CYCLIST) {
+        // Cyclists randomly pick a bike trail
         int r = rand() % 3;
         switch (r) {
             case 0:
@@ -381,11 +390,14 @@ static int descend_trail(IPCResources *res, TouristData *data) {
                 trail_time_sim = res->state->trail_bike_slow_time;
                 break;
         }
+    } else {
+        // Walkers and families walk the trail
+        trail_time_sim = res->state->trail_walk_time;
     }
 
     double trail_seconds = time_sim_to_real_seconds(res->state, trail_time_sim);
 
-    log_info("TOURIST", "%d descending trail (%.1f real seconds)",
+    log_info(get_tourist_tag(data), "%d descending trail (%.1f real seconds)",
              data->id, trail_seconds);
 
     return pauseable_sleep(res, trail_seconds);
@@ -536,27 +548,29 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    const char *type_name = data.type == TOURIST_WALKER ? "walker" : "cyclist";
+    const char *tag = get_tourist_tag(&data);
+    const char *type_names[] = {"walker", "cyclist", "family"};
+    const char *type_name = type_names[data.type];
     if (data.kid_count > 0) {
-        log_info("TOURIST", "%d arrived (age %d, %s%s) with %d kid(s)",
+        log_info(tag, "%d arrived (age %d, %s%s) with %d kid(s)",
                  data.id, data.age, type_name, data.is_vip ? ", VIP" : "", data.kid_count);
     } else {
-        log_info("TOURIST", "%d arrived (age %d, %s%s)",
+        log_info(tag, "%d arrived (age %d, %s%s)",
                  data.id, data.age, type_name, data.is_vip ? ", VIP" : "");
     }
 
     // Buy ticket at cashier (parent buys for whole family)
     if (buy_ticket(&res, &data) == -1) {
-        log_info("TOURIST", "%d leaving (no ticket)", data.id);
+        log_info(tag, "%d leaving (no ticket)", data.id);
         goto cleanup_family;
     }
 
     const char *ticket_names[] = {"SINGLE", "TIME_T1", "TIME_T2", "TIME_T3", "DAILY"};
     if (data.kid_count > 0) {
-        log_info("TOURIST", "%d got %s family ticket for %d",
+        log_info(tag, "%d got %s family ticket for %d",
                  data.id, ticket_names[data.ticket_type], 1 + data.kid_count);
     } else {
-        log_info("TOURIST", "%d got %s ticket",
+        log_info(tag, "%d got %s ticket",
                  data.id, ticket_names[data.ticket_type]);
     }
 
@@ -569,12 +583,12 @@ int main(int argc, char *argv[]) {
 
         // Check exit conditions
         if (!is_ticket_valid(&res, &data)) {
-            log_info("TOURIST", "%d leaving (ticket expired)", data.id);
+            log_info(tag, "%d leaving (ticket expired)", data.id);
             break;
         }
 
         if (is_station_closing(&res)) {
-            log_info("TOURIST", "%d leaving (station closing)", data.id);
+            log_info(tag, "%d leaving (station closing)", data.id);
             break;
         }
 
@@ -587,7 +601,7 @@ int main(int argc, char *argv[]) {
 
         check_pause(&res);
 
-        log_info("TOURIST", "%d entered through gate", data.id);
+        log_info(tag, "%d entered through gate", data.id);
 
         // Enter lower station (wait if full)
         // Station slots = person + kids (bike doesn't count in waiting room)
@@ -612,10 +626,10 @@ int main(int argc, char *argv[]) {
         }
 
         if (data.kid_count > 0) {
-            log_info("TOURIST", "%d + %d kids in lower station (count: %d/%d)",
+            log_info(tag, "%d + %d kids in lower station (count: %d/%d)",
                      data.id, data.kid_count, count, res.state->station_capacity);
         } else {
-            log_info("TOURIST", "%d in lower station (count: %d/%d)",
+            log_info(tag, "%d in lower station (count: %d/%d)",
                      data.id, count, res.state->station_capacity);
         }
 
@@ -625,10 +639,10 @@ int main(int argc, char *argv[]) {
         if ((data.rides_completed == 0 || data.rides_completed == 1) && (rand() % 10) == 0) {
             const char *reason = (data.rides_completed == 0) ? "too scared to ride" : "that was too scary";
             if (data.kid_count > 0) {
-                log_info("TOURIST", "%d + %d kids leaving lower station (%s)",
+                log_info(tag, "%d + %d kids leaving lower station (%s)",
                          data.id, data.kid_count, reason);
             } else {
-                log_info("TOURIST", "%d leaving lower station (%s)", data.id, reason);
+                log_info(tag, "%d leaving lower station (%s)", data.id, reason);
             }
             // Release lower station slots (skip state update if shutdown)
             if (sem_wait_pauseable(&res, SEM_STATE, 1) == 0) {
@@ -650,7 +664,7 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        log_info("TOURIST", "%d passed through platform gate", data.id);
+        log_info(tag, "%d passed through platform gate", data.id);
 
         // Release station slots now that we're past the platform gate
         // (we're committed to boarding, so free up station capacity for others)
@@ -676,9 +690,9 @@ int main(int argc, char *argv[]) {
         sem_post(res.sem_id, SEM_PLATFORM_GATES, 1);
 
         if (data.kid_count > 0) {
-            log_info("TOURIST", "%d + %d kids boarded chairlift", data.id, data.kid_count);
+            log_info(tag, "%d + %d kids boarded chairlift", data.id, data.kid_count);
         } else {
-            log_info("TOURIST", "%d boarded chairlift", data.id);
+            log_info(tag, "%d boarded chairlift", data.id);
         }
 
         // Ride chairlift (synchronized with other passengers via departure_time)
@@ -701,25 +715,25 @@ int main(int argc, char *argv[]) {
         update_stats(&res, &data);
 
         if (data.kid_count > 0) {
-            log_info("TOURIST", "%d + %d kids completed ride #%d",
+            log_info(tag, "%d + %d kids completed ride #%d",
                      data.id, data.kid_count, data.rides_completed);
         } else {
-            log_info("TOURIST", "%d completed ride #%d",
+            log_info(tag, "%d completed ride #%d",
                      data.id, data.rides_completed);
         }
 
         // Single ticket: one ride only
         if (data.ticket_type == TICKET_SINGLE) {
-            log_info("TOURIST", "%d leaving (single ticket used)", data.id);
+            log_info(tag, "%d leaving (single ticket used)", data.id);
             break;
         }
     }
 
     if (data.kid_count > 0) {
-        log_info("TOURIST", "%d + %d kids exiting (total rides: %d)",
+        log_info(tag, "%d + %d kids exiting (total rides: %d)",
                  data.id, data.kid_count, data.rides_completed);
     } else {
-        log_info("TOURIST", "%d exiting (total rides: %d)",
+        log_info(tag, "%d exiting (total rides: %d)",
                  data.id, data.rides_completed);
     }
 

@@ -255,7 +255,7 @@ static void print_report(SharedState *state) {
     printf("----------------------------------------------\n");
 
     const char *ticket_names[] = {"SINGLE", "TIME_T1", "TIME_T2", "TIME_T3", "DAILY"};
-    const char *type_names[] = {"Walker", "Cyclist"};
+    const char *type_names[] = {"Walker", "Cyclist", "Family"};
 
     for (int i = 0; i < state->tourist_entry_count && i < state->max_tracked_tourists; i++) {
         TouristEntry *e = &state->tourist_entries[i];

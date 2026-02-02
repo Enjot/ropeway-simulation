@@ -28,6 +28,16 @@ typedef struct {
 static PendingBoarding g_pending[MAX_PENDING_PER_CHAIR];
 static int g_pending_count = 0;
 
+/**
+ * Get the appropriate logging tag for a tourist based on type.
+ * Returns "FAMILY" for families, "CYCLIST" for cyclists, "TOURIST" for solo walkers.
+ */
+static const char *get_tourist_tag(TouristType type) {
+    if (type == TOURIST_CYCLIST) return "CYCLIST";
+    if (type == TOURIST_FAMILY) return "FAMILY";
+    return "TOURIST";
+}
+
 static void signal_handler(int sig) {
     if (sig == SIGTERM || sig == SIGINT) {
         g_running = 0;
@@ -421,13 +431,15 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
 
         current_chair_slots += slots_needed;
 
-        const char *type_name = msg.tourist_type == TOURIST_WALKER ? "walker" : "cyclist";
+        const char *tag = get_tourist_tag(msg.tourist_type);
+        const char *type_names[] = {"walker", "cyclist", "family"};
+        const char *type_name = type_names[msg.tourist_type];
         if (msg.kid_count > 0) {
-            log_info("LOWER_WORKER", "Tourist %d (%s) + %d kid(s) (%d slots) boarded chair %d [%d/%d slots]",
+            log_info(tag, "Tourist %d (%s) + %d kid(s) (%d slots) boarded chair %d [%d/%d slots]",
                      msg.tourist_id, type_name, msg.kid_count, slots_needed,
                      chair_number, current_chair_slots, CHAIR_CAPACITY);
         } else {
-            log_info("LOWER_WORKER", "Tourist %d (%s, %d slots) boarded chair %d [%d/%d slots]",
+            log_info(tag, "Tourist %d (%s, %d slots) boarded chair %d [%d/%d slots]",
                      msg.tourist_id, type_name, slots_needed,
                      chair_number, current_chair_slots, CHAIR_CAPACITY);
         }

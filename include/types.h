@@ -49,7 +49,8 @@
 
 typedef enum {
     TOURIST_WALKER = 0,
-    TOURIST_CYCLIST = 1
+    TOURIST_CYCLIST = 1,
+    TOURIST_FAMILY = 2
 } TouristType;
 
 typedef enum {
@@ -207,6 +208,7 @@ typedef struct {
 typedef struct {
     long mtype;                     // Always 1
     int tourist_id;
+    TouristType tourist_type;       // Walker/cyclist (for logging tag determination)
     int kid_count;                  // Number of kids arriving with parent (for logging)
     int chair_id;                   // Which chair arrived (for tracking)
     int tourists_on_chair;          // Total tourists expected from this chair

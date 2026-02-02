@@ -188,7 +188,8 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
         }
 
         const char *ticket_names[] = {"SINGLE", "TIME_T1", "TIME_T2", "TIME_T3", "DAILY"};
-        const char *type_name = request.tourist_type == TOURIST_WALKER ? "walker" : "cyclist";
+        const char *type_names[] = {"walker", "cyclist", "family"};
+        const char *type_name = type_names[request.tourist_type];
 
         char valid_buf[8];
         time_format_minutes(valid_until, valid_buf, sizeof(valid_buf));

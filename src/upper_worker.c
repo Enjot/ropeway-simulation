@@ -18,6 +18,16 @@ static time_t g_last_danger_time = 0;       // Last danger detection (real time)
 static time_t g_emergency_start_time = 0;   // When current emergency started
 static int g_is_emergency_initiator = 0;    // 1 if this worker detected danger
 
+/**
+ * Get the appropriate logging tag for a tourist based on type.
+ * Returns "FAMILY" for families, "CYCLIST" for cyclists, "TOURIST" for solo walkers.
+ */
+static const char *get_tourist_tag(TouristType type) {
+    if (type == TOURIST_CYCLIST) return "CYCLIST";
+    if (type == TOURIST_FAMILY) return "FAMILY";
+    return "TOURIST";
+}
+
 static void signal_handler(int sig) {
     if (sig == SIGTERM || sig == SIGINT) {
         g_running = 0;
@@ -336,11 +346,12 @@ void upper_worker_main(IPCResources *res, IPCKeys *keys) {
         // Count parent + kids as separate arrivals
         arrivals_count += (1 + msg.kid_count);
 
+        const char *tag = get_tourist_tag(msg.tourist_type);
         if (msg.kid_count > 0) {
-            log_info("UPPER_WORKER", "Tourist %d + %d kid(s) arrived at upper platform (total arrivals: %d)",
+            log_info(tag, "Tourist %d + %d kid(s) arrived at upper platform (total arrivals: %d)",
                      msg.tourist_id, msg.kid_count, arrivals_count);
         } else {
-            log_info("UPPER_WORKER", "Tourist %d arrived at upper platform (total arrivals: %d)",
+            log_info(tag, "Tourist %d arrived at upper platform (total arrivals: %d)",
                      msg.tourist_id, arrivals_count);
         }
 

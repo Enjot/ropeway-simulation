@@ -157,6 +157,10 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         int kid_count = 0;
         if (type == TOURIST_WALKER && can_have_kids && age >= 26) {
             kid_count = generate_kid_count();
+            // Walker with kids becomes FAMILY type
+            if (kid_count > 0) {
+                type = TOURIST_FAMILY;
+            }
         }
 
         // Prepare arguments for exec
@@ -207,7 +211,8 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         }
         setpgid(pid, g_tourist_pgid);  // Add to tourist process group
 
-        const char *type_name = type == TOURIST_WALKER ? "walker" : "cyclist";
+        const char *type_names[] = {"walker", "cyclist", "family"};
+        const char *type_name = type_names[type];
         const char *ticket_names[] = {"SINGLE", "T1", "T2", "T3", "DAILY"};
         if (kid_count > 0) {
             log_debug("GENERATOR", "Spawned tourist %d: age=%d, type=%s, vip=%s, kids=%d, ticket=%s (PID %d)",
