@@ -97,8 +97,7 @@ int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     sem_values[SEM_EXIT_GATES] = EXIT_GATES;            // 2 gates
     sem_values[SEM_LOWER_STATION] = cfg->station_capacity;
     sem_values[SEM_CHAIRS] = MAX_CHAIRS_IN_TRANSIT;     // 36
-    sem_values[SEM_WORKER_READY] = 0;                   // (deprecated/unused)
-    sem_values[SEM_PAUSE] = 0;                          // (deprecated - kernel handles SIGTSTP)
+    sem_values[SEM_WORKER_READY] = 0;                   // Startup barrier (workers signal ready)
     sem_values[SEM_PLATFORM_GATES] = PLATFORM_GATES;    // 3 platform gates
     sem_values[SEM_EMERGENCY_CLEAR] = 0;                // Emergency clear (tourist waiters)
 
