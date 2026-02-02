@@ -15,7 +15,7 @@ static int g_debug_enabled = 1;
 
 // Color for each component type (indexed by LogComponent enum)
 static const char *g_component_colors[LOG_COMPONENT_COUNT] = {
-    [LOG_TOURIST]      = "\033[32m",  // green
+    [LOG_TOURIST]      = "\033[92m",  // bright green
     [LOG_CASHIER]      = "\033[33m",  // yellow
     [LOG_LOWER_WORKER] = "\033[34m",  // blue
     [LOG_UPPER_WORKER] = "\033[36m",  // cyan
@@ -71,10 +71,15 @@ void log_msg(const char *level, const char *component, const char *fmt, ...) {
     format_sim_time(time_buf, sizeof(time_buf));
 
     // Get color for this component (based on process's component type set at init)
+    // Special case: KID logs use bright green for visibility
     const char *color = "";
     const char *reset = "";
-    if (g_use_colors && g_component < LOG_COMPONENT_COUNT) {
-        color = g_component_colors[g_component];
+    if (g_use_colors) {
+        if (strcmp(component, "KID") == 0) {
+            color = "\033[32m";  // green for kids (darker than tourist's bright green)
+        } else if (g_component < LOG_COMPONENT_COUNT) {
+            color = g_component_colors[g_component];
+        }
         reset = COLOR_RESET;
     }
 

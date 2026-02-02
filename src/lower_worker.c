@@ -352,7 +352,7 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
                 if (g_pending_count > 0) {
                     dispatch_chair(res, chair_number, current_chair_slots);
                     current_chair_slots = 0;
-                    chair_number++;
+                    chair_number = (chair_number % TOTAL_CHAIRS) + 1;
                 }
                 usleep(100000);  // 100ms polling interval
                 continue;
@@ -395,7 +395,7 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
                 dispatch_chair(res, chair_number, current_chair_slots);
             }
             current_chair_slots = 0;
-            chair_number++;
+            chair_number = (chair_number % TOTAL_CHAIRS) + 1;
 
             // Put tourist back in queue with high priority
             msg.mtype = 1;  // VIP priority so they're next
@@ -436,7 +436,7 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
         if (current_chair_slots >= CHAIR_CAPACITY) {
             dispatch_chair(res, chair_number, current_chair_slots);
             current_chair_slots = 0;
-            chair_number++;
+            chair_number = (chair_number % TOTAL_CHAIRS) + 1;
         }
 
         // Check for random danger after each boarding

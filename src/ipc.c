@@ -316,7 +316,10 @@ int sem_wait(int sem_id, int sem_num, int count) {
     struct sembuf sop = {sem_num, -count, 0};
 
     if (semop(sem_id, &sop, 1) == -1) {
-        if (errno == EINTR || errno == EIDRM) {
+        // EINTR: interrupted by signal
+        // EIDRM: semaphore removed while blocked
+        // EINVAL: semaphore already removed before call
+        if (errno == EINTR || errno == EIDRM || errno == EINVAL) {
             return -1;  // Let caller check g_running / handle shutdown
         }
         perror("sem_wait: semop");
@@ -335,7 +338,9 @@ int sem_wait_pauseable(IPCResources *res, int sem_num, int count) {
     struct sembuf sop = {sem_num, -count, 0};
 
     while (semop(res->sem_id, &sop, 1) == -1) {
-        if (errno == EIDRM) {
+        // EIDRM: semaphore removed while blocked
+        // EINVAL: semaphore already removed before call
+        if (errno == EIDRM || errno == EINVAL) {
             return -1;  // Shutdown - IPC destroyed
         }
         if (errno == EINTR) {
@@ -357,7 +362,10 @@ int sem_post(int sem_id, int sem_num, int count) {
     struct sembuf sop = {sem_num, count, 0};
 
     if (semop(sem_id, &sop, 1) == -1) {
-        if (errno == EINTR || errno == EIDRM) {
+        // EINTR: interrupted by signal
+        // EIDRM: semaphore removed while blocked
+        // EINVAL: semaphore already removed before call
+        if (errno == EINTR || errno == EIDRM || errno == EINVAL) {
             return -1;  // Let caller check g_running / handle shutdown
         }
         perror("sem_post: semop");
@@ -373,8 +381,9 @@ int sem_trywait(int sem_id, int sem_num) {
         if (errno == EAGAIN) {
             return -1;  // Would block
         }
-        if (errno == EINTR) {
-            return -1;  // Interrupted
+        // EINTR, EIDRM, EINVAL: signal, shutdown, or semaphore already removed
+        if (errno == EINTR || errno == EIDRM || errno == EINVAL) {
+            return -1;
         }
         perror("sem_trywait: semop");
         return -1;
@@ -384,7 +393,7 @@ int sem_trywait(int sem_id, int sem_num) {
 
 int sem_getval(int sem_id, int sem_num) {
     int val = semctl(sem_id, sem_num, GETVAL);
-    if (val == -1) {
+    if (val == -1 && errno != EINVAL && errno != EIDRM) {
         perror("sem_getval: semctl GETVAL");
     }
     return val;
