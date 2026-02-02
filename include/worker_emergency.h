@@ -5,8 +5,8 @@
  * Eliminates code duplication between the two worker implementations.
  */
 
-#include "types.h"
-#include "ipc.h"
+#include "constants.h"
+#include "ipc/ipc.h"
 
 /**
  * Worker emergency state - each worker maintains its own instance.

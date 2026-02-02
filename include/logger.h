@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "ipc/shared_state.h"
 
 // Log levels
 #define LOG_DEBUG "DEBUG"

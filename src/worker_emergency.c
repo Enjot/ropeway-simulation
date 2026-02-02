@@ -1,4 +1,5 @@
 #include "worker_emergency.h"
+#include "ipc/messages.h"
 #include "logger.h"
 #include "time_sim.h"
 

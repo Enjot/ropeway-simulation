@@ -10,8 +10,7 @@
  * Other processes simply read the atomic time value - no time calculation needed.
  */
 
-#include "types.h"
-#include "ipc.h"
+#include "ipc/ipc.h"
 #include "logger.h"
 
 #include <signal.h>

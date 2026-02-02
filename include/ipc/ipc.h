@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "ipc/resources.h"
 #include "config.h"
 
 // Generate IPC keys using ftok

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "ipc/shared_state.h"
 #include "config.h"
 
 // Initialize time acceleration in shared state

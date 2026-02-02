@@ -1,8 +1,8 @@
-#include "types.h"
+#include "constants.h"
 #include "config.h"
 #include "logger.h"
 #include "time_sim.h"
-#include "ipc.h"
+#include "ipc/ipc.h"
 
 #include <stdio.h>
 #include <stdlib.h>

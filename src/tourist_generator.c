@@ -1,5 +1,5 @@
-#include "types.h"
-#include "ipc.h"
+#include "constants.h"
+#include "ipc/ipc.h"
 #include "logger.h"
 #include "time_sim.h"
 
