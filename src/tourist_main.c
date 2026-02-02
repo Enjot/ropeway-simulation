@@ -24,28 +24,17 @@ typedef struct TouristData {
     TicketType ticket_type;
     int ticket_valid_until;  // Sim minutes
     int rides_completed;
-    int slots_needed;        // 1 for walker, 2 for cyclist (includes kids)
+    int station_slots;       // For lower station: 1 + kid_count (bike doesn't count)
+    int chair_slots;         // For chair: walker=1, cyclist=2, plus kid_count
     int kid_count;           // Number of kids (0-2)
 } TouristData;
 
-// Family state for managing kid threads
+// Family state for kid/bike threads (simplified - just data, no sync primitives)
 typedef struct FamilyState {
-    pthread_mutex_t mutex;
-    pthread_barrier_t stage_barrier;      // First barrier: sync at stage start
-    pthread_barrier_t stage_ack_barrier;  // Second barrier: kids acknowledge stage capture
-
     int parent_id;
     int kid_count;
-    TouristStage current_stage;           // Current simulation stage
-    TouristStage last_synced_stage;       // Stage value for kid logging (avoids race condition)
-    int should_exit;                      // Flag for coordinated exit
-
-    // Shared IPC resources (inherited from parent)
+    int has_bike;
     IPCResources *res;
-
-    // Ticket info (same for all family members)
-    TicketType ticket_type;
-    int ticket_valid_until;
 } FamilyState;
 
 // Per-thread data for kid threads
@@ -53,6 +42,12 @@ typedef struct KidThreadData {
     int kid_index;           // 0 or 1 for kids
     FamilyState *family;
 } KidThreadData;
+
+// Per-thread data for bike thread
+typedef struct BikeThreadData {
+    int tourist_id;
+    FamilyState *family;
+} BikeThreadData;
 
 static int g_running = 1;
 
@@ -98,9 +93,12 @@ static int parse_args(int argc, char *argv[], TouristData *data) {
         }
     }
 
-    // Calculate total slots: walker=1, cyclist=2; kids take 1 each
-    int parent_slots = (data->type == TOURIST_CYCLIST) ? 2 : 1;
-    data->slots_needed = parent_slots + data->kid_count;
+    // Station capacity: person + kids (bike doesn't take waiting room space)
+    data->station_slots = 1 + data->kid_count;
+
+    // Chair capacity: walker=1, cyclist=2 (for bike), plus kids
+    int parent_chair = (data->type == TOURIST_CYCLIST) ? 2 : 1;
+    data->chair_slots = parent_chair + data->kid_count;
 
     return 0;
 }
@@ -113,66 +111,34 @@ static void check_pause(IPCResources *res) {
 
 /**
  * Kid thread function.
- * Kids simply follow their parent through each stage using barrier synchronization.
- * The parent handles all IPC communication for the family.
+ * Kids just log and exit immediately - parent handles all actions.
+ * Thread resources are cleaned up via pthread_join() at parent cleanup.
  */
 static void *kid_thread_func(void *arg) {
     KidThreadData *td = (KidThreadData *)arg;
     FamilyState *family = td->family;
     int kid_idx = td->kid_index;
 
-    // Enable async cancellation so pthread_cancel() works even during barrier_wait
-    // pthread_barrier_wait is NOT a cancellation point, so we need this
-    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-    log_info("KID", "Tourist %d's kid #%d started",
-             family->parent_id, kid_idx + 1);
-
-    while (!family->should_exit) {
-        // Wait at barrier for parent to complete each stage
-        int rc = pthread_barrier_wait(&family->stage_barrier);
-        if (rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
-            break;  // Barrier destroyed or error
-        }
-
-        if (family->should_exit) break;
-
-        // Capture stage immediately after barrier (before parent can overwrite)
-        TouristStage synced_stage = family->last_synced_stage;
-
-        // Signal parent we've captured the stage
-        pthread_barrier_wait(&family->stage_ack_barrier);
-
-        // Kid just follows parent - no independent actions needed
-        log_debug("KID", "Tourist %d's kid #%d completed stage %d",
-                  family->parent_id, kid_idx + 1, synced_stage);
-    }
-
-    log_info("KID", "Tourist %d's kid #%d exiting",
-             family->parent_id, kid_idx + 1);
+    log_info("KID", "Tourist %d's kid #%d started", family->parent_id, kid_idx + 1);
+    // Thread exits immediately - no zombie, just waits for join
+    log_info("KID", "Tourist %d's kid #%d exiting", family->parent_id, kid_idx + 1);
 
     return NULL;
 }
 
 /**
- * Synchronize parent with kid threads at stage boundaries.
- * Does nothing if no kids or if shutdown is in progress.
- * Returns 0 on success, -1 if shutdown detected.
+ * Bike thread function (for cyclists).
+ * Bikes just log and exit immediately - parent handles all actions.
+ * Thread resources are cleaned up via pthread_join() at parent cleanup.
  */
-static int sync_with_kids(FamilyState *family, TouristStage stage) {
-    if (family->kid_count > 0) {
-        // Check if shutting down - don't wait on barrier
-        if (!g_running || family->should_exit) {
-            return -1;
-        }
-        family->current_stage = stage;
-        family->last_synced_stage = stage;  // Set before barrier for kid logging
-        pthread_barrier_wait(&family->stage_barrier);
-        // Wait for kids to capture stage before proceeding (prevents race condition)
-        pthread_barrier_wait(&family->stage_ack_barrier);
-    }
-    return 0;
+static void *bike_thread_func(void *arg) {
+    BikeThreadData *td = (BikeThreadData *)arg;
+
+    log_info("BIKE", "Tourist %d's bike ready", td->tourist_id);
+    // Thread exits immediately
+    log_info("BIKE", "Tourist %d's bike stored", td->tourist_id);
+
+    return NULL;
 }
 
 // Pause-aware sleep (handles SIGTSTP during sleep)
@@ -299,7 +265,7 @@ static int board_chair(IPCResources *res, TouristData *data, time_t *departure_t
     msg.mtype = 2;  // No VIP priority at boarding (VIPs skip entry gates instead)
     msg.tourist_id = data->id;
     msg.tourist_type = data->type;
-    msg.slots_needed = data->slots_needed;  // Includes kids for families
+    msg.slots_needed = data->chair_slots;  // Chair slots include bike for cyclists
     msg.kid_count = data->kid_count;
 
     if (msgsnd(res->mq_platform_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
@@ -491,8 +457,12 @@ int main(int argc, char *argv[]) {
     FamilyState family;
     pthread_t kid_threads[MAX_KIDS_PER_ADULT];
     KidThreadData kid_data[MAX_KIDS_PER_ADULT];
+    pthread_t bike_thread;
+    BikeThreadData bike_data;
+    int bike_thread_created = 0;
 
     memset(&family, 0, sizeof(family));
+    memset(&bike_data, 0, sizeof(bike_data));
 
     if (parse_args(argc, argv, &data) == -1) {
         return 1;
@@ -527,47 +497,39 @@ int main(int argc, char *argv[]) {
     logger_init(res.state, LOG_TOURIST);
     logger_set_debug_enabled(res.state->debug_logs_enabled);
 
-    // Initialize family state
+    // Initialize family state (simple data only - no sync primitives)
     family.parent_id = data.id;
     family.kid_count = data.kid_count;
+    family.has_bike = (data.type == TOURIST_CYCLIST);
     family.res = &res;
-    family.should_exit = 0;
-    family.current_stage = STAGE_AT_CASHIER;
 
-    // Initialize synchronization primitives for family
+    // Spawn bike thread if cyclist (thread exits immediately after logging)
+    if (data.type == TOURIST_CYCLIST) {
+        bike_data.tourist_id = data.id;
+        bike_data.family = &family;
+        if (pthread_create(&bike_thread, NULL, bike_thread_func, &bike_data) != 0) {
+            perror("tourist: pthread_create bike");
+            ipc_detach(&res);
+            return 1;
+        }
+        bike_thread_created = 1;
+    }
+
+    // Spawn kid threads (threads exit immediately after logging)
     if (data.kid_count > 0) {
-        pthread_mutex_init(&family.mutex, NULL);
-
-        // Barriers for parent + all kids (two barriers for race-free stage sync)
-        int barrier_count = 1 + data.kid_count;
-        if (pthread_barrier_init(&family.stage_barrier, NULL, barrier_count) != 0) {
-            fprintf(stderr, "tourist %d: Failed to create stage barrier\n", data.id);
-            ipc_detach(&res);
-            return 1;
-        }
-        if (pthread_barrier_init(&family.stage_ack_barrier, NULL, barrier_count) != 0) {
-            fprintf(stderr, "tourist %d: Failed to create ack barrier\n", data.id);
-            pthread_barrier_destroy(&family.stage_barrier);
-            ipc_detach(&res);
-            return 1;
-        }
-
-        // Spawn kid threads
         for (int i = 0; i < data.kid_count; i++) {
             kid_data[i].kid_index = i;
             kid_data[i].family = &family;
 
             if (pthread_create(&kid_threads[i], NULL, kid_thread_func, &kid_data[i]) != 0) {
                 perror("tourist: pthread_create kid");
-                // Clean up already-created threads
-                family.should_exit = 1;
+                // Join already-created threads
                 for (int j = 0; j < i; j++) {
-                    pthread_barrier_wait(&family.stage_barrier);
                     pthread_join(kid_threads[j], NULL);
                 }
-                pthread_barrier_destroy(&family.stage_barrier);
-                pthread_barrier_destroy(&family.stage_ack_barrier);
-                pthread_mutex_destroy(&family.mutex);
+                if (bike_thread_created) {
+                    pthread_join(bike_thread, NULL);
+                }
                 ipc_detach(&res);
                 return 1;
             }
@@ -589,11 +551,6 @@ int main(int argc, char *argv[]) {
         goto cleanup_family;
     }
 
-    // Store ticket info in family state for kids
-    family.ticket_type = data.ticket_type;
-    family.ticket_valid_until = data.ticket_valid_until;
-    family.current_stage = STAGE_AT_ENTRY_GATES;  // Moving to entry gates after buying ticket
-
     const char *ticket_names[] = {"SINGLE", "TIME_T1", "TIME_T2", "TIME_T3", "DAILY"};
     if (data.kid_count > 0) {
         log_info("TOURIST", "%d got %s family ticket for %d",
@@ -609,7 +566,6 @@ int main(int argc, char *argv[]) {
     // Main ride loop
     while (g_running && res.state->running) {
         check_pause(&res);
-        sync_with_kids(&family, STAGE_AT_ENTRY_GATES);
 
         // Check exit conditions
         if (!is_ticket_valid(&res, &data)) {
@@ -630,25 +586,23 @@ int main(int argc, char *argv[]) {
         }
 
         check_pause(&res);
-        sync_with_kids(&family, STAGE_ENTERED_LOWER_STATION);
 
         log_info("TOURIST", "%d entered through gate", data.id);
 
         // Enter lower station (wait if full)
-        // Family atomically acquires slots to enforce capacity correctly
-        int family_size = 1 + data.kid_count;
-        if (sem_wait_pauseable(&res, SEM_LOWER_STATION, family_size) == -1) {
+        // Station slots = person + kids (bike doesn't count in waiting room)
+        if (sem_wait_pauseable(&res, SEM_LOWER_STATION, data.station_slots) == -1) {
             if (!data.is_vip) sem_post(res.sem_id, SEM_ENTRY_GATES, 1);
             break;
         }
 
-        // Update station count for logging (count whole family)
+        // Update station count for logging
         if (sem_wait_pauseable(&res, SEM_STATE, 1) == -1) {
             if (!data.is_vip) sem_post(res.sem_id, SEM_ENTRY_GATES, 1);
-            sem_post(res.sem_id, SEM_LOWER_STATION, family_size);
+            sem_post(res.sem_id, SEM_LOWER_STATION, data.station_slots);
             break;
         }
-        res.state->lower_station_count += family_size;
+        res.state->lower_station_count += data.station_slots;
         int count = res.state->lower_station_count;
         sem_post(res.sem_id, SEM_STATE, 1);
 
@@ -666,7 +620,6 @@ int main(int argc, char *argv[]) {
         }
 
         check_pause(&res);
-        sync_with_kids(&family, STAGE_QUEUED_FOR_PLATFORM);
 
         // ~10% chance to leave: before first ride (too scared) or after first ride (was too scary)
         if ((data.rides_completed == 0 || data.rides_completed == 1) && (rand() % 10) == 0) {
@@ -679,10 +632,10 @@ int main(int argc, char *argv[]) {
             }
             // Release lower station slots (skip state update if shutdown)
             if (sem_wait_pauseable(&res, SEM_STATE, 1) == 0) {
-                res.state->lower_station_count -= family_size;
+                res.state->lower_station_count -= data.station_slots;
                 sem_post(res.sem_id, SEM_STATE, 1);
             }
-            sem_post(res.sem_id, SEM_LOWER_STATION, family_size);
+            sem_post(res.sem_id, SEM_LOWER_STATION, data.station_slots);
             break;
         }
 
@@ -690,10 +643,10 @@ int main(int argc, char *argv[]) {
         if (sem_wait_pauseable(&res, SEM_PLATFORM_GATES, 1) == -1) {
             // Cleanup on failure - skip state update if shutdown
             if (sem_wait_pauseable(&res, SEM_STATE, 1) == 0) {
-                res.state->lower_station_count -= family_size;
+                res.state->lower_station_count -= data.station_slots;
                 sem_post(res.sem_id, SEM_STATE, 1);
             }
-            sem_post(res.sem_id, SEM_LOWER_STATION, family_size);
+            sem_post(res.sem_id, SEM_LOWER_STATION, data.station_slots);
             break;
         }
 
@@ -702,13 +655,12 @@ int main(int argc, char *argv[]) {
         // Release station slots now that we're past the platform gate
         // (we're committed to boarding, so free up station capacity for others)
         if (sem_wait_pauseable(&res, SEM_STATE, 1) == 0) {
-            res.state->lower_station_count -= family_size;
+            res.state->lower_station_count -= data.station_slots;
             sem_post(res.sem_id, SEM_STATE, 1);
         }
-        sem_post(res.sem_id, SEM_LOWER_STATION, family_size);
+        sem_post(res.sem_id, SEM_LOWER_STATION, data.station_slots);
 
         check_pause(&res);
-        sync_with_kids(&family, STAGE_AT_LOWER_PLATFORM);
 
         // Board chair (family boards together)
         time_t departure_time = 0;
@@ -728,26 +680,22 @@ int main(int argc, char *argv[]) {
         } else {
             log_info("TOURIST", "%d boarded chairlift", data.id);
         }
-        sync_with_kids(&family, STAGE_ON_CHAIR);
 
         // Ride chairlift (synchronized with other passengers via departure_time)
         if (ride_chairlift(&res, &data, departure_time) == -1) {
             // Note: SEM_CHAIRS is managed by lower_worker/upper_worker, not tourist
             break;
         }
-        sync_with_kids(&family, STAGE_RIDE_COMPLETE);
 
         // Arrive at upper platform (pass chair info for atomic SEM_CHAIRS release)
         if (arrive_upper(&res, &data, chair_id, tourists_on_chair) == -1) {
             break;
         }
-        sync_with_kids(&family, STAGE_AT_UPPER_PLATFORM_GATES);
 
         // Descend trail
         if (descend_trail(&res, &data) == -1) {
             break;
         }
-        sync_with_kids(&family, STAGE_ON_TRAIL);
 
         data.rides_completed++;
         update_stats(&res, &data);
@@ -776,24 +724,14 @@ int main(int argc, char *argv[]) {
     }
 
 cleanup_family:
-    family.current_stage = STAGE_LEAVING;
+    // Join bike thread if created (returns immediately - thread already exited)
+    if (bike_thread_created) {
+        pthread_join(bike_thread, NULL);
+    }
 
-    // Signal kids to exit and join threads
-    if (data.kid_count > 0) {
-        family.should_exit = 1;
-
-        // Cancel kid threads - they might be stuck in barrier_wait
-        for (int i = 0; i < data.kid_count; i++) {
-            pthread_cancel(kid_threads[i]);
-        }
-
-        for (int i = 0; i < data.kid_count; i++) {
-            pthread_join(kid_threads[i], NULL);
-        }
-
-        pthread_barrier_destroy(&family.stage_barrier);
-        pthread_barrier_destroy(&family.stage_ack_barrier);
-        pthread_mutex_destroy(&family.mutex);
+    // Join kid threads (returns immediately - threads already exited)
+    for (int i = 0; i < data.kid_count; i++) {
+        pthread_join(kid_threads[i], NULL);
     }
 
     ipc_detach(&res);
