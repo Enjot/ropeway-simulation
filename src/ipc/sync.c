@@ -10,7 +10,7 @@
 
 /**
  * Wait for emergency stop to clear.
- * Uses semaphore blocking instead of usleep polling (issue #4 fix).
+ * Uses semaphore blocking instead of usleep polling.
  */
 void ipc_wait_emergency_clear(IPCResources *res) {
     if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {

@@ -46,7 +46,7 @@ int sem_wait_pauseable(IPCResources *res, int sem_num, int count);
 // Get current semaphore value
 int sem_getval(int sem_id, int sem_num);
 
-// Wait for emergency stop to clear (issue #4 fix - replaces usleep polling)
+// Wait for emergency stop to clear
 // Properly tracks emergency_waiters for reliable wakeup
 void ipc_wait_emergency_clear(IPCResources *res);
 

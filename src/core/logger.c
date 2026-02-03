@@ -1,5 +1,5 @@
 #include "core/logger.h"
-#include "core/time_sim.h"  // Issue #12 fix: Use time_sim functions instead of duplicating
+#include "core/time_sim.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -37,10 +37,7 @@ void logger_set_debug_enabled(int enabled) {
     g_debug_enabled = enabled;
 }
 
-// Issue #12 fix: Removed duplicated get_sim_minutes() - use time_get_sim_minutes() instead
-
 // Format sim time as HH:MM:SS
-// Issue #12 fix: Uses time_get_sim_minutes_f() for accurate seconds
 static void format_sim_time(char *buf, int buf_size) {
     double total_sim_minutes = g_state ? time_get_sim_minutes_f(g_state) : 0.0;
     int total_minutes = (int)total_sim_minutes;

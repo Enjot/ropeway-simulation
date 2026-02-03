@@ -19,7 +19,6 @@ int tourist_board_chair(IPCResources *res, TouristData *data, time_t *departure_
 
     // Kernel handles SIGTSTP automatically
 
-    // Issue #2, #4 fix: Check emergency stop with semaphore protection and blocking
     if (sem_wait_pauseable(res, SEM_STATE, 1) == -1) {
         return -1;
     }
@@ -27,7 +26,6 @@ int tourist_board_chair(IPCResources *res, TouristData *data, time_t *departure_
     sem_post(res->sem_id, SEM_STATE, 1);
 
     if (emergency) {
-        // Issue #4 fix: Block on semaphore instead of polling with usleep
         ipc_wait_emergency_clear(res);
     }
 
@@ -42,7 +40,6 @@ int tourist_board_chair(IPCResources *res, TouristData *data, time_t *departure_
 
     if (msgsnd(res->mq_platform_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
         if (errno == EINTR) return -1;
-        // Issue #6 fix: Check for EIDRM
         if (errno == EIDRM) {
             return -1;
         }
@@ -60,7 +57,6 @@ int tourist_board_chair(IPCResources *res, TouristData *data, time_t *departure_
                 // Kernel handles SIGTSTP automatically
                 continue;
             }
-            // Issue #6 fix: Check for EIDRM
             if (errno == EIDRM) {
                 return -1;
             }
@@ -99,7 +95,6 @@ int tourist_arrive_upper(IPCResources *res, TouristData *data,
     msg.tourists_on_chair = tourists_on_chair;
 
     if (msgsnd(res->mq_arrivals_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
-        // Issue #6 fix: Check for EIDRM (queue removed during shutdown)
         if (errno != EINTR && errno != EIDRM) {
             perror("tourist: msgsnd arrivals");
         }

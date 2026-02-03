@@ -207,8 +207,7 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
             continue;
         }
 
-        // Issue #16 fix: Clarify comment - msgrcv with -2 returns lowest mtype first
-        // (1=VIP before 2=regular, so VIPs are processed first)
+        // msgrcv with -2 returns lowest mtype first (1=VIP before 2=regular)
         // Use IPC_NOWAIT for polling - dispatch chair when queue is empty
         PlatformMsg msg;
         ssize_t ret = msgrcv(res->mq_platform_id, &msg, sizeof(msg) - sizeof(long), -2, IPC_NOWAIT);
@@ -235,7 +234,6 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
             continue;
         }
 
-        // Issue #2 fix: Check emergency stop with semaphore protection
         if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
             continue;  // Check loop condition on failure
         }
@@ -267,7 +265,6 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
             // Put tourist back in queue with high priority
             msg.mtype = 1;  // VIP priority so they're next
             if (msgsnd(res->mq_platform_id, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
-                // Issue #6 fix: Check for EIDRM
                 if (errno == EIDRM) {
                     log_debug("LOWER_WORKER", "Platform queue removed during requeue");
                     break;

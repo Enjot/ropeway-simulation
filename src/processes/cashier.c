@@ -145,7 +145,6 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
             response.ticket_type = -1;
 
             if (msgsnd(res->mq_cashier_id, &response, sizeof(response) - sizeof(long), 0) == -1) {
-                // Issue #6 fix: Check for EIDRM
                 if (errno == EIDRM) break;
                 if (errno != EINTR) perror("cashier: msgsnd rejection");
             }
@@ -181,7 +180,6 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
 
         if (msgsnd(res->mq_cashier_id, &response, sizeof(response) - sizeof(long), 0) == -1) {
             if (errno == EINTR) continue;
-            // Issue #6 fix: Check for EIDRM
             if (errno == EIDRM) {
                 log_debug("CASHIER", "Message queue removed during send");
                 break;

@@ -50,7 +50,7 @@ typedef struct {
     int running;                    // 0 = shutdown
     int closing;                    // 1 = stop accepting new tourists
     int emergency_stop;             // 1 = chairlift stopped (SIGUSR1)
-    int emergency_waiters;          // Count of processes waiting on SEM_EMERGENCY_CLEAR (issue #4 fix)
+    int emergency_waiters;          // Count of processes waiting on SEM_EMERGENCY_CLEAR
 
     // Statistics (protected by SEM_STATS)
     int total_tourists;             // Total tourists spawned

@@ -23,7 +23,6 @@ int tourist_buy_ticket(IPCResources *res, TouristData *data) {
 
     // Send request
     if (msgsnd(res->mq_cashier_id, &request, sizeof(request) - sizeof(long), 0) == -1) {
-        // Issue #6 fix: Check for EIDRM
         if (errno == EIDRM) return -1;
         perror("tourist: msgsnd cashier request");
         return -1;
@@ -37,7 +36,6 @@ int tourist_buy_ticket(IPCResources *res, TouristData *data) {
                              MSG_CASHIER_RESPONSE_BASE + data->id, 0);
         if (ret == -1) {
             if (errno == EINTR) continue;
-            // Issue #6 fix: Check for EIDRM
             if (errno == EIDRM) return -1;
             perror("tourist: msgrcv cashier response");
             return -1;

@@ -149,7 +149,6 @@ int config_validate(const Config *cfg) {
         valid = 0;
     }
 
-    // Issue #13 fix: Add minute field validation (0-59)
     if (cfg->sim_start_minute < 0 || cfg->sim_start_minute > 59) {
         fprintf(stderr, "config: SIM_START_MINUTE must be 0-59\n");
         valid = 0;
