@@ -17,8 +17,6 @@ int tourist_board_chair(IPCResources *res, TouristData *data, time_t *departure_
     // Note: SEM_CHAIRS is now acquired by lower_worker when chair departs,
     // and released by upper_worker when all tourists from that chair arrive.
 
-    // Kernel handles SIGTSTP automatically
-
     if (sem_wait_pauseable(res, SEM_STATE, 1) == -1) {
         return -1;
     }
@@ -54,7 +52,6 @@ int tourist_board_chair(IPCResources *res, TouristData *data, time_t *departure_
                              sizeof(response) - sizeof(long), data->id, 0);
         if (ret == -1) {
             if (errno == EINTR) {
-                // Kernel handles SIGTSTP automatically
                 continue;
             }
             if (errno == EIDRM) {
@@ -82,8 +79,6 @@ int tourist_arrive_upper(IPCResources *res, TouristData *data,
     if (sem_wait_pauseable(res, SEM_EXIT_GATES, 1) == -1) {
         return -1;
     }
-
-    // Kernel handles SIGTSTP automatically
 
     // Notify upper worker of arrival (with chair info for tracking)
     ArrivalMsg msg;

@@ -9,8 +9,8 @@
 #include <sys/ipc.h>
 
 int ipc_generate_keys(IPCKeys *keys, const char *path) {
-    keys->shm_key = ftok(path, 'S');  // Shared memory
-    keys->sem_key = ftok(path, 'E');  // Semaphores
+    keys->shm_key = ftok(path, 'S');
+    keys->sem_key = ftok(path, 'E');
     keys->mq_cashier_key = ftok(path, 'C');
     keys->mq_platform_key = ftok(path, 'P');
     keys->mq_boarding_key = ftok(path, 'B');

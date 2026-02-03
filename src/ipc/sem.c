@@ -30,16 +30,16 @@ int ipc_sem_create(IPCResources *res, key_t key, const Config *cfg) {
     union semun arg;
     unsigned short sem_values[SEM_COUNT];
 
-    sem_values[SEM_STATE] = 1;                          // Mutex
-    sem_values[SEM_STATS] = 1;                          // Mutex
-    sem_values[SEM_ENTRY_GATES] = ENTRY_GATES;          // 4 gates
-    sem_values[SEM_EXIT_GATES] = EXIT_GATES;            // 2 gates
+    sem_values[SEM_STATE] = 1;
+    sem_values[SEM_STATS] = 1;
+    sem_values[SEM_ENTRY_GATES] = ENTRY_GATES;
+    sem_values[SEM_EXIT_GATES] = EXIT_GATES;
     sem_values[SEM_LOWER_STATION] = cfg->station_capacity;
-    sem_values[SEM_CHAIRS] = MAX_CHAIRS_IN_TRANSIT;     // 36
-    sem_values[SEM_WORKER_READY] = 0;                   // Startup barrier (workers signal ready)
-    sem_values[SEM_PLATFORM_GATES] = PLATFORM_GATES;    // 3 platform gates
-    sem_values[SEM_EMERGENCY_CLEAR] = 0;                // Emergency clear (tourist waiters)
-    sem_values[SEM_EMERGENCY_LOCK] = 1;                 // Emergency initiator mutex (binary)
+    sem_values[SEM_CHAIRS] = MAX_CHAIRS_IN_TRANSIT;
+    sem_values[SEM_WORKER_READY] = 0;  // Startup barrier
+    sem_values[SEM_PLATFORM_GATES] = PLATFORM_GATES;
+    sem_values[SEM_EMERGENCY_CLEAR] = 0;
+    sem_values[SEM_EMERGENCY_LOCK] = 1;
 
     arg.array = sem_values;
     if (semctl(res->sem_id, 0, SETALL, arg) == -1) {

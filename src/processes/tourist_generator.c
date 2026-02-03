@@ -78,7 +78,9 @@ static int generate_kid_count(void) {
 }
 
 
-// Generate tourist type (walker or cyclist)
+/**
+ * Generate tourist type based on walker/cyclist percentage config.
+ */
 static TouristType generate_type(SharedState *state) {
     return (rand() % 100) < state->walker_percentage ? TOURIST_WALKER : TOURIST_CYCLIST;
 }
@@ -96,7 +98,9 @@ static TicketType select_ticket_type(void) {
     return TICKET_DAILY;
 }
 
-// Check if tourist is VIP
+/**
+ * Check if tourist should be VIP based on percentage config.
+ */
 static int is_vip(SharedState *state) {
     return (rand() % 100) < state->vip_percentage;
 }
@@ -136,8 +140,6 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         int reaped = reap_zombies();
         active_tourists -= reaped;
         if (active_tourists < 0) active_tourists = 0;
-
-        // Kernel handles SIGTSTP/SIGCONT automatically
 
         // Check if closing
         if (res->state->closing) {
@@ -238,8 +240,6 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         }
 
         if (active_tourists > 0) {
-            // Kernel handles SIGTSTP/SIGCONT automatically
-
             // If simulation ended, wait for remaining tourists with timeout
             if (!res->state->running) {
                 usleep(100000);  // 100ms between checks

@@ -26,7 +26,9 @@ static int g_is_emergency_initiator = 0;         // 1 if this worker detected da
 // State pointers for worker_emergency functions
 static WorkerEmergencyState g_emergency_state;
 
-// Buffer for tourists waiting on current chair (for synchronized departures)
+/**
+ * @brief Buffered tourist awaiting chair departure.
+ */
 typedef struct {
     int tourist_id;
     int slots_needed;
@@ -48,8 +50,6 @@ static const char *get_tourist_tag(TouristType type) {
 
 // Use macro-generated signal handler for emergency-capable workers
 DEFINE_EMERGENCY_SIGNAL_HANDLER(signal_handler, "LOWER_WORKER")
-
-// Note: Emergency functions moved to worker_emergency.c (shared module)
 
 /**
  * Check for random danger and trigger emergency stop if detected.
@@ -175,8 +175,6 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
             log_debug("LOWER_WORKER", "Resume signal (SIGUSR2) received");
         }
 
-        // Kernel handles SIGTSTP/SIGCONT automatically
-
         // Check if we're the emergency initiator and need to wait for duration
         if (g_is_emergency_initiator && g_emergency_start_time_sim > 0) {
             // Use simulated time for duration (already accounts for pause)
@@ -188,8 +186,7 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
                 worker_initiate_resume(res, WORKER_LOWER, &g_emergency_state);
             } else {
                 // Still in cooldown - sleep briefly
-                // Kernel handles SIGTSTP/SIGCONT automatically
-                usleep(100000);  // 100ms (timing only, not IPC sync)
+                usleep(100000);
             }
             continue;
         }

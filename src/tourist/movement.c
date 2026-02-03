@@ -23,9 +23,7 @@ int tourist_pauseable_sleep(IPCResources *res, double real_seconds, int *running
         int ret = nanosleep(&ts, &ts);
 
         if (ret == -1 && errno == EINTR) {
-            // Check if paused
-            // Kernel handles SIGTSTP automatically
-            // Recalculate remaining
+            // Signal interrupted sleep - recalculate remaining time
             remaining = real_seconds - (double)(time(NULL) - start);
         } else {
             break;
