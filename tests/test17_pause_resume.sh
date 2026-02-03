@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 17: Pause/Resume Test (SIGTSTP/SIGCONT)
-# Verify simulated time accounts for pause correctly
+#
+# Goal: Simulated time offset adjusts for pause duration.
+#
+# Rationale: Tests SIGTSTP/SIGCONT handlers in time_server. Pause duration
+# must be added to time_offset so accelerated simulation time doesn't jump.
+# Without offset adjustment: tickets expire during pause, time discontinuity.
+#
+# Parameters: SIGTSTP for 5s, then SIGCONT.
+#
+# Expected outcome: Time continues smoothly after resume. No expired tickets.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

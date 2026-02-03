@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 18: Rapid Signals Test
-# Verify signal handler safety under rapid signal delivery
+#
+# Goal: No crash under rapid signal delivery.
+#
+# Rationale: Tests signal handler reentrancy. Rapid SIGUSR1 can interrupt
+# handler mid-execution. Non-async-signal-safe functions (malloc, printf)
+# in handler cause undefined behavior. Must use only safe functions.
+#
+# Parameters: 10 SIGUSR1 signals with 100ms delay.
+#
+# Expected outcome: No segfault. No hang. Simulation survives signal storm.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

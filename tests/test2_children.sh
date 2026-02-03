@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 2: Children Under 8 with Guardians
-# Verify that children (ages 4-7) board with guardians and no adult has more than 2 kids
+#
+# Goal: Children board with guardians, max 2 kids per adult.
+#
+# Rationale: Tests atomic multi-slot semaphore acquisition for families.
+# sem_wait_n(SEM_LOWER_STATION, family_size) must be atomic - partial
+# acquisition would split family or cause deadlock if slots < family_size.
+#
+# Parameters: walker_percentage=100 (high family probability), tourists=50.
+#
+# Expected outcome: Families board together. No adult has >2 kids. No deadlock.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

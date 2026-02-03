@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 12: All VIPs Edge Case
-# Verify same-priority ordering when all tourists are VIPs
+#
+# Goal: All tourists served when everyone has same mtype=1 priority.
+#
+# Rationale: Tests msgrcv() behavior when all messages have identical mtype.
+# Verifies FIFO ordering within same priority level. Edge case where priority
+# differentiation provides no benefit - system must still function.
+#
+# Parameters: vip_percentage=100, tourists=30, simulation_time=90s.
+#
+# Expected outcome: FIFO order maintained. All tourists served. No starvation.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

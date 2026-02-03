@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 5: High Throughput Stress Test
-# Verify no deadlocks under high load with 500 tourists, rapid spawning
+#
+# Goal: Simulation completes without timeout under high concurrency.
+#
+# Rationale: Tests for deadlock between MQ_CASHIER, MQ_PLATFORM, MQ_BOARDING
+# under load. 500 concurrent tourists stress all semaphores and message queues
+# simultaneously - exposes circular wait conditions or semaphore exhaustion.
+#
+# Parameters: tourists=500, spawn_delay=0, station_capacity=50, simulation_time=300s.
+#
+# Expected outcome: No timeout (deadlock). No zombies. IPC cleaned.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

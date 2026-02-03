@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 15: SIGKILL Recovery Test
-# Verify stale IPC cleanup when starting after crash
+#
+# Goal: New run cleans orphaned IPC from previous crash.
+#
+# Rationale: SIGKILL bypasses signal handlers - no ipc_cleanup() runs.
+# Tests ipc_cleanup_stale() at startup: must detect orphaned resources via
+# ftok() key collision and remove before creating new IPC objects.
+#
+# Parameters: SIGKILL first run, start second run, verify stale cleanup.
+#
+# Expected outcome: Second run succeeds. Stale IPC cleaned. Log shows cleanup.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 4: Emergency Stop and Resume (Signals)
-# Verify SIGUSR1 stops chairlift, SIGUSR2 resumes after workers ready
+#
+# Goal: SIGUSR1 stops chairlift, SIGUSR2 resumes after worker confirmation.
+#
+# Rationale: Tests signal handler coordination via SEM_EMERGENCY_LOCK and
+# SEM_EMERGENCY_CLEAR. Race condition possible if both workers try to initiate
+# emergency simultaneously. Resume requires both workers to signal ready.
+#
+# Parameters: Manual SIGUSR1/SIGUSR2 injection during runtime.
+#
+# Expected outcome: Emergency stop logged. Resume only after both workers ready.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

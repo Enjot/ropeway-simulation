@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 8: Chair Saturation Test
-# Verify SEM_CHAIRS blocks correctly when all chairs are in transit
+#
+# Goal: Tourists block on SEM_CHAIRS when all 36 chairs are in transit.
+#
+# Rationale: Tests semaphore blocking behavior when SEM_CHAIRS reaches zero.
+# Fast boarding + slow travel saturates chairs. Verifies sem_wait() blocks
+# correctly and sem_post() from arrivals unblocks waiting tourists.
+#
+# Parameters: chair_travel_time=30 sim minutes, tourists=100, station_capacity=50.
+#
+# Expected outcome: Max 36 chairs in transit. No deadlock on chair exhaustion.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

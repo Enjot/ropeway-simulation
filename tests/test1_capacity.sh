@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 1: Lower Station Capacity Limit
-# Verify that lower station capacity N is never exceeded
+#
+# Goal: Station visitor count never exceeds N.
+#
+# Rationale: Tests for race condition between 4 entry gates incrementing
+# station count via SEM_LOWER_STATION. Without proper semaphore synchronization,
+# concurrent sem_wait() calls could allow count > N briefly.
+#
+# Parameters: station_capacity=5, tourists=30, simulation_time=60s.
+#
+# Expected outcome: Max observed count <= 5. No zombies. IPC cleaned.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

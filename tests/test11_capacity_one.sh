@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 11: Capacity One Edge Case
-# Verify extreme serialization with N=1
+#
+# Goal: Only 1 tourist in station at any time with N=1.
+#
+# Rationale: Tests convoy effect on SEM_LOWER_STATION. With N=1, all tourists
+# serialize on single semaphore slot. Potential for priority inversion or
+# starvation if sem_wait() ordering is unfair.
+#
+# Parameters: N=1, tourists=10, simulation_time=120s.
+#
+# Expected outcome: Max count=1. All tourists eventually served. No deadlock.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

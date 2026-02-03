@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 7: Emergency Race Condition Test
-# Verify only one worker becomes initiator when both detect danger simultaneously
+#
+# Goal: Only one worker initiates emergency when both detect danger.
+#
+# Rationale: Tests race on SEM_EMERGENCY_LOCK when lower_worker and upper_worker
+# both call sem_trywait() simultaneously. Double-initiation would corrupt
+# emergency state or cause deadlock waiting on SEM_EMERGENCY_CLEAR.
+#
+# Parameters: danger_probability=100, tourists=30, simulation_time=60s.
+#
+# Expected outcome: Single initiator per emergency. No deadlock. System recovers.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 16: Child Death Test
-# Verify main process handles unexpected child termination
+#
+# Goal: Main process shuts down gracefully when child dies unexpectedly.
+#
+# Rationale: Tests SIGCHLD handler and zombie reaper thread. Killing cashier
+# mid-run must trigger: waitpid() reaps child, main detects worker death,
+# initiates shutdown. Without proper handling: zombies or orphaned children.
+#
+# Parameters: Kill cashier process mid-simulation.
+#
+# Expected outcome: Main detects death. Graceful shutdown. No zombies or IPC leaks.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

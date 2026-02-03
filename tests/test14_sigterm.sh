@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 14: SIGTERM Cleanup Test
-# Verify clean shutdown and IPC cleanup on SIGTERM
+#
+# Goal: No orphaned IPC resources after SIGTERM shutdown.
+#
+# Rationale: Tests ipc_cleanup() is called from SIGTERM handler. Semaphores,
+# shared memory, and message queues must be released via semctl(RMID),
+# shmctl(RMID), msgctl(RMID). Leaked IPC persists until reboot.
+#
+# Parameters: Run 10s, send SIGTERM, verify ipcs shows no resources.
+#
+# Expected outcome: ipcs empty after shutdown. No zombies. All children terminated.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

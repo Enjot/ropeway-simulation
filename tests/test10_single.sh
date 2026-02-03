@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 10: Single Tourist Edge Case
-# Verify one tourist completes full lifecycle
+#
+# Goal: One tourist completes full lifecycle without concurrency.
+#
+# Rationale: Baseline test - verifies message passing chain works:
+# tourist->MQ_CASHIER->cashier->MQ_PLATFORM->lower_worker->MQ_BOARDING->
+# tourist->MQ_ARRIVALS->upper_worker. No concurrency masks IPC bugs.
+#
+# Parameters: tourists=1, walker, simulation_time=60s.
+#
+# Expected outcome: Tourist completes ride. All IPC handoffs succeed.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

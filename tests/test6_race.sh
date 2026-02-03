@@ -1,7 +1,15 @@
 #!/bin/bash
 # Test 6: Entry Gate Race Condition Test
-# Verify capacity is never exceeded under rapid concurrent access
-# Run multiple iterations to catch intermittent race conditions
+#
+# Goal: Capacity N=5 never exceeded across 10 iterations.
+#
+# Rationale: Tests TOCTOU race in SEM_LOWER_STATION. Multiple tourists calling
+# sem_wait() simultaneously could interleave check-and-decrement operations.
+# 10 iterations increases probability of catching intermittent race.
+#
+# Parameters: tourists=50, spawn_delay=0, N=5, 10 iterations.
+#
+# Expected outcome: Count <= 5 in all iterations. 100% pass rate.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 13: All Families Edge Case
-# Verify multi-slot atomic acquisition under family-heavy workload
+#
+# Goal: Families board atomically without splitting.
+#
+# Rationale: Tests semop() with sem_op > 1 for atomic multi-slot acquisition.
+# Family of 3 must acquire 3 slots atomically - partial acquisition would
+# split family or deadlock if remaining capacity < family_size.
+#
+# Parameters: walker_percentage=100 (maximizes family probability), tourists=40.
+#
+# Expected outcome: No split families. Atomic acquisition verified. No deadlock.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"

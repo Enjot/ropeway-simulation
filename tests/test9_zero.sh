@@ -1,6 +1,15 @@
 #!/bin/bash
 # Test 9: Zero Tourists Edge Case
-# Verify graceful handling of empty simulation
+#
+# Goal: Workers initialize and shutdown cleanly with no tourists.
+#
+# Rationale: Tests for blocking on empty message queues. msgrcv() without
+# IPC_NOWAIT on MQ_CASHIER/MQ_PLATFORM would hang forever. Workers must
+# handle SIGTERM during idle wait without deadlock.
+#
+# Parameters: tourists=0, simulation_time=15s.
+#
+# Expected outcome: Clean shutdown. No hang on empty queues. No IPC leaks.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
