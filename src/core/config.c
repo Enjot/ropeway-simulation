@@ -1,9 +1,19 @@
+/**
+ * @file core/config.c
+ * @brief Configuration loading and validation.
+ */
+
 #include "core/config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 
+/**
+ * @brief Initialize configuration with default values.
+ *
+ * @param cfg Configuration structure to initialize.
+ */
 void config_set_defaults(Config *cfg) {
     cfg->station_capacity = 50;
     cfg->simulation_duration_real = 120;  // 2 minutes real time
@@ -34,6 +44,15 @@ void config_set_defaults(Config *cfg) {
     cfg->debug_logs_enabled = 1;    // Debug logs enabled by default
 }
 
+/**
+ * @brief Load configuration from a file.
+ *
+ * Sets defaults first, then overrides with file values.
+ *
+ * @param path Path to the configuration file.
+ * @param cfg Configuration structure to populate.
+ * @return 0 on success, -1 on error.
+ */
 int config_load(const char *path, Config *cfg) {
     // Set defaults first
     config_set_defaults(cfg);
@@ -126,6 +145,14 @@ int config_load(const char *path, Config *cfg) {
     return 0;
 }
 
+/**
+ * @brief Validate configuration values.
+ *
+ * Prints error messages for invalid values to stderr.
+ *
+ * @param cfg Configuration structure to validate.
+ * @return 0 if valid, -1 if invalid.
+ */
 int config_validate(const Config *cfg) {
     int valid = 1;
 

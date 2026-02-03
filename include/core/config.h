@@ -40,13 +40,28 @@ typedef struct {
     int debug_logs_enabled;         // 1 = show debug logs, 0 = hide debug logs
 } Config;
 
-// Load configuration from file
-// Returns 0 on success, -1 on error
+/**
+ * @brief Load configuration from a file.
+ *
+ * @param path Path to the configuration file.
+ * @param cfg Configuration structure to populate.
+ * @return 0 on success, -1 on error.
+ */
 int config_load(const char *path, Config *cfg);
 
-// Initialize config with default values
+/**
+ * @brief Initialize configuration with default values.
+ *
+ * @param cfg Configuration structure to initialize.
+ */
 void config_set_defaults(Config *cfg);
 
-// Validate configuration values
-// Returns 0 if valid, -1 if invalid (prints errors)
+/**
+ * @brief Validate configuration values.
+ *
+ * Prints error messages for invalid values to stderr.
+ *
+ * @param cfg Configuration structure to validate.
+ * @return 0 if valid, -1 if invalid.
+ */
 int config_validate(const Config *cfg);

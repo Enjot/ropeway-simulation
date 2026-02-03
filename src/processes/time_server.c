@@ -38,11 +38,13 @@ static struct timespec g_real_start_time;
 static struct sigaction g_sigtstp_action;
 
 /**
- * @brief SIGTSTP handler - capture pause start time and suspend
+ * @brief SIGTSTP handler - capture pause start time and suspend.
  *
- * Note: Uses SA_RESETHAND so handler is automatically reset to SIG_DFL
- * before this handler runs. After capture, we raise SIGTSTP again to
- * actually suspend the process. SIGCONT handler will reinstall this handler.
+ * Uses SA_RESETHAND so handler is automatically reset to SIG_DFL before
+ * this handler runs. After capture, we raise SIGTSTP again to actually
+ * suspend the process. SIGCONT handler will reinstall this handler.
+ *
+ * @param sig Signal number (unused).
  */
 static void sigtstp_handler(int sig) {
     (void)sig;
@@ -58,10 +60,12 @@ static void sigtstp_handler(int sig) {
 }
 
 /**
- * @brief SIGCONT handler - calculate pause offset and resume
+ * @brief SIGCONT handler - signal that pause has ended.
  *
- * Note: sigaction() is async-signal-safe (POSIX.1-2008), so we can
- * safely reinstall the SIGTSTP handler here.
+ * Reinstalls the SIGTSTP handler (sigaction is async-signal-safe).
+ * Actual pause offset calculation happens in handle_resume().
+ *
+ * @param sig Signal number (unused).
  */
 static void sigcont_handler(int sig) {
     (void)sig;
@@ -73,7 +77,9 @@ static void sigcont_handler(int sig) {
 }
 
 /**
- * @brief SIGTERM/SIGINT handler - request shutdown
+ * @brief SIGTERM/SIGINT handler - request shutdown.
+ *
+ * @param sig Signal number (unused).
  */
 static void sigterm_handler(int sig) {
     (void)sig;
@@ -81,7 +87,9 @@ static void sigterm_handler(int sig) {
 }
 
 /**
- * @brief SIGALRM handler - wake up from pause() to update time
+ * @brief SIGALRM handler - wake up from pause() to update time.
+ *
+ * @param sig Signal number (unused).
  */
 static void sigalrm_handler(int sig) {
     (void)sig;
@@ -89,7 +97,10 @@ static void sigalrm_handler(int sig) {
 }
 
 /**
- * @brief Handle pause offset calculation (called outside signal handler)
+ * @brief Handle pause offset calculation after SIGCONT.
+ *
+ * Called outside signal handler context to safely calculate the pause
+ * duration and update the total pause offset.
  */
 static void handle_resume(void) {
     if (!g_sigcont_received) return;
@@ -115,7 +126,12 @@ static void handle_resume(void) {
 }
 
 /**
- * @brief Update the atomic simulated time in SharedState
+ * @brief Update the atomic simulated time in SharedState.
+ *
+ * Calculates current simulated time accounting for pause offsets and
+ * stores it atomically for other processes to read.
+ *
+ * @param state Shared state to update.
  */
 static void update_sim_time(SharedState *state) {
     struct timespec now;
@@ -148,10 +164,14 @@ static void update_sim_time(SharedState *state) {
 }
 
 /**
- * @brief Time Server main entry point
+ * @brief Time Server process entry point.
  *
- * @param res IPC resources
- * @param keys IPC keys (unused)
+ * Maintains the current simulated time with sub-millisecond precision.
+ * Handles SIGTSTP/SIGCONT pause tracking and offset calculation.
+ * Atomically updates SharedState.current_sim_time_ms for other processes.
+ *
+ * @param res IPC resources (shared memory for time updates).
+ * @param keys IPC keys (unused, kept for interface consistency).
  */
 void time_server_main(IPCResources *res, IPCKeys *keys) {
     (void)keys;

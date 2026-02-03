@@ -39,8 +39,10 @@ static PendingBoarding g_pending[MAX_PENDING_PER_CHAIR];
 static int g_pending_count = 0;
 
 /**
- * Get the appropriate logging tag for a tourist based on type.
- * Returns "FAMILY" for families, "CYCLIST" for cyclists, "TOURIST" for solo walkers.
+ * @brief Get the appropriate logging tag for a tourist based on type.
+ *
+ * @param type Tourist type enum value.
+ * @return "FAMILY" for families, "CYCLIST" for cyclists, "TOURIST" for solo walkers.
  */
 static const char *get_tourist_tag(TouristType type) {
     if (type == TOURIST_CYCLIST) return "CYCLIST";
@@ -52,9 +54,12 @@ static const char *get_tourist_tag(TouristType type) {
 DEFINE_EMERGENCY_SIGNAL_HANDLER(signal_handler, "LOWER_WORKER")
 
 /**
- * Check for random danger and trigger emergency stop if detected.
- * Returns 1 if danger was detected, 0 otherwise.
+ * @brief Check for random danger and trigger emergency stop if detected.
+ *
  * Uses pause-adjusted time for cooldown calculation.
+ *
+ * @param res IPC resources for emergency coordination.
+ * @return 1 if danger was detected, 0 otherwise.
  */
 static int check_for_danger(IPCResources *res) {
     int probability = res->state->danger_probability;
@@ -82,9 +87,15 @@ static int check_for_danger(IPCResources *res) {
 }
 
 /**
- * Dispatch the current chair: acquire a chair slot, then send boarding confirmations
- * to all buffered tourists with the same departure_time so they arrive together.
- * The upper_worker will release the chair slot when all tourists have arrived.
+ * @brief Dispatch the current chair with all buffered tourists.
+ *
+ * Acquires a chair slot, then sends boarding confirmations to all buffered
+ * tourists with the same departure_time so they arrive together.
+ * The upper_worker releases the chair slot when all tourists have arrived.
+ *
+ * @param res IPC resources for semaphores and message queues.
+ * @param chair_number Chair identifier for logging.
+ * @param slots_used Total slots used on this chair.
  */
 static void dispatch_chair(IPCResources *res, int chair_number, int slots_used) {
     if (g_pending_count == 0) {
@@ -128,6 +139,16 @@ static void dispatch_chair(IPCResources *res, int chair_number, int slots_used) 
     g_pending_count = 0;
 }
 
+/**
+ * @brief Lower platform worker process entry point.
+ *
+ * Manages tourist boarding onto chairlift. Buffers tourists until chair is full
+ * or queue is empty, then dispatches. Handles emergency stops and random danger
+ * detection.
+ *
+ * @param res IPC resources (message queues, semaphores, shared memory).
+ * @param keys IPC keys (unused, kept for interface consistency).
+ */
 void lower_worker_main(IPCResources *res, IPCKeys *keys) {
     (void)keys;
 

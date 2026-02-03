@@ -21,7 +21,13 @@ static int g_running = 1;
 // Use macro-generated signal handler for basic shutdown handling
 DEFINE_BASIC_SIGNAL_HANDLER(signal_handler)
 
-// Calculate ticket valid until time (for time-based tickets)
+/**
+ * @brief Calculate ticket expiration time in simulated minutes.
+ *
+ * @param state Shared state with ticket duration settings.
+ * @param ticket Type of ticket being purchased.
+ * @return Expiration time in simulated minutes from midnight.
+ */
 static int calculate_ticket_validity(SharedState *state, TicketType ticket) {
     int current_minutes = time_get_sim_minutes(state);
 
@@ -47,8 +53,14 @@ static int calculate_ticket_validity(SharedState *state, TicketType ticket) {
 }
 
 /**
- * Calculate ticket price for one person.
- * Age discounts: <10 years or 65+ get 25% off.
+ * @brief Calculate ticket price for one person.
+ *
+ * Age discounts: under 10 years or 65+ get 25% off.
+ *
+ * @param age Tourist age in years.
+ * @param ticket Type of ticket being purchased.
+ * @param is_vip Whether tourist has VIP status (adds surcharge).
+ * @return Price in PLN.
  */
 static int calculate_price(int age, TicketType ticket, int is_vip) {
     // Base prices
@@ -71,9 +83,16 @@ static int calculate_price(int age, TicketType ticket, int is_vip) {
 }
 
 /**
- * Calculate total family ticket price.
+ * @brief Calculate total family ticket price.
+ *
  * Parent and kids all get the same ticket type.
  * Kids (4-7 years old) always get the under-10 discount.
+ *
+ * @param parent_age Parent's age in years.
+ * @param ticket Type of ticket for the family.
+ * @param is_vip Whether family has VIP status.
+ * @param kid_count Number of children (0-2).
+ * @return Total price in PLN for entire family.
  */
 static int calculate_family_price(int parent_age, TicketType ticket, int is_vip,
                                   int kid_count) {
@@ -89,6 +108,15 @@ static int calculate_family_price(int parent_age, TicketType ticket, int is_vip,
     return total;
 }
 
+/**
+ * @brief Cashier process entry point.
+ *
+ * Handles ticket sales via message queue. Calculates prices with age discounts
+ * and VIP surcharges. Runs until station closes or shutdown signal received.
+ *
+ * @param res IPC resources (message queues, semaphores, shared memory).
+ * @param keys IPC keys (unused, kept for interface consistency).
+ */
 void cashier_main(IPCResources *res, IPCKeys *keys) {
     (void)keys;
 

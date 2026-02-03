@@ -38,7 +38,10 @@ void logger_set_debug_enabled(int enabled) {
 }
 
 /**
- * Format simulation time as HH:MM:SS string.
+ * @brief Format simulation time as HH:MM:SS string.
+ *
+ * @param buf Output buffer for the formatted time.
+ * @param buf_size Size of the output buffer.
  */
 static void format_sim_time(char *buf, int buf_size) {
     double total_sim_minutes = g_state ? time_get_sim_minutes_f(g_state) : 0.0;

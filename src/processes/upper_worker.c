@@ -27,8 +27,10 @@ static int g_is_emergency_initiator = 0;         // 1 if this worker detected da
 static WorkerEmergencyState g_emergency_state;
 
 /**
- * Get the appropriate logging tag for a tourist based on type.
- * Returns "FAMILY" for families, "CYCLIST" for cyclists, "TOURIST" for solo walkers.
+ * @brief Get the appropriate logging tag for a tourist based on type.
+ *
+ * @param type Tourist type enum value.
+ * @return "FAMILY" for families, "CYCLIST" for cyclists, "TOURIST" for solo walkers.
  */
 static const char *get_tourist_tag(TouristType type) {
     if (type == TOURIST_CYCLIST) return "CYCLIST";
@@ -39,12 +41,13 @@ static const char *get_tourist_tag(TouristType type) {
 // Use macro-generated signal handler for emergency-capable workers
 DEFINE_EMERGENCY_SIGNAL_HANDLER(signal_handler, "UPPER_WORKER")
 
-// Note: Emergency functions moved to worker_emergency.c (shared module)
-
 /**
- * Check for random danger and trigger emergency stop if detected.
- * Returns 1 if danger was detected, 0 otherwise.
+ * @brief Check for random danger and trigger emergency stop if detected.
+ *
  * Uses pause-adjusted time for cooldown calculation.
+ *
+ * @param res IPC resources for emergency coordination.
+ * @return 1 if danger was detected, 0 otherwise.
  */
 static int check_for_danger(IPCResources *res) {
     int probability = res->state->danger_probability;
@@ -87,8 +90,11 @@ static ChairTracker g_chairs[MAX_ACTIVE_CHAIRS];
 static int g_chair_count = 0;
 
 /**
- * Find or create a tracker for a chair.
- * Returns pointer to tracker, or NULL if tracking array is full.
+ * @brief Find or create a tracker for a chair.
+ *
+ * @param chair_id Chair identifier to find or create tracker for.
+ * @param tourists_on_chair Expected number of tourists on this chair.
+ * @return Pointer to tracker, or NULL if tracking array is full.
  */
 static ChairTracker* get_chair_tracker(int chair_id, int tourists_on_chair) {
     // Find existing tracker
@@ -110,8 +116,11 @@ static ChairTracker* get_chair_tracker(int chair_id, int tourists_on_chair) {
 }
 
 /**
- * Remove a completed chair from tracking by index.
+ * @brief Remove a completed chair from tracking by index.
+ *
  * Uses swap-and-pop for O(1) removal.
+ *
+ * @param idx Index of tracker to remove.
  */
 static void remove_chair_tracker(int idx) {
     if (idx >= 0 && idx < g_chair_count) {
@@ -119,6 +128,16 @@ static void remove_chair_tracker(int idx) {
     }
 }
 
+/**
+ * @brief Upper platform worker process entry point.
+ *
+ * Processes tourist arrivals at the upper platform. Tracks chairs and releases
+ * chair slots when all tourists from a chair have arrived. Handles emergency
+ * stops and random danger detection.
+ *
+ * @param res IPC resources (message queues, semaphores, shared memory).
+ * @param keys IPC keys (unused, kept for interface consistency).
+ */
 void upper_worker_main(IPCResources *res, IPCKeys *keys) {
     (void)keys;
 

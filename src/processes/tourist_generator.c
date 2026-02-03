@@ -18,6 +18,11 @@
 static int g_running = 1;
 static int g_child_exited = 0;
 
+/**
+ * @brief Signal handler for SIGTERM, SIGINT, and SIGCHLD.
+ *
+ * @param sig Signal number received.
+ */
 static void signal_handler(int sig) {
     if (sig == SIGTERM || sig == SIGINT) {
         g_running = 0;
@@ -27,7 +32,9 @@ static void signal_handler(int sig) {
 }
 
 /**
- * Reap zombie child processes (non-blocking).
+ * @brief Reap zombie child processes (non-blocking).
+ *
+ * @return Number of processes reaped.
  */
 static int reap_zombies(void) {
     if (!g_child_exited) return 0;
@@ -45,8 +52,12 @@ static int reap_zombies(void) {
 }
 
 /**
- * Generate random age (8-80) and check if person can have kids.
+ * @brief Generate random age (8-80) and check if person can have kids.
+ *
  * Adults 26+ can be guardians for kids aged 4-7.
+ *
+ * @param can_have_kids Output: 1 if person can be a guardian, 0 otherwise.
+ * @return Generated age in years.
  */
 static int generate_age(int *can_have_kids) {
     int r = rand() % 100;
@@ -67,8 +78,11 @@ static int generate_age(int *can_have_kids) {
 }
 
 /**
- * Generate number of kids for an adult walker (0-2).
- * ~60% no kids, ~25% one kid, ~15% two kids.
+ * @brief Generate number of kids for an adult walker (0-2).
+ *
+ * Distribution: ~60% no kids, ~25% one kid, ~15% two kids.
+ *
+ * @return Number of children (0, 1, or 2).
  */
 static int generate_kid_count(void) {
     int r = rand() % 100;
@@ -79,15 +93,21 @@ static int generate_kid_count(void) {
 
 
 /**
- * Generate tourist type based on walker/cyclist percentage config.
+ * @brief Generate tourist type based on walker/cyclist percentage config.
+ *
+ * @param state Shared state with walker_percentage setting.
+ * @return TOURIST_WALKER or TOURIST_CYCLIST.
  */
 static TouristType generate_type(SharedState *state) {
     return (rand() % 100) < state->walker_percentage ? TOURIST_WALKER : TOURIST_CYCLIST;
 }
 
 /**
- * Select ticket type for a tourist.
- * Distribution: 30% single, 20% T1, 20% T2, 15% T3, 15% daily
+ * @brief Select ticket type for a tourist.
+ *
+ * Distribution: 30% single, 20% T1, 20% T2, 15% T3, 15% daily.
+ *
+ * @return Random ticket type.
  */
 static TicketType select_ticket_type(void) {
     int r = rand() % 100;
@@ -99,13 +119,26 @@ static TicketType select_ticket_type(void) {
 }
 
 /**
- * Check if tourist should be VIP based on percentage config.
+ * @brief Check if tourist should be VIP based on percentage config.
+ *
+ * @param state Shared state with vip_percentage setting.
+ * @return 1 if VIP, 0 otherwise.
  */
 static int is_vip(SharedState *state) {
     return (rand() % 100) < state->vip_percentage;
 }
 
-
+/**
+ * @brief Tourist generator process entry point.
+ *
+ * Spawns tourist processes with random attributes (age, type, VIP status,
+ * ticket type, kids). Uses fork+exec to create tourist processes. Waits
+ * for all spawned tourists to exit before returning.
+ *
+ * @param res IPC resources (shared memory for config values).
+ * @param keys IPC keys (unused, kept for interface consistency).
+ * @param tourist_exe Path to tourist executable.
+ */
 void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *tourist_exe) {
     (void)keys;
 
