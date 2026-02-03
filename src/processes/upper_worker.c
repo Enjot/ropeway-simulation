@@ -52,13 +52,13 @@ static int check_for_danger(IPCResources *res) {
         return 0;  // Danger detection disabled
     }
 
-    // Check cooldown period using simulated time (already accounts for pause)
+    // Check if still within duration of previous danger (can't trigger new one)
     double now_sim = time_get_sim_minutes_f(res->state);
-    int cooldown_sim = res->state->danger_cooldown_sim;
+    int duration_sim = res->state->danger_duration_sim;
 
     if (g_last_danger_time_sim > 0) {
-        if ((now_sim - g_last_danger_time_sim) < cooldown_sim) {
-            return 0;  // Still in cooldown
+        if ((now_sim - g_last_danger_time_sim) < duration_sim) {
+            return 0;  // Still within previous emergency duration
         }
     }
 
@@ -167,14 +167,14 @@ void upper_worker_main(IPCResources *res, IPCKeys *keys) {
 
         // Note: Pause handled by kernel SIGTSTP automatically
 
-        // Check if we're the emergency initiator and need to wait for cooldown
+        // Check if we're the emergency initiator and need to wait for duration
         if (g_is_emergency_initiator && g_emergency_start_time_sim > 0) {
-            // Use simulated time for cooldown (already accounts for pause)
+            // Use simulated time for duration (already accounts for pause)
             double now_sim = time_get_sim_minutes_f(res->state);
-            int cooldown_sim = res->state->danger_cooldown_sim;
+            int duration_sim = res->state->danger_duration_sim;
 
-            if ((now_sim - g_emergency_start_time_sim) >= cooldown_sim) {
-                // Cooldown passed - initiate resume
+            if ((now_sim - g_emergency_start_time_sim) >= duration_sim) {
+                // Duration passed - initiate resume
                 worker_initiate_resume(res, WORKER_UPPER, &g_emergency_state);
             } else {
                 // Still in cooldown - sleep briefly

@@ -29,7 +29,7 @@ void config_set_defaults(Config *cfg) {
     cfg->ticket_t3_duration = 180;  // 3 sim hours
 
     cfg->danger_probability = 0;    // Disabled by default
-    cfg->danger_cooldown_sim = 30;  // 30 sim minutes cooldown
+    cfg->danger_duration_sim = 30;  // 30 sim minutes duration
 
     cfg->debug_logs_enabled = 1;    // Debug logs enabled by default
 }
@@ -113,8 +113,8 @@ int config_load(const char *path, Config *cfg) {
             cfg->ticket_t3_duration = atoi(value);
         } else if (strcmp(key, "DANGER_PROBABILITY") == 0) {
             cfg->danger_probability = atoi(value);
-        } else if (strcmp(key, "DANGER_COOLDOWN_SIM_MINUTES") == 0) {
-            cfg->danger_cooldown_sim = atoi(value);
+        } else if (strcmp(key, "DANGER_DURATION_SIM_MINUTES") == 0) {
+            cfg->danger_duration_sim = atoi(value);
         } else if (strcmp(key, "DEBUG_LOGS_ENABLED") == 0) {
             cfg->debug_logs_enabled = atoi(value);
         } else {
@@ -198,8 +198,8 @@ int config_validate(const Config *cfg) {
         valid = 0;
     }
 
-    if (cfg->danger_cooldown_sim < 0) {
-        fprintf(stderr, "config: DANGER_COOLDOWN_SIM_MINUTES must be >= 0\n");
+    if (cfg->danger_duration_sim < 0) {
+        fprintf(stderr, "config: DANGER_DURATION_SIM_MINUTES must be >= 0\n");
         valid = 0;
     }
 

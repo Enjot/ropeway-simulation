@@ -82,7 +82,7 @@ typedef struct {
 
     // Danger detection settings
     int danger_probability;         // Probability per check (0-100), 0 = disabled
-    int danger_cooldown_sim;        // Simulated minutes between possible detections
+    int danger_duration_sim;        // Simulated minutes emergency stop lasts
 
     // Logging settings
     int debug_logs_enabled;         // 1 = show debug logs, 0 = hide debug logs

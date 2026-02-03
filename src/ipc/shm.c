@@ -96,7 +96,7 @@ void ipc_shm_init_state(IPCResources *res, const Config *cfg) {
     res->state->ticket_t2_duration = cfg->ticket_t2_duration;
     res->state->ticket_t3_duration = cfg->ticket_t3_duration;
     res->state->danger_probability = cfg->danger_probability;
-    res->state->danger_cooldown_sim = cfg->danger_cooldown_sim;
+    res->state->danger_duration_sim = cfg->danger_duration_sim;
     res->state->debug_logs_enabled = cfg->debug_logs_enabled;
 
     // Set initial state
