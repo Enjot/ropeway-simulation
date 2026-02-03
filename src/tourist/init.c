@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 /**
  * @file tourist/init.c
  * @brief Tourist initialization and argument parsing.

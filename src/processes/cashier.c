@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include "constants.h"
 #include "ipc/messages.h"
 #include "ipc/ipc.h"

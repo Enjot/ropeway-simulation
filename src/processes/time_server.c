@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 /**
  * @file time_server.c
  * @brief Time Server process - centralizes all time management and pause handling

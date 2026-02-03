@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 /**
  * @file lifecycle/process_signals.c
  * @brief Signal handling for main process.
