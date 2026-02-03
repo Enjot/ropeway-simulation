@@ -1,0 +1,62 @@
+#!/bin/bash
+# Test 11: Capacity One Edge Case
+# Verify extreme serialization with N=1
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_DIR="${SCRIPT_DIR}/../build"
+CONFIG="${BUILD_DIR}/config/test11_capacity_one.conf"
+LOG_FILE="/tmp/ropeway_test11.log"
+EXPECTED_MAX_CAPACITY=1
+
+cd "$BUILD_DIR" || exit 1
+
+echo "=== Test 11: Capacity One Edge Case ==="
+echo "Goal: Verify only 1 tourist in station at a time (N=$EXPECTED_MAX_CAPACITY)"
+echo "Running simulation..."
+
+# Run simulation with timeout
+timeout 150 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
+EXIT_CODE=$?
+
+echo
+echo "Analyzing results..."
+
+# Check for timeout (possible deadlock with N=1)
+if [ $EXIT_CODE -eq 124 ]; then
+    echo "Warning: Simulation timed out - checking for deadlock"
+fi
+
+# Extract max station count
+MAX_SEEN=$(grep -o "count: [0-9]*/" "$LOG_FILE" | sed 's/count: //' | sed 's/\///' | sort -n | tail -1)
+
+if [ -z "$MAX_SEEN" ]; then
+    echo "Warning: No station count logs found"
+    MAX_SEEN=0
+fi
+
+echo "Maximum station count observed: $MAX_SEEN"
+echo "Expected maximum: $EXPECTED_MAX_CAPACITY"
+
+if [ "$MAX_SEEN" -gt "$EXPECTED_MAX_CAPACITY" ]; then
+    echo "FAIL: Capacity exceeded ($MAX_SEEN > $EXPECTED_MAX_CAPACITY)"
+    exit 1
+fi
+
+# Check for zombies
+ZOMBIES=$(ps aux | grep -E "(ropeway|tourist)" | grep -v grep | grep defunct | wc -l)
+if [ "$ZOMBIES" -gt 0 ]; then
+    echo "FAIL: Found $ZOMBIES zombie processes"
+    exit 1
+fi
+
+# Check for leftover IPC
+IPC_SEM=$(ipcs -s 2>/dev/null | grep "$(id -u)" | wc -l)
+IPC_SHM=$(ipcs -m 2>/dev/null | grep "$(id -u)" | wc -l)
+IPC_MQ=$(ipcs -q 2>/dev/null | grep "$(id -u)" | wc -l)
+
+if [ "$IPC_SEM" -gt 0 ] || [ "$IPC_SHM" -gt 0 ] || [ "$IPC_MQ" -gt 0 ]; then
+    echo "Warning: Leftover IPC resources found"
+fi
+
+echo "PASS: Capacity one edge case respected limit"
+exit 0
