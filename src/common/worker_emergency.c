@@ -45,15 +45,28 @@ static const char* get_other_worker_name(WorkerRole role) {
 
 void worker_trigger_emergency_stop(IPCResources *res, WorkerRole role, WorkerEmergencyState *state) {
     const char *tag = get_worker_tag(role);
-    log_warn(tag, "Danger detected! Triggering emergency stop");
+    log_warn(tag, "Danger detected! Attempting to become emergency initiator");
 
+    // Try to acquire emergency lock - only one worker can be initiator
+    if (sem_trywait(res->sem_id, SEM_EMERGENCY_LOCK) == -1) {
+        // Failed to acquire lock - another worker is already initiator
+        // Become receiver instead
+        log_debug(tag, "Another worker is initiator, becoming receiver");
+        worker_acknowledge_emergency_stop(res, role, state);
+        return;
+    }
+
+    // Got the lock - we are the initiator
+    log_info(tag, "Acquired emergency lock, becoming initiator");
     *state->is_initiator = 1;
     // Store simulated time for consistent cooldown calculation (already accounts for pause)
     *state->start_time_sim = time_get_sim_minutes_f(res->state);
 
     // Set emergency flag
     if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
-        return;  // Shutdown in progress
+        // Shutdown - release lock
+        sem_post(res->sem_id, SEM_EMERGENCY_LOCK, 1);
+        return;
     }
     res->state->emergency_stop = 1;
     sem_post(res->sem_id, SEM_STATE, 1);
@@ -171,6 +184,10 @@ void worker_initiate_resume(IPCResources *res, WorkerRole role, WorkerEmergencyS
 
     // Release any tourist waiters
     ipc_release_emergency_waiters(res);
+
+    // Release emergency lock so another emergency can occur
+    sem_post(res->sem_id, SEM_EMERGENCY_LOCK, 1);
+    log_debug(tag, "Released emergency lock");
 
     *state->is_initiator = 0;
     *state->start_time_sim = 0.0;

@@ -65,6 +65,11 @@ int tourist_parse_args(int argc, char *argv[], TouristData *data) {
 }
 
 const char *tourist_get_tag(const TouristData *data) {
+    if (data->is_vip) {
+        if (data->type == TOURIST_CYCLIST) return "VIP CYCLIST";
+        if (data->type == TOURIST_FAMILY) return "VIP FAMILY";
+        return "VIP TOURIST";
+    }
     if (data->type == TOURIST_CYCLIST) return "CYCLIST";
     if (data->type == TOURIST_FAMILY) return "FAMILY";
     return "TOURIST";

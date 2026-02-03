@@ -39,6 +39,7 @@ int ipc_sem_create(IPCResources *res, key_t key, const Config *cfg) {
     sem_values[SEM_WORKER_READY] = 0;                   // Startup barrier (workers signal ready)
     sem_values[SEM_PLATFORM_GATES] = PLATFORM_GATES;    // 3 platform gates
     sem_values[SEM_EMERGENCY_CLEAR] = 0;                // Emergency clear (tourist waiters)
+    sem_values[SEM_EMERGENCY_LOCK] = 1;                 // Emergency initiator mutex (binary)
 
     arg.array = sem_values;
     if (semctl(res->sem_id, 0, SETALL, arg) == -1) {

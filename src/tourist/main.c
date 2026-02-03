@@ -57,8 +57,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Initialize logger
-    logger_init(res.state, LOG_TOURIST);
+    // Initialize logger (VIPs get distinct color)
+    logger_init(res.state, data.is_vip ? LOG_VIP : LOG_TOURIST);
     logger_set_debug_enabled(res.state->debug_logs_enabled);
 
     // Initialize family state (simple data only - no sync primitives)
@@ -117,13 +117,14 @@ int main(int argc, char *argv[]) {
         }
 
         // Enter through entry gate (VIPs skip the queue)
-        if (!data.is_vip) {
+        if (data.is_vip) {
+            log_info(tag, "%d skipped gate queue", data.id);
+        } else {
             if (sem_wait_pauseable(&res, SEM_ENTRY_GATES, 1) == -1) {
                 break;
             }
+            log_info(tag, "%d entered through gate", data.id);
         }
-
-        log_info(tag, "%d entered through gate", data.id);
 
         // Enter lower station (wait if full)
         if (sem_wait_pauseable(&res, SEM_LOWER_STATION, data.station_slots) == -1) {

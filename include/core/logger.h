@@ -11,6 +11,7 @@
 // Component types for colored logging
 typedef enum {
     LOG_TOURIST,
+    LOG_VIP,
     LOG_CASHIER,
     LOG_LOWER_WORKER,
     LOG_UPPER_WORKER,

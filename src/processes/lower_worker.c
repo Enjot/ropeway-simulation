@@ -202,8 +202,8 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
         sem_post(res->sem_id, SEM_STATE, 1);
 
         if (emergency) {
-            // Emergency is active but we're not the initiator - wait briefly
-            usleep(100000);  // 100ms
+            // Emergency is active but we're not the initiator - acknowledge and wait
+            worker_acknowledge_emergency_stop(res, WORKER_LOWER, &g_emergency_state);
             continue;
         }
 

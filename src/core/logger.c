@@ -16,6 +16,7 @@ static int g_debug_enabled = 1;
 // Color for each component type (indexed by LogComponent enum)
 static const char *g_component_colors[LOG_COMPONENT_COUNT] = {
     [LOG_TOURIST]      = "\033[92m",  // bright green
+    [LOG_VIP]          = "\033[91m",  // bright red
     [LOG_CASHIER]      = "\033[33m",  // yellow
     [LOG_LOWER_WORKER] = "\033[34m",  // blue
     [LOG_UPPER_WORKER] = "\033[36m",  // cyan
