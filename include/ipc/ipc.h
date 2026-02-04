@@ -56,5 +56,5 @@ void ipc_release_emergency_waiters(IPCResources *res);
 // Startup synchronization barrier
 // Workers call ipc_signal_worker_ready() after initialization
 // Main calls ipc_wait_workers_ready() before spawning tourist generator
-void ipc_signal_worker_ready(IPCResources *res);
+int ipc_signal_worker_ready(IPCResources *res);
 int ipc_wait_workers_ready(IPCResources *res, int expected_count);

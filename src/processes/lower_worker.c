@@ -176,7 +176,10 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
     srand((unsigned int)(time(NULL) ^ getpid()));
 
     // Signal that this worker is ready (startup barrier)
-    ipc_signal_worker_ready(res);
+    if (ipc_signal_worker_ready(res) == -1) {
+        log_error("LOWER_WORKER", "Failed to signal ready, exiting");
+        return;
+    }
     log_info("LOWER_WORKER", "Lower platform worker ready");
 
     int current_chair_slots = 0;  // Slots used on current chair being loaded

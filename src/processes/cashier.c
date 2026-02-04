@@ -136,7 +136,10 @@ void cashier_main(IPCResources *res, IPCKeys *keys) {
     srand(time(NULL) ^ getpid());
 
     // Signal that this worker is ready (startup barrier)
-    ipc_signal_worker_ready(res);
+    if (ipc_signal_worker_ready(res) == -1) {
+        log_error("CASHIER", "Failed to signal ready, exiting");
+        return;
+    }
     log_info("CASHIER", "Cashier ready to serve tourists");
 
     while (g_running && res->state->running) {

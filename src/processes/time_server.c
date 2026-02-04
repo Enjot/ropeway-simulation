@@ -17,6 +17,7 @@
 
 #include <signal.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/time.h>
@@ -220,14 +221,17 @@ void time_server_main(IPCResources *res, IPCKeys *keys) {
         .it_value = { .tv_sec = 0, .tv_usec = 10000 }
     };
     if (setitimer(ITIMER_REAL, &timer, NULL) == -1) {
-        perror("time_server: setitimer");
+        log_error("TIME_SERVER", "setitimer failed: %s", strerror(errno));
         return;
     }
 
     log_debug("TIME_SERVER", "Timer started (10ms interval)");
 
     // Signal that this worker is ready (startup barrier)
-    ipc_signal_worker_ready(res);
+    if (ipc_signal_worker_ready(res) == -1) {
+        log_error("TIME_SERVER", "Failed to signal ready, exiting");
+        return;
+    }
     log_info("TIME_SERVER", "Time Server ready");
 
     // Initial time update

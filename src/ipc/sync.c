@@ -6,11 +6,11 @@
 #include "ipc/ipc.h"
 #include "core/logger.h"
 
-#include <stdio.h>
+#include <errno.h>
+#include <string.h>
 
 /**
  * Wait for emergency stop to clear.
- * Uses semaphore blocking instead of usleep polling.
  */
 void ipc_wait_emergency_clear(IPCResources *res) {
     if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
@@ -52,10 +52,12 @@ void ipc_release_emergency_waiters(IPCResources *res) {
  * Signal that a worker has completed initialization and is ready.
  * Called by each worker (TimeServer, Cashier, LowerWorker, UpperWorker).
  */
-void ipc_signal_worker_ready(IPCResources *res) {
+int ipc_signal_worker_ready(IPCResources *res) {
     if (sem_post(res->sem_id, SEM_WORKER_READY, 1) == -1) {
-        perror("ipc_signal_worker_ready: sem_post");
+        log_error("IPC", "sem_post(SEM_WORKER_READY) failed: %s", strerror(errno));
+        return -1;
     }
+    return 0;
 }
 
 /**
@@ -72,7 +74,7 @@ int ipc_wait_workers_ready(IPCResources *res, int expected_count) {
     // Wait for expected_count posts to SEM_WORKER_READY
     // Each worker posts 1, so we wait for the total count
     if (sem_wait(res->sem_id, SEM_WORKER_READY, expected_count) == -1) {
-        perror("ipc_wait_workers_ready: sem_wait");
+        log_error("IPC", "sem_wait(SEM_WORKER_READY) failed: %s", strerror(errno));
         return -1;
     }
 

@@ -165,7 +165,10 @@ void upper_worker_main(IPCResources *res, IPCKeys *keys) {
     srand((unsigned int)(time(NULL) ^ (getpid() << 1)));
 
     // Signal that this worker is ready (startup barrier)
-    ipc_signal_worker_ready(res);
+    if (ipc_signal_worker_ready(res) == -1) {
+        log_error("UPPER_WORKER", "Failed to signal ready, exiting");
+        return;
+    }
     log_info("UPPER_WORKER", "Upper platform worker ready");
 
     int arrivals_count = 0;

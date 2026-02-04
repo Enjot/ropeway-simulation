@@ -89,7 +89,7 @@ int config_load(const char *path, Config *cfg) {
         char value[64] = {0};
 
         if (sscanf(line, "%63[^=]=%63s", key, value) != 2) {
-            fprintf(stderr, "config_load: invalid format at line %d: %s\n", line_num, line);
+            fprintf(stderr, "[--:--:--] [WARN ] [CONFIG] Invalid format at line %d: %s\n", line_num, line);
             continue;
         }
 
@@ -137,7 +137,7 @@ int config_load(const char *path, Config *cfg) {
         } else if (strcmp(key, "DEBUG_LOGS_ENABLED") == 0) {
             cfg->debug_logs_enabled = atoi(value);
         } else {
-            fprintf(stderr, "config_load: unknown key at line %d: %s\n", line_num, key);
+            fprintf(stderr, "[--:--:--] [WARN ] [CONFIG] Unknown key at line %d: %s\n", line_num, key);
         }
     }
 
