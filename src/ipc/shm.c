@@ -11,7 +11,7 @@
 #include <sys/shm.h>
 
 int ipc_shm_create(IPCResources *res, key_t key, size_t size) {
-    res->shm_id = shmget(key, size, IPC_CREAT | IPC_EXCL | 0666);
+    res->shm_id = shmget(key, size, IPC_CREAT | IPC_EXCL | 0600);
     if (res->shm_id == -1) {
         perror("ipc_shm_create: shmget");
         return -1;
@@ -35,7 +35,7 @@ int ipc_shm_create(IPCResources *res, key_t key, size_t size) {
 
 int ipc_shm_attach(IPCResources *res, key_t key) {
     // Get shared memory (size 0 to attach to existing segment with unknown size)
-    res->shm_id = shmget(key, 0, 0666);
+    res->shm_id = shmget(key, 0, 0600);
     if (res->shm_id == -1) {
         perror("ipc_shm_attach: shmget");
         return -1;

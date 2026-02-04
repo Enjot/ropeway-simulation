@@ -19,7 +19,7 @@ union semun {
 };
 
 int ipc_sem_create(IPCResources *res, key_t key, const Config *cfg) {
-    res->sem_id = semget(key, SEM_COUNT, IPC_CREAT | IPC_EXCL | 0666);
+    res->sem_id = semget(key, SEM_COUNT, IPC_CREAT | IPC_EXCL | 0600);
     if (res->sem_id == -1) {
         perror("ipc_sem_create: semget");
         return -1;
@@ -53,7 +53,7 @@ int ipc_sem_create(IPCResources *res, key_t key, const Config *cfg) {
 }
 
 int ipc_sem_attach(IPCResources *res, key_t key) {
-    res->sem_id = semget(key, SEM_COUNT, 0666);
+    res->sem_id = semget(key, SEM_COUNT, 0600);
     if (res->sem_id == -1) {
         perror("ipc_sem_attach: semget");
         return -1;

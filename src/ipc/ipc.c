@@ -23,7 +23,7 @@
  */
 int ipc_cleanup_stale(const IPCKeys *keys) {
     // Try to access existing shared memory (without IPC_CREAT)
-    int shm_id = shmget(keys->shm_key, 0, 0666);
+    int shm_id = shmget(keys->shm_key, 0, 0600);
     if (shm_id == -1) {
         if (errno == ENOENT) {
             return 0;  // No existing shared memory - nothing to clean
@@ -55,11 +55,11 @@ int ipc_cleanup_stale(const IPCKeys *keys) {
 
     // Remove message queues
     int mq_ids[] = {
-        msgget(keys->mq_cashier_key, 0666),
-        msgget(keys->mq_platform_key, 0666),
-        msgget(keys->mq_boarding_key, 0666),
-        msgget(keys->mq_arrivals_key, 0666),
-        msgget(keys->mq_worker_key, 0666)
+        msgget(keys->mq_cashier_key, 0600),
+        msgget(keys->mq_platform_key, 0600),
+        msgget(keys->mq_boarding_key, 0600),
+        msgget(keys->mq_arrivals_key, 0600),
+        msgget(keys->mq_worker_key, 0600)
     };
     for (int i = 0; i < 5; i++) {
         if (mq_ids[i] != -1) {
@@ -68,7 +68,7 @@ int ipc_cleanup_stale(const IPCKeys *keys) {
     }
 
     // Remove semaphores
-    int sem_id = semget(keys->sem_key, 0, 0666);
+    int sem_id = semget(keys->sem_key, 0, 0600);
     if (sem_id != -1) {
         semctl(sem_id, 0, IPC_RMID);
     }

@@ -10,35 +10,35 @@
 #include <sys/msg.h>
 
 int ipc_mq_create(IPCResources *res, const IPCKeys *keys) {
-    res->mq_cashier_id = msgget(keys->mq_cashier_key, IPC_CREAT | IPC_EXCL | 0666);
+    res->mq_cashier_id = msgget(keys->mq_cashier_key, IPC_CREAT | IPC_EXCL | 0600);
     if (res->mq_cashier_id == -1) {
         perror("ipc_mq_create: msgget cashier");
         return -1;
     }
     log_debug("IPC", "Created cashier message queue: id=%d", res->mq_cashier_id);
 
-    res->mq_platform_id = msgget(keys->mq_platform_key, IPC_CREAT | IPC_EXCL | 0666);
+    res->mq_platform_id = msgget(keys->mq_platform_key, IPC_CREAT | IPC_EXCL | 0600);
     if (res->mq_platform_id == -1) {
         perror("ipc_mq_create: msgget platform");
         return -1;
     }
     log_debug("IPC", "Created platform message queue: id=%d", res->mq_platform_id);
 
-    res->mq_boarding_id = msgget(keys->mq_boarding_key, IPC_CREAT | IPC_EXCL | 0666);
+    res->mq_boarding_id = msgget(keys->mq_boarding_key, IPC_CREAT | IPC_EXCL | 0600);
     if (res->mq_boarding_id == -1) {
         perror("ipc_mq_create: msgget boarding");
         return -1;
     }
     log_debug("IPC", "Created boarding message queue: id=%d", res->mq_boarding_id);
 
-    res->mq_arrivals_id = msgget(keys->mq_arrivals_key, IPC_CREAT | IPC_EXCL | 0666);
+    res->mq_arrivals_id = msgget(keys->mq_arrivals_key, IPC_CREAT | IPC_EXCL | 0600);
     if (res->mq_arrivals_id == -1) {
         perror("ipc_mq_create: msgget arrivals");
         return -1;
     }
     log_debug("IPC", "Created arrivals message queue: id=%d", res->mq_arrivals_id);
 
-    res->mq_worker_id = msgget(keys->mq_worker_key, IPC_CREAT | IPC_EXCL | 0666);
+    res->mq_worker_id = msgget(keys->mq_worker_key, IPC_CREAT | IPC_EXCL | 0600);
     if (res->mq_worker_id == -1) {
         perror("ipc_mq_create: msgget worker");
         return -1;
@@ -49,31 +49,31 @@ int ipc_mq_create(IPCResources *res, const IPCKeys *keys) {
 }
 
 int ipc_mq_attach(IPCResources *res, const IPCKeys *keys) {
-    res->mq_cashier_id = msgget(keys->mq_cashier_key, 0666);
+    res->mq_cashier_id = msgget(keys->mq_cashier_key, 0600);
     if (res->mq_cashier_id == -1) {
         perror("ipc_mq_attach: msgget cashier");
         return -1;
     }
 
-    res->mq_platform_id = msgget(keys->mq_platform_key, 0666);
+    res->mq_platform_id = msgget(keys->mq_platform_key, 0600);
     if (res->mq_platform_id == -1) {
         perror("ipc_mq_attach: msgget platform");
         return -1;
     }
 
-    res->mq_boarding_id = msgget(keys->mq_boarding_key, 0666);
+    res->mq_boarding_id = msgget(keys->mq_boarding_key, 0600);
     if (res->mq_boarding_id == -1) {
         perror("ipc_mq_attach: msgget boarding");
         return -1;
     }
 
-    res->mq_arrivals_id = msgget(keys->mq_arrivals_key, 0666);
+    res->mq_arrivals_id = msgget(keys->mq_arrivals_key, 0600);
     if (res->mq_arrivals_id == -1) {
         perror("ipc_mq_attach: msgget arrivals");
         return -1;
     }
 
-    res->mq_worker_id = msgget(keys->mq_worker_key, 0666);
+    res->mq_worker_id = msgget(keys->mq_worker_key, 0600);
     if (res->mq_worker_id == -1) {
         perror("ipc_mq_attach: msgget worker");
         return -1;

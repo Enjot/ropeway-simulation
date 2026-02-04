@@ -64,7 +64,7 @@ The simulation demonstrates classical Unix IPC patterns through a real-world sce
 | IPC | Exclusively System V (no POSIX semaphores/queues) |
 | Process creation | `fork()` + `exec()` for workers, no process pools |
 | Threading | Limited to kid simulation within Tourist and zombie reaper in Main |
-| Permissions | All IPC objects use `0666` mode |
+| Permissions | All IPC objects use `0600` mode |
 | Cleanup | Resources removed via `IPC_RMID` on shutdown; `ipcs` empty after exit |
 
 ## Simulation Flow
