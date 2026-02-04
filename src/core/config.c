@@ -28,6 +28,7 @@ void config_set_defaults(Config *cfg) {
 
     cfg->vip_percentage = 1;
     cfg->walker_percentage = 50;
+    cfg->family_percentage = 40;    // 40% of eligible walkers become families
 
     cfg->trail_walk_time = 30;
     cfg->trail_bike_fast_time = 15;
@@ -116,6 +117,8 @@ int config_load(const char *path, Config *cfg) {
             cfg->vip_percentage = atoi(value);
         } else if (strcmp(key, "WALKER_PERCENTAGE") == 0) {
             cfg->walker_percentage = atoi(value);
+        } else if (strcmp(key, "FAMILY_PERCENTAGE") == 0) {
+            cfg->family_percentage = atoi(value);
         } else if (strcmp(key, "TRAIL_WALK_TIME_SIM_MINUTES") == 0) {
             cfg->trail_walk_time = atoi(value);
         } else if (strcmp(key, "TRAIL_BIKE_FAST_TIME_SIM_MINUTES") == 0) {
@@ -211,6 +214,11 @@ int config_validate(const Config *cfg) {
 
     if (cfg->walker_percentage < 0 || cfg->walker_percentage > 100) {
         fprintf(stderr, "config: WALKER_PERCENTAGE must be 0-100\n");
+        valid = 0;
+    }
+
+    if (cfg->family_percentage < 0 || cfg->family_percentage > 100) {
+        fprintf(stderr, "config: FAMILY_PERCENTAGE must be 0-100\n");
         valid = 0;
     }
 

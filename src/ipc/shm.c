@@ -88,6 +88,7 @@ void ipc_shm_init_state(IPCResources *res, const Config *cfg) {
     res->state->tourist_entry_count = 0;
     res->state->vip_percentage = cfg->vip_percentage;
     res->state->walker_percentage = cfg->walker_percentage;
+    res->state->family_percentage = cfg->family_percentage;
     res->state->trail_walk_time = cfg->trail_walk_time;
     res->state->trail_bike_fast_time = cfg->trail_bike_fast_time;
     res->state->trail_bike_medium_time = cfg->trail_bike_medium_time;

@@ -68,6 +68,7 @@ typedef struct {
     int tourist_spawn_delay_us;     // Delay between spawns in microseconds (0 = no delay)
     int vip_percentage;             // VIP percentage (0-100)
     int walker_percentage;          // Walker percentage (0-100)
+    int family_percentage;          // Family percentage of eligible walkers (0-100)
 
     // Trail times in simulated minutes
     int trail_walk_time;

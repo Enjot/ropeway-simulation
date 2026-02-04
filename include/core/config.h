@@ -20,6 +20,7 @@ typedef struct {
     // Tourist distribution (percentages 0-100)
     int vip_percentage;
     int walker_percentage;
+    int family_percentage;          // Percentage of eligible walkers (26+) who become families
 
     // Trail times in simulated minutes
     int trail_walk_time;

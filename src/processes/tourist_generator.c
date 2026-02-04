@@ -81,17 +81,17 @@ static int generate_age(int *can_have_kids) {
 }
 
 /**
- * @brief Generate number of kids for an adult walker (0-2).
+ * @brief Generate number of kids for a family (1-2).
  *
- * Distribution: ~60% no kids, ~25% one kid, ~15% two kids.
+ * Distribution: ~63% one kid, ~37% two kids (based on original 25:15 ratio).
+ * Only called when family_percentage check already passed.
  *
- * @return Number of children (0, 1, or 2).
+ * @return Number of children (1 or 2).
  */
 static int generate_kid_count(void) {
     int r = rand() % 100;
-    if (r < 60) return 0;  // 60% no kids
-    if (r < 85) return 1;  // 25% one kid
-    return 2;              // 15% two kids
+    if (r < 63) return 1;  // 63% one kid
+    return 2;              // 37% two kids
 }
 
 
@@ -192,12 +192,12 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         int vip = is_vip(res->state);
         TicketType ticket = select_ticket_type();
 
-        // Determine number of kids (only walkers 26+ can have kids)
+        // Determine if this walker becomes a family (only walkers 26+ can have kids)
         int kid_count = 0;
         if (type == TOURIST_WALKER && can_have_kids && age >= 26) {
-            kid_count = generate_kid_count();
-            // Walker with kids becomes FAMILY type
-            if (kid_count > 0) {
+            // Use family_percentage to decide if walker becomes a family
+            if ((rand() % 100) < res->state->family_percentage) {
+                kid_count = generate_kid_count();
                 type = TOURIST_FAMILY;
             }
         }
