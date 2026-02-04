@@ -131,98 +131,230 @@ bash ../tests/test1_capacity.sh
 
 ## Function Documentation
 
-### Main Process ([src/main.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/main.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `main` | [100-254](https://github.com/Enjot/ropeway-simulation/blob/main/src/main.c#L100-L254) | Entry point: load config, create IPC, spawn workers, main loop |
-| `shutdown_workers` | [42-98](https://github.com/Enjot/ropeway-simulation/blob/main/src/main.c#L42-L98) | Signal workers and destroy IPC to unblock operations |
+### Main Process ([src/main.c](src/main.c))
 
-### IPC Management ([src/ipc/ipc.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/ipc.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `ipc_cleanup_stale` | [24-80](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/ipc.c#L24-L80) | Clean up orphaned IPC from crashed runs |
-| `ipc_create` | [82-125](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/ipc.c#L82-L125) | Create all IPC resources |
-| `ipc_attach` | [127-147](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/ipc.c#L127-L147) | Child process attach to IPC |
-| `ipc_destroy` | [153-165](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/ipc.c#L153-L165) | Destroy all IPC resources |
-| `ipc_cleanup_signal_safe` | [172-181](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/ipc.c#L172-L181) | Signal-safe cleanup for handlers |
+#### `shutdown_workers` (lines 42-98)
+Signal workers to stop and destroy IPC to unblock blocked operations.
 
-### Semaphore Operations ([src/ipc/sem.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sem.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `ipc_sem_create` | [21-53](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sem.c#L21-L53) | Create and initialize semaphore set |
-| `sem_wait` | [84-99](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sem.c#L84-L99) | Atomic wait by count |
-| `sem_wait_pauseable` | [106-125](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sem.c#L106-L125) | Wait with EINTR handling |
-| `sem_post` | [131-146](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sem.c#L131-L146) | Atomic post by count |
+#### `main` (lines 100-254)
+Entry point: load config, create IPC, spawn workers, run main loop.
 
-### Time Server ([src/processes/time_server.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/time_server.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `sigtstp_handler` | [49-60](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/time_server.c#L49-L60) | Capture pause start time |
-| `sigcont_handler` | [70-77](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/time_server.c#L70-L77) | Signal pause ended |
-| `handle_resume` | [105-126](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/time_server.c#L105-L126) | Calculate pause offset |
-| `update_sim_time` | [136-164](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/time_server.c#L136-L164) | Atomic time update |
-| `time_server_main` | [176-254](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/time_server.c#L176-L254) | Entry point |
+---
 
-### Cashier ([src/processes/cashier.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/cashier.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `calculate_ticket_validity` | [31-53](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/cashier.c#L31-L53) | Ticket expiration time |
-| `calculate_price` | [65-83](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/cashier.c#L65-L83) | Price with age discounts |
-| `calculate_family_price` | [97-109](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/cashier.c#L97-L109) | Family ticket pricing |
-| `cashier_main` | [120-249](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/cashier.c#L120-L249) | Entry point |
+### IPC Management ([src/ipc/ipc.c](src/ipc/ipc.c))
 
-### Lower Worker ([src/processes/lower_worker.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/lower_worker.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `check_for_danger` | [65-88](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/lower_worker.c#L65-L88) | Random danger detection |
-| `dispatch_chair` | [101-141](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/lower_worker.c#L101-L141) | Send boarding confirmations |
-| `lower_worker_main` | [153-338](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/lower_worker.c#L153-L338) | Entry point |
+#### `ipc_cleanup_stale` (lines 24-80)
+Clean up stale IPC resources from a previous crashed run. Checks if shared memory exists and if the stored `main_pid` is dead.
+- **Parameters**: `keys` - IPC keys to check
+- **Returns**: 1 if stale resources cleaned, 0 if no stale resources, -1 on error
 
-### Upper Worker ([src/processes/upper_worker.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/upper_worker.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `get_chair_tracker` | [100-117](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/upper_worker.c#L100-L117) | Track chair arrivals |
-| `upper_worker_main` | [142-265](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/upper_worker.c#L142-L265) | Entry point |
+#### `ipc_create` (lines 82-125)
+Create all IPC resources (shared memory, semaphores, message queues).
+- **Parameters**: `res` - IPC resources struct to populate, `keys` - IPC keys, `cfg` - configuration
+- **Returns**: 0 on success, -1 on error
 
-### Tourist Generator ([src/processes/tourist_generator.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/tourist_generator.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `generate_age` | [65-81](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/tourist_generator.c#L65-L81) | Random age with guardian eligibility |
-| `generate_kid_count` | [90-95](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/tourist_generator.c#L90-L95) | 0-2 kids per adult |
-| `select_ticket_type` | [115-122](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/tourist_generator.c#L115-L122) | Random ticket distribution |
-| `tourist_generator_main` | [145-294](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/tourist_generator.c#L145-L294) | Entry point |
+#### `ipc_attach` (lines 127-147)
+Attach child process to existing IPC resources.
+- **Parameters**: `res` - IPC resources struct to populate, `keys` - IPC keys
+- **Returns**: 0 on success, -1 on error
 
-### Tourist ([src/tourist/main.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/main.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `main` | [24-258](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/main.c#L24-L258) | Lifecycle: ticket purchase, ride loop, exit |
+#### `ipc_destroy` (lines 153-165)
+Destroy all IPC resources (message queues, semaphores, shared memory).
+- **Parameters**: `res` - IPC resources to destroy
 
-### Emergency Coordination ([src/common/worker_emergency.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/common/worker_emergency.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `worker_trigger_emergency_stop` | [46-79](https://github.com/Enjot/ropeway-simulation/blob/main/src/common/worker_emergency.c#L46-L79) | Initiate emergency stop |
-| `worker_acknowledge_emergency_stop` | [81-135](https://github.com/Enjot/ropeway-simulation/blob/main/src/common/worker_emergency.c#L81-L135) | Receive and wait for resume |
-| `worker_initiate_resume` | [137-196](https://github.com/Enjot/ropeway-simulation/blob/main/src/common/worker_emergency.c#L137-L196) | Resume after cooldown |
+#### `ipc_cleanup_signal_safe` (lines 172-181)
+Signal-safe IPC cleanup for use in signal handlers. Only uses async-signal-safe syscalls (`msgctl`, `semctl`, `shmctl`). Cleanup order: MQ → Semaphores → SHM (unblocks waiting processes first).
+- **Parameters**: `res` - IPC resources to clean up
 
-### Logger ([src/core/logger.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/logger.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `logger_init` | [30-34](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/logger.c#L30-L34) | Initialize with component type |
-| `log_msg` | [64-106](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/logger.c#L64-L106) | Formatted log output |
-| `log_signal_safe` | [108-112](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/logger.c#L108-L112) | Async-signal-safe logging |
-| `int_to_str` | [114-149](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/logger.c#L114-L149) | Signal-safe int to string |
+---
 
-### Configuration ([src/core/config.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/config.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `config_set_defaults` | [17-45](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/config.c#L17-L45) | Initialize defaults |
-| `config_load` | [56-146](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/config.c#L56-L146) | Load from file |
-| `config_validate` | [156-233](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/config.c#L156-L233) | Validate values |
+### Semaphore Operations ([src/ipc/sem.c](src/ipc/sem.c))
 
-### Report ([src/core/report.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/report.c))
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `print_report` | [13-67](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/report.c#L13-L67) | Final simulation summary |
+#### `ipc_sem_create` (lines 21-53)
+Create and initialize semaphore set with configured values.
+- **Parameters**: `res` - IPC resources, `key` - semaphore key, `cfg` - configuration
+- **Returns**: 0 on success, -1 on error
+
+#### `sem_wait` (lines 84-99)
+Atomically wait (decrement) a semaphore by count. Blocks until count slots are available, then acquires all at once.
+- **Parameters**: `sem_id` - semaphore set ID, `sem_num` - semaphore index, `count` - number of slots to acquire
+- **Returns**: 0 on success, -1 on error/interrupt
+
+#### `sem_wait_pauseable` (lines 106-125)
+Semaphore wait with EINTR handling. Kernel handles SIGTSTP/SIGCONT automatically (process gets suspended). Only returns -1 on shutdown (EIDRM) or other errors.
+- **Parameters**: `res` - IPC resources, `sem_num` - semaphore index, `count` - number of slots
+- **Returns**: 0 on success, -1 on shutdown/error
+
+#### `sem_post` (lines 131-146)
+Atomically post (increment) a semaphore by count. Releases count slots at once.
+- **Parameters**: `sem_id` - semaphore set ID, `sem_num` - semaphore index, `count` - number of slots to release
+- **Returns**: 0 on success, -1 on error
+
+---
+
+### Time Server ([src/processes/time_server.c](src/processes/time_server.c))
+
+#### `sigtstp_handler` (lines 50-61)
+SIGTSTP handler - capture pause start time and suspend. Uses SA_RESETHAND so handler is automatically reset to SIG_DFL before this handler runs. After capture, raises SIGTSTP again to actually suspend the process.
+- **Parameters**: `sig` - signal number (unused)
+
+#### `sigcont_handler` (lines 71-78)
+SIGCONT handler - signal that pause has ended. Reinstalls the SIGTSTP handler (sigaction is async-signal-safe). Actual pause offset calculation happens in `handle_resume()`.
+- **Parameters**: `sig` - signal number (unused)
+
+#### `handle_resume` (lines 106-127)
+Handle pause offset calculation after SIGCONT. Called outside signal handler context to safely calculate the pause duration and update the total pause offset.
+
+#### `update_sim_time` (lines 137-165)
+Update the atomic simulated time in SharedState. Calculates current simulated time accounting for pause offsets and stores it atomically for other processes to read.
+- **Parameters**: `state` - shared state to update
+
+#### `time_server_main` (lines 177-258)
+Time Server process entry point. Maintains the current simulated time with sub-millisecond precision. Handles SIGTSTP/SIGCONT pause tracking and offset calculation. Atomically updates `SharedState.current_sim_time_ms` for other processes.
+- **Parameters**: `res` - IPC resources (shared memory for time updates), `keys` - IPC keys (unused)
+
+---
+
+### Cashier ([src/processes/cashier.c](src/processes/cashier.c))
+
+#### `calculate_ticket_validity` (lines 31-53)
+Calculate ticket expiration time in simulated minutes.
+- **Parameters**: `state` - shared state with ticket duration settings, `ticket` - type of ticket being purchased
+- **Returns**: Expiration time in simulated minutes from midnight
+
+#### `calculate_price` (lines 65-83)
+Calculate ticket price for one person. Age discounts: under 10 years or 65+ get 25% off.
+- **Parameters**: `age` - tourist age in years, `ticket` - type of ticket being purchased, `is_vip` - whether tourist has VIP status (adds surcharge)
+- **Returns**: Price in PLN
+
+#### `calculate_family_price` (lines 97-109)
+Calculate total family ticket price. Parent and kids all get the same ticket type. Kids (4-7 years old) always get the under-10 discount.
+- **Parameters**: `parent_age` - parent's age in years, `ticket` - type of ticket for the family, `is_vip` - whether family has VIP status, `kid_count` - number of children (0-2)
+- **Returns**: Total price in PLN for entire family
+
+#### `cashier_main` (lines 120-252)
+Cashier process entry point. Handles ticket sales via message queue. Calculates prices with age discounts and VIP surcharges. Runs until station closes or shutdown signal received.
+- **Parameters**: `res` - IPC resources (message queues, semaphores, shared memory), `keys` - IPC keys (unused)
+
+---
+
+### Lower Worker ([src/processes/lower_worker.c](src/processes/lower_worker.c))
+
+#### `check_for_danger` (lines 65-88)
+Check for random danger and trigger emergency stop if detected. Uses pause-adjusted time for cooldown calculation.
+- **Parameters**: `res` - IPC resources for emergency coordination
+- **Returns**: 1 if danger was detected, 0 otherwise
+
+#### `dispatch_chair` (lines 101-141)
+Dispatch the current chair with all buffered tourists. Acquires a chair slot, then sends boarding confirmations to all buffered tourists with the same `departure_time` so they arrive together. The `upper_worker` releases the chair slot when all tourists have arrived.
+- **Parameters**: `res` - IPC resources for semaphores and message queues, `chair_number` - chair identifier for logging, `slots_used` - total slots used on this chair
+
+#### `lower_worker_main` (lines 153-341)
+Lower platform worker process entry point. Manages tourist boarding onto chairlift. Buffers tourists until chair is full or queue is empty, then dispatches. Handles emergency stops and random danger detection.
+- **Parameters**: `res` - IPC resources (message queues, semaphores, shared memory), `keys` - IPC keys (unused)
+
+---
+
+### Upper Worker ([src/processes/upper_worker.c](src/processes/upper_worker.c))
+
+#### `get_chair_tracker` (lines 100-117)
+Find or create a tracker for a chair.
+- **Parameters**: `chair_id` - chair identifier to find or create tracker for, `tourists_on_chair` - expected number of tourists on this chair
+- **Returns**: Pointer to tracker, or NULL if tracking array is full
+
+#### `upper_worker_main` (lines 142-268)
+Upper platform worker process entry point. Processes tourist arrivals at the upper platform. Tracks chairs and releases chair slots when all tourists from a chair have arrived. Handles emergency stops and random danger detection.
+- **Parameters**: `res` - IPC resources (message queues, semaphores, shared memory), `keys` - IPC keys (unused)
+
+---
+
+### Tourist Generator ([src/processes/tourist_generator.c](src/processes/tourist_generator.c))
+
+#### `generate_age` (lines 65-81)
+Generate random age (8-80) and check if person can have kids. Adults 26+ can be guardians for kids aged 4-7.
+- **Parameters**: `can_have_kids` - output: 1 if person can be a guardian, 0 otherwise
+- **Returns**: Generated age in years
+
+#### `generate_kid_count` (lines 91-95)
+Generate number of kids for a family (1-2). Distribution: ~63% one kid, ~37% two kids. Only called when `family_percentage` check already passed.
+- **Returns**: Number of children (1 or 2)
+
+#### `select_ticket_type` (lines 115-122)
+Select ticket type for a tourist. Distribution: 30% single, 20% T1, 20% T2, 15% T3, 15% daily.
+- **Returns**: Random ticket type
+
+#### `tourist_generator_main` (lines 145-294)
+Tourist generator process entry point. Spawns tourist processes with random attributes (age, type, VIP status, ticket type, kids). Uses fork+exec to create tourist processes. Waits for all spawned tourists to exit before returning.
+- **Parameters**: `res` - IPC resources (shared memory for config values), `keys` - IPC keys (unused), `tourist_exe` - path to tourist executable
+
+---
+
+### Tourist ([src/tourist/main.c](src/tourist/main.c))
+
+#### `main` (lines 24-258)
+Tourist process entry point. Handles complete tourist lifecycle: ticket purchase, ride loop (enter station, board chair, ride, descend trail), and exit when ticket expires.
+
+---
+
+### Emergency Coordination ([src/common/worker_emergency.c](src/common/worker_emergency.c))
+
+#### `worker_trigger_emergency_stop` (lines 46-79)
+Initiate emergency stop. Attempts to acquire `SEM_EMERGENCY_LOCK` to become the initiator. If lock acquired, sets `emergency_stop` flag and signals the other worker via SIGUSR1. If lock not acquired, falls back to receiver role.
+- **Parameters**: `res` - IPC resources, `role` - worker role (WORKER_LOWER or WORKER_UPPER), `state` - emergency state tracking
+
+#### `worker_acknowledge_emergency_stop` (lines 81-135)
+Acknowledge emergency stop from the other worker. Sets `emergency_stop` flag, then blocks waiting for resume message via `MQ_WORKER`. After resume received, signals ready and clears emergency flag.
+- **Parameters**: `res` - IPC resources, `role` - worker role, `state` - emergency state tracking
+
+#### `worker_initiate_resume` (lines 137-196)
+Resume operations after emergency cooldown passed. Sends `READY_TO_RESUME` message to other worker, waits for `I_AM_READY` response, sends SIGUSR2, clears emergency flag, and releases `SEM_EMERGENCY_LOCK`.
+- **Parameters**: `res` - IPC resources, `role` - worker role, `state` - emergency state tracking
+
+---
+
+### Logger ([src/core/logger.c](src/core/logger.c))
+
+#### `logger_init` (lines 30-34)
+Initialize logger with shared state and component type for colored output.
+- **Parameters**: `state` - shared state (for simulation time), `comp` - component type enum
+
+#### `log_msg` (lines 64-106)
+Formatted log output with simulation timestamp, level, and component tag. Uses colors based on component type when output is a terminal.
+- **Parameters**: `level` - log level string, `component` - component name, `fmt` - printf-style format string
+
+#### `log_signal_safe` (lines 108-112)
+Async-signal-safe logging using only `write()`. For use in signal handlers.
+- **Parameters**: `msg` - message string to write
+
+#### `int_to_str` (lines 114-149)
+Signal-safe integer to string conversion. Does not use any non-async-signal-safe functions.
+- **Parameters**: `n` - integer to convert, `buf` - output buffer, `buf_size` - buffer size
+
+---
+
+### Configuration ([src/core/config.c](src/core/config.c))
+
+#### `config_set_defaults` (lines 17-46)
+Initialize configuration with default values.
+- **Parameters**: `cfg` - configuration structure to initialize
+
+#### `config_load` (lines 57-149)
+Load configuration from a file. Sets defaults first, then overrides with file values.
+- **Parameters**: `path` - path to the configuration file, `cfg` - configuration structure to populate
+- **Returns**: 0 on success, -1 on error
+
+#### `config_validate` (lines 159-241)
+Validate configuration values. Prints error messages for invalid values to stderr.
+- **Parameters**: `cfg` - configuration structure to validate
+- **Returns**: 0 if valid, -1 if invalid
+
+---
+
+### Report ([src/core/report.c](src/core/report.c))
+
+#### `print_report` (lines 13-67)
+Print final simulation summary including duration, total tourists, total rides, per-tourist breakdown, and aggregates by ticket type.
+- **Parameters**: `state` - shared state with simulation statistics
 
 ## Configuration Parameters
 
