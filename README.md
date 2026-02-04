@@ -283,47 +283,130 @@ Config file format: `KEY=VALUE` with `#` comments.
 ## Test Suite Details
 
 ### Integration Tests (1-4)
-| Test | Purpose | Validates |
-|------|---------|-----------|
-| [test1_capacity.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test1_capacity.sh) | Station capacity limits | `SEM_LOWER_STATION` never exceeded |
-| [test2_children.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test2_children.sh) | Family/kid handling | Family atomic boarding |
-| [test3_vip.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test3_vip.sh) | VIP priority queue | mtype-based priority |
-| [test4_emergency.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test4_emergency.sh) | Emergency stop/resume | SIGUSR1/SIGUSR2 coordination |
 
-#### Stress Tests (5-8)
-| Test | Purpose | Validates |
-|------|---------|-----------|
-| [test5_stress.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test5_stress.sh) | High-volume stress | Stability under load |
-| [test6_race.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test6_race.sh) | Race condition detection | Concurrent gate access |
-| [test7_emergency_race.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test7_emergency_race.sh) | Emergency + race conditions | Emergency lock acquisition |
-| [test8_chair_saturation.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test8_chair_saturation.sh) | Chair availability | `SEM_CHAIRS` limits respected |
+#### [test1_capacity.sh](tests/test1_capacity.sh) - Lower Station Capacity Limit
+- **Goal**: Station visitor count never exceeds N
+- **Rationale**: Tests for race condition between 4 entry gates incrementing station count via `SEM_LOWER_STATION`. Without proper semaphore synchronization, concurrent `sem_wait()` calls could allow count > N briefly.
+- **Parameters**: `station_capacity=5`, `tourists=30`, `simulation_time=60s`
+- **Expected**: Max observed count ≤ 5. No zombies. IPC cleaned.
 
-#### Edge Case Tests (9-13)
-| Test | Purpose | Validates |
-|------|---------|-----------|
-| [test9_zero.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test9_zero.sh) | Zero tourists edge case | Clean shutdown with no activity |
-| [test10_single.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test10_single.sh) | Single tourist | Minimal load behavior |
-| [test11_capacity_one.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test11_capacity_one.sh) | Capacity = 1 | Extreme serialization |
-| [test12_all_vip.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test12_all_vip.sh) | 100% VIP tourists | All-VIP queue handling |
-| [test13_all_families.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test13_all_families.sh) | Only family tourists | Thread-heavy load |
+#### [test2_children.sh](tests/test2_children.sh) - Children Under 8 with Guardians
+- **Goal**: Children board with guardians, max 2 kids per adult
+- **Rationale**: Tests atomic multi-slot semaphore acquisition for families. `sem_wait_n(SEM_LOWER_STATION, family_size)` must be atomic - partial acquisition would split family or cause deadlock if slots < family_size.
+- **Parameters**: `walker_percentage=100` (high family probability), `tourists=50`
+- **Expected**: Families board together. No adult has >2 kids. No deadlock.
 
-#### Recovery Tests (14-16)
-| Test | Purpose | Validates |
-|------|---------|-----------|
-| [test14_sigterm.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test14_sigterm.sh) | SIGTERM handling | Graceful shutdown |
-| [test15_sigkill_recovery.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test15_sigkill_recovery.sh) | Crash recovery | `ipc_cleanup_stale` works |
-| [test16_child_death.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test16_child_death.sh) | Child process failure | Zombie reaping |
+#### [test3_vip.sh](tests/test3_vip.sh) - VIP Priority Without Queue Starvation
+- **Goal**: VIPs served first, regular tourists not starved indefinitely
+- **Rationale**: Tests `msgrcv()` with `mtype=-2` for priority ordering. If VIPs continuously arrive, `mtype=2` messages could starve. Verifies cashier eventually serves regular tourists between VIP bursts.
+- **Parameters**: `vip_percentage=10`, `tourists=50`, `simulation_time=120s`
+- **Expected**: VIPs board first. Regular tourists eventually served.
 
-#### Signal Tests (17-18)
-| Test | Purpose | Validates |
-|------|---------|-----------|
-| [test17_pause_resume.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test17_pause_resume.sh) | SIGTSTP/SIGCONT pause | Time offset calculation |
-| [test18_rapid_signals.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test18_rapid_signals.sh) | Signal flooding | Handler robustness |
+#### [test4_emergency.sh](tests/test4_emergency.sh) - Emergency Stop and Resume (Signals)
+- **Goal**: SIGUSR1 stops chairlift, SIGUSR2 resumes after worker confirmation
+- **Rationale**: Tests signal handler coordination via `SEM_EMERGENCY_LOCK` and `SEM_EMERGENCY_CLEAR`. Race condition possible if both workers try to initiate emergency simultaneously. Resume requires both workers to signal ready.
+- **Parameters**: Manual SIGUSR1/SIGUSR2 injection during runtime
+- **Expected**: Emergency stop logged. Resume only after both workers ready.
 
-#### Sync Correctness Tests (19)
-| Test | Purpose | Validates |
-|------|---------|-----------|
-| [test19_sigalrm_sync.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test19_sigalrm_sync.sh) | SIGALRM synchronization | Time-based coordination |
+### Stress Tests (5-8)
+
+#### [test5_stress.sh](tests/test5_stress.sh) - High Throughput Stress Test
+- **Goal**: Simulation completes without timeout under high concurrency
+- **Rationale**: Tests for deadlock between `MQ_CASHIER`, `MQ_PLATFORM`, `MQ_BOARDING` under load. 500 concurrent tourists stress all semaphores and message queues simultaneously - exposes circular wait conditions or semaphore exhaustion.
+- **Parameters**: `tourists=500`, `spawn_delay=0`, `station_capacity=50`, `simulation_time=300s`
+- **Expected**: No timeout (deadlock). No zombies. IPC cleaned.
+
+#### [test6_race.sh](tests/test6_race.sh) - Entry Gate Race Condition Test
+- **Goal**: Capacity N=5 never exceeded across 10 iterations
+- **Rationale**: Tests TOCTOU race in `SEM_LOWER_STATION`. Multiple tourists calling `sem_wait()` simultaneously could interleave check-and-decrement operations. 10 iterations increases probability of catching intermittent race.
+- **Parameters**: `tourists=50`, `spawn_delay=0`, `N=5`, 10 iterations
+- **Expected**: Count ≤ 5 in all iterations. 100% pass rate.
+
+#### [test7_emergency_race.sh](tests/test7_emergency_race.sh) - Emergency Race Condition Test
+- **Goal**: Only one worker initiates emergency when both detect danger
+- **Rationale**: Tests race on `SEM_EMERGENCY_LOCK` when lower_worker and upper_worker both call `sem_trywait()` simultaneously. Double-initiation would corrupt emergency state or cause deadlock waiting on `SEM_EMERGENCY_CLEAR`.
+- **Parameters**: `danger_probability=100`, `tourists=30`, `simulation_time=60s`
+- **Expected**: Single initiator per emergency. No deadlock. System recovers.
+
+#### [test8_chair_saturation.sh](tests/test8_chair_saturation.sh) - Chair Saturation Test
+- **Goal**: Tourists block on `SEM_CHAIRS` when all 36 chairs are in transit
+- **Rationale**: Tests semaphore blocking behavior when `SEM_CHAIRS` reaches zero. Fast boarding + slow travel saturates chairs. Verifies `sem_wait()` blocks correctly and `sem_post()` from arrivals unblocks waiting tourists.
+- **Parameters**: `chair_travel_time=30` sim minutes, `tourists=100`, `station_capacity=50`
+- **Expected**: Max 36 chairs in transit. No deadlock on chair exhaustion.
+
+### Edge Case Tests (9-13)
+
+#### [test9_zero.sh](tests/test9_zero.sh) - Zero Tourists Edge Case
+- **Goal**: Workers initialize and shutdown cleanly with no tourists
+- **Rationale**: Tests for blocking on empty message queues. `msgrcv()` without `IPC_NOWAIT` on `MQ_CASHIER`/`MQ_PLATFORM` would hang forever. Workers must handle SIGTERM during idle wait without deadlock.
+- **Parameters**: `tourists=0`, `simulation_time=15s`
+- **Expected**: Clean shutdown. No hang on empty queues. No IPC leaks.
+
+#### [test10_single.sh](tests/test10_single.sh) - Single Tourist Edge Case
+- **Goal**: One tourist completes full lifecycle without concurrency
+- **Rationale**: Baseline test - verifies message passing chain works: tourist→MQ_CASHIER→cashier→MQ_PLATFORM→lower_worker→MQ_BOARDING→tourist→MQ_ARRIVALS→upper_worker. No concurrency masks IPC bugs.
+- **Parameters**: `tourists=1`, walker, `simulation_time=60s`
+- **Expected**: Tourist completes ride. All IPC handoffs succeed.
+
+#### [test11_capacity_one.sh](tests/test11_capacity_one.sh) - Capacity One Edge Case
+- **Goal**: Only 1 tourist in station at any time with N=1
+- **Rationale**: Tests convoy effect on `SEM_LOWER_STATION`. With N=1, all tourists serialize on single semaphore slot. Potential for priority inversion or starvation if `sem_wait()` ordering is unfair.
+- **Parameters**: `N=1`, `tourists=10`, `simulation_time=120s`
+- **Expected**: Max count=1. All tourists eventually served. No deadlock.
+
+#### [test12_all_vip.sh](tests/test12_all_vip.sh) - All VIPs Edge Case
+- **Goal**: All tourists served when everyone has same mtype=1 priority
+- **Rationale**: Tests `msgrcv()` behavior when all messages have identical mtype. Verifies FIFO ordering within same priority level. Edge case where priority differentiation provides no benefit - system must still function.
+- **Parameters**: `vip_percentage=100`, `tourists=30`, `simulation_time=90s`
+- **Expected**: FIFO order maintained. All tourists served. No starvation.
+
+#### [test13_all_families.sh](tests/test13_all_families.sh) - All Families Edge Case
+- **Goal**: Families board atomically without splitting
+- **Rationale**: Tests `semop()` with `sem_op > 1` for atomic multi-slot acquisition. Family of 3 must acquire 3 slots atomically - partial acquisition would split family or deadlock if remaining capacity < family_size.
+- **Parameters**: `walker_percentage=100` (maximizes family probability), `tourists=40`
+- **Expected**: No split families. Atomic acquisition verified. No deadlock.
+
+### Recovery Tests (14-16)
+
+#### [test14_sigterm.sh](tests/test14_sigterm.sh) - SIGTERM Cleanup Test
+- **Goal**: No orphaned IPC resources after SIGTERM shutdown
+- **Rationale**: Tests `ipc_cleanup()` is called from SIGTERM handler. Semaphores, shared memory, and message queues must be released via `semctl(RMID)`, `shmctl(RMID)`, `msgctl(RMID)`. Leaked IPC persists until reboot.
+- **Parameters**: Run 10s, send SIGTERM, verify ipcs shows no resources
+- **Expected**: ipcs empty after shutdown. No zombies. All children terminated.
+
+#### [test15_sigkill_recovery.sh](tests/test15_sigkill_recovery.sh) - SIGKILL Recovery Test
+- **Goal**: New run cleans orphaned IPC from previous crash
+- **Rationale**: SIGKILL bypasses signal handlers - no `ipc_cleanup()` runs. Tests `ipc_cleanup_stale()` at startup: must detect orphaned resources via `ftok()` key collision and remove before creating new IPC objects.
+- **Parameters**: SIGKILL first run, start second run, verify stale cleanup
+- **Expected**: Second run succeeds. Stale IPC cleaned. Log shows cleanup.
+
+#### [test16_child_death.sh](tests/test16_child_death.sh) - Child Death Test
+- **Goal**: Main process shuts down gracefully when child dies unexpectedly
+- **Rationale**: Tests SIGCHLD handler and zombie reaper thread. Killing cashier mid-run must trigger: `waitpid()` reaps child, main detects worker death, initiates shutdown. Without proper handling: zombies or orphaned children.
+- **Parameters**: Kill cashier process mid-simulation
+- **Expected**: Main detects death. Graceful shutdown. No zombies or IPC leaks.
+
+### Signal Tests (17-18)
+
+#### [test17_pause_resume.sh](tests/test17_pause_resume.sh) - Pause/Resume Test (SIGTSTP/SIGCONT)
+- **Goal**: Simulated time offset adjusts for pause duration
+- **Rationale**: Tests SIGTSTP/SIGCONT handlers in time_server. Pause duration must be added to time_offset so accelerated simulation time doesn't jump. Without offset adjustment: tickets expire during pause, time discontinuity.
+- **Parameters**: SIGTSTP for 5s, then SIGCONT
+- **Expected**: Time continues smoothly after resume. No expired tickets.
+
+#### [test18_rapid_signals.sh](tests/test18_rapid_signals.sh) - Rapid Signals Test
+- **Goal**: No crash under rapid signal delivery
+- **Rationale**: Tests signal handler reentrancy. Rapid SIGUSR1 can interrupt handler mid-execution. Non-async-signal-safe functions (`malloc`, `printf`) in handler cause undefined behavior. Must use only safe functions.
+- **Parameters**: 10 SIGUSR1 signals with 100ms delay
+- **Expected**: No segfault. No hang. Simulation survives signal storm.
+
+### Sync Correctness Tests (19)
+
+#### [test19_sigalrm_sync.sh](tests/test19_sigalrm_sync.sh) - SIGALRM Sync Test
+- **Goal**: Verify simulation works with SIGALRM-based sync (no usleep polling)
+- **Rationale**: Confirms refactored code uses blocking IPC + `alarm()` correctly. All `IPC_NOWAIT`+usleep polling has been replaced with blocking calls that use SIGALRM for periodic wakeup. EINTR handled properly on alarm interrupt.
+- **Parameters**: `tourists=20`, `simulation_time=60s` (uses test1_capacity.conf)
+- **Expected**: Simulation completes. No deadlock. No leftover IPC.
 
 ### Test Output
 Tests check for:
