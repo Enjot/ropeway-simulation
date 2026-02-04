@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run all tests
 # Usage: ./run_all.sh [category]
-# Categories: all, integration, stress, edge, recovery, signal
+# Categories: all, integration, stress, edge, recovery, signal, sync
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
@@ -103,6 +103,12 @@ if [ "$CATEGORY" = "all" ] || [ "$CATEGORY" = "signal" ]; then
     echo ">>> SIGNAL TESTS <<<"
     run_test "Test 17: Pause/Resume" "${SCRIPT_DIR}/test17_pause_resume.sh"
     run_test "Test 18: Rapid Signals" "${SCRIPT_DIR}/test18_rapid_signals.sh"
+fi
+
+# Sync correctness tests (Test 19)
+if [ "$CATEGORY" = "all" ] || [ "$CATEGORY" = "sync" ]; then
+    echo ">>> SYNC CORRECTNESS TESTS <<<"
+    run_test "Test 19: SIGALRM Sync" "${SCRIPT_DIR}/test19_sigalrm_sync.sh"
 fi
 
 # Summary

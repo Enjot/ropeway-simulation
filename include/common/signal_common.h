@@ -22,13 +22,14 @@
 
 /**
  * Define an emergency-capable signal handler for lower/upper workers.
- * Handles SIGTERM, SIGINT, SIGUSR1 (emergency), SIGUSR2 (resume).
+ * Handles SIGTERM, SIGINT, SIGUSR1 (emergency), SIGUSR2 (resume), SIGALRM (timeout).
  * Uses write() for signal-safe logging.
  *
  * Requires:
  *   static int g_running = 1;
  *   static int g_emergency_signal = 0;
  *   static int g_resume_signal = 0;
+ *   static int g_alarm_signal = 0;
  *
  * @param handler_name Name for the generated handler function
  * @param worker_tag String literal for logging (e.g., "LOWER_WORKER")
@@ -45,5 +46,7 @@
             g_resume_signal = 1; \
             write(STDERR_FILENO, "[SIGNAL] [" worker_tag "] Resume request (SIGUSR2)\n", \
                   sizeof("[SIGNAL] [" worker_tag "] Resume request (SIGUSR2)\n") - 1); \
+        } else if (sig == SIGALRM) { \
+            g_alarm_signal = 1; \
         } \
     }

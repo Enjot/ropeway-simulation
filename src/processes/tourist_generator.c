@@ -17,9 +17,10 @@
 
 static int g_running = 1;
 static int g_child_exited = 0;
+static int g_alarm_signal = 0;
 
 /**
- * @brief Signal handler for SIGTERM, SIGINT, and SIGCHLD.
+ * @brief Signal handler for SIGTERM, SIGINT, SIGCHLD, and SIGALRM.
  *
  * @param sig Signal number received.
  */
@@ -28,6 +29,8 @@ static void signal_handler(int sig) {
         g_running = 0;
     } else if (sig == SIGCHLD) {
         g_child_exited = 1;
+    } else if (sig == SIGALRM) {
+        g_alarm_signal = 1;
     }
 }
 
@@ -156,6 +159,7 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
     sa.sa_flags = 0;
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGALRM, &sa, NULL);
 
     // Seed random number generator
     srand(time(NULL) ^ getpid());
@@ -264,21 +268,25 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
     int status;
     pid_t pid;
 
-    // Wait for all tourists to exit (blocking wait with zombie reaping)
+    // Wait for all tourists to exit (blocking wait with SIGALRM timeout)
     while (active_tourists > 0) {
-        // Check for zombie children (non-blocking first to handle accumulated exits)
+        // First reap any accumulated zombies (non-blocking)
         while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
             active_tourists--;
             log_debug("GENERATOR", "Tourist exited (PID %d), %d remaining", (int)pid, active_tourists);
         }
 
         if (active_tourists > 0) {
-            // If simulation ended, wait for remaining tourists with timeout
-            if (!res->state->running) {
-                usleep(100000);  // 100ms between checks
-            } else {
-                usleep(50000);  // 50ms between checks during normal operation
+            // Use blocking waitpid with SIGALRM timeout (100ms)
+            ualarm(100000, 0);
+            pid = waitpid(-1, &status, 0);  // Blocking wait
+            ualarm(0, 0);
+
+            if (pid > 0) {
+                active_tourists--;
+                log_debug("GENERATOR", "Tourist exited (PID %d), %d remaining", (int)pid, active_tourists);
             }
+            // EINTR from SIGALRM or SIGCHLD just loops back to check again
         }
     }
 

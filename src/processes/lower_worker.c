@@ -19,6 +19,7 @@
 static int g_running = 1;
 static int g_emergency_signal = 0;
 static int g_resume_signal = 0;
+static int g_alarm_signal = 0;
 static double g_last_danger_time_sim = 0.0;       // Last danger detection (sim minutes)
 static double g_emergency_start_time_sim = 0.0;  // When current emergency started (sim minutes)
 static int g_is_emergency_initiator = 0;         // 1 if this worker detected danger
@@ -169,6 +170,7 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGUSR1, &sa, NULL);
     sigaction(SIGUSR2, &sa, NULL);
+    sigaction(SIGALRM, &sa, NULL);
 
     // Seed random number generator for danger detection
     srand((unsigned int)(time(NULL) ^ getpid()));
@@ -206,8 +208,10 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
                 // Duration passed - initiate resume
                 worker_initiate_resume(res, WORKER_LOWER, &g_emergency_state);
             } else {
-                // Still in cooldown - sleep briefly
-                usleep(100000);
+                // Still in cooldown - wait with SIGALRM timeout (100ms)
+                ualarm(100000, 0);
+                pause();  // Interrupted by SIGALRM or other signals
+                ualarm(0, 0);
             }
             continue;
         }
@@ -226,23 +230,21 @@ void lower_worker_main(IPCResources *res, IPCKeys *keys) {
         }
 
         // msgrcv with -2 returns lowest mtype first (1=VIP before 2=regular)
-        // Use IPC_NOWAIT for polling - dispatch chair when queue is empty
+        // Use blocking msgrcv with SIGALRM timeout for periodic chair dispatch
         PlatformMsg msg;
-        ssize_t ret = msgrcv(res->mq_platform_id, &msg, sizeof(msg) - sizeof(long), -2, IPC_NOWAIT);
+        ualarm(100000, 0);  // 100ms timeout for periodic dispatch
+        ssize_t ret = msgrcv(res->mq_platform_id, &msg, sizeof(msg) - sizeof(long), -2, 0);
+        ualarm(0, 0);  // Cancel alarm if message received
 
         if (ret == -1) {
-            if (errno == ENOMSG) {
-                // Queue empty - dispatch any pending chair
+            if (errno == EINTR) {
+                // Interrupted by signal (SIGALRM or other) - dispatch any pending chair
                 if (g_pending_count > 0) {
                     dispatch_chair(res, chair_number, current_chair_slots);
                     current_chair_slots = 0;
                     chair_number = (chair_number % TOTAL_CHAIRS) + 1;
                 }
-                usleep(100000);  // 100ms polling interval
                 continue;
-            }
-            if (errno == EINTR) {
-                continue;  // Interrupted by signal
             }
             if (errno == EIDRM) {
                 log_debug("LOWER_WORKER", "Platform queue removed, exiting");
