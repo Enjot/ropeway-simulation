@@ -8,15 +8,6 @@
 #include "ipc/shared_state.h"
 
 /**
- * @brief Print final simulation report to stdout.
- *
- * Shows per-tourist summary and aggregates by ticket type.
- *
- * @param state Shared state with simulation data.
- */
-void print_report(SharedState *state);
-
-/**
  * @brief Write final simulation report to a file.
  *
  * Writes the same content as print_report() to the specified file.

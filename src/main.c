@@ -251,9 +251,6 @@ int main(int argc, char *argv[]) {
     // Wait for workers to exit
     wait_for_workers();
 
-    // Print report - shared memory is still attached
-    // TODO remove print_report(g_res.state);
-
     // Write report to file
     if (write_report_to_file(g_res.state, "simulation_report.txt") == 0) {
         write(STDERR_FILENO, "[INFO] [MAIN] Report saved to simulation_report.txt\n", 52);

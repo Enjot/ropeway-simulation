@@ -390,9 +390,10 @@ Validate configuration values. Prints error messages for invalid values to stder
 
 ### Report ([src/core/report.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/report.c))
 
-#### [`print_report`](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/report.c#L13-L67)
-Print final simulation summary including duration, total tourists, total rides, per-tourist breakdown, and aggregates by ticket type.
-- **Parameters**: `state` - shared state with simulation statistics
+#### [`write_report_to_file`](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/report.c#L13-L67)
+Write final simulation summary to file including duration, total tourists, total rides, per-tourist breakdown, and aggregates by ticket type. Report is saved to `simulation_report.txt`.
+- **Parameters**: `state` - shared state with simulation statistics, `filepath` - output file path
+- **Returns**: 0 on success, -1 on error
 
 ## Configuration Parameters
 
