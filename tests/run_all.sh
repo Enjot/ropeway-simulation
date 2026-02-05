@@ -100,11 +100,12 @@ if [ "$CATEGORY" = "all" ] || [ "$CATEGORY" = "recovery" ]; then
     run_test "Test 16: Child Death" "${SCRIPT_DIR}/test16_child_death.sh"
 fi
 
-# Signal tests (Tests 17-18)
+# Signal tests (Tests 17-18, 20)
 if [ "$CATEGORY" = "all" ] || [ "$CATEGORY" = "signal" ]; then
     echo ">>> SIGNAL TESTS <<<"
     run_test "Test 17: Pause/Resume" "${SCRIPT_DIR}/test17_pause_resume.sh"
     run_test "Test 18: Rapid Signals" "${SCRIPT_DIR}/test18_rapid_signals.sh"
+    run_test "Test 20: SIGINT During Emergency" "${SCRIPT_DIR}/test20_sigint_emergency.sh"
 fi
 
 # Sync correctness tests (Test 19)

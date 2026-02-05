@@ -34,7 +34,7 @@ cd tests
 ./run_all.sh stress       # Tests 5-8: High load scenarios
 ./run_all.sh edge         # Tests 9-13: Edge cases
 ./run_all.sh recovery     # Tests 14-16: Crash recovery
-./run_all.sh signal       # Tests 17-18: Signal handling
+./run_all.sh signal       # Tests 17-18, 20: Signal handling
 ./run_all.sh sync         # Test 19: Synchronization
 
 # Run individual test
@@ -578,6 +578,12 @@ Config file format: `KEY=VALUE` with `#` comments.
 - **Rationale**: Confirms refactored code uses blocking IPC + `alarm()` correctly. All `IPC_NOWAIT`+usleep polling has been replaced with blocking calls that use SIGALRM for periodic wakeup. EINTR handled properly on alarm interrupt.
 - **Parameters**: `tourists=15`, `simulation_time=1s` (uses test1_capacity.conf)
 - **Expected**: Simulation completes. No deadlock. No leftover IPC.
+
+#### [test20_sigint_emergency.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test20_sigint_emergency.sh) - SIGINT During Emergency Stop
+- **Goal**: Graceful shutdown when Ctrl+C is sent during emergency stop
+- **Rationale**: Workers blocked on `msgrcv()` during emergency handshake must wake up on SIGINT (EINTR) and proceed with shutdown. Emergency lock (`SEM_EMERGENCY_LOCK`) must be released. IPC cleanup must complete even when chairlift is stopped.
+- **Parameters**: `danger_probability=100`, `danger_duration=120min` (long duration ensures SIGINT hits during emergency)
+- **Expected**: Clean shutdown within 15s. No zombies. No orphaned processes. No leftover IPC.
 
 ### Test Output
 Tests check for:

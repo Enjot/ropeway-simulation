@@ -141,7 +141,7 @@ void worker_initiate_resume(IPCResources *res, WorkerRole role, WorkerEmergencyS
     int other_dest = get_other_dest(role);
     pid_t other_pid = get_other_pid(res, role);
 
-    log_info(tag, "Cooldown passed, initiating resume");
+    log_info(tag, "Danger resolved, initiating resume");
 
     // Send READY_TO_RESUME to receiving worker (via message queue)
     WorkerMsg msg = { .mtype = other_dest, .msg_type = WORKER_MSG_READY_TO_RESUME };
