@@ -23,9 +23,9 @@ void print_report(SharedState *state) {
 
     // Per-tourist summary
     printf("--- Per-Tourist Summary ---\n");
-    printf("%-6s %-8s %-10s %-8s %-6s %s\n",
-           "ID", "Type", "Ticket", "Entry", "Rides", "Notes");
-    printf("----------------------------------------------\n");
+    printf("%-6s %-8s %-10s %-6s %s\n",
+           "ID", "Type", "Ticket", "Rides", "Notes");
+    printf("-------------------------------------\n");
 
     const char *ticket_names[] = {"SINGLE", "TIME_T1", "TIME_T2", "TIME_T3", "DAILY"};
     const char *type_names[] = {"Walker", "Cyclist", "Family"};
@@ -33,9 +33,6 @@ void print_report(SharedState *state) {
     for (int i = 0; i < state->tourist_entry_count && i < state->max_tracked_tourists; i++) {
         TouristEntry *e = &state->tourist_entries[i];
         if (!e->active) continue;
-
-        char entry_time_buf[8];
-        time_format_minutes(e->entry_time_sim, entry_time_buf, sizeof(entry_time_buf));
 
         char notes[32] = "";
         if (e->is_vip) strcat(notes, "VIP ");
@@ -45,11 +42,10 @@ void print_report(SharedState *state) {
             strcat(notes, kid_note);
         }
 
-        printf("%-6d %-8s %-10s %-8s %-6d %s\n",
+        printf("%-6d %-8s %-10s %-6d %s\n",
                e->tourist_id,
                type_names[e->tourist_type],
                ticket_names[e->ticket_type],
-               entry_time_buf,
                e->total_rides,
                notes);
     }
@@ -84,9 +80,9 @@ int write_report_to_file(SharedState *state, const char *filepath) {
 
     // Per-tourist summary
     fprintf(f, "--- Per-Tourist Summary ---\n");
-    fprintf(f, "%-6s %-8s %-10s %-8s %-6s %s\n",
-           "ID", "Type", "Ticket", "Entry", "Rides", "Notes");
-    fprintf(f, "----------------------------------------------\n");
+    fprintf(f, "%-6s %-8s %-10s %-6s %s\n",
+           "ID", "Type", "Ticket", "Rides", "Notes");
+    fprintf(f, "-------------------------------------\n");
 
     const char *ticket_names[] = {"SINGLE", "TIME_T1", "TIME_T2", "TIME_T3", "DAILY"};
     const char *type_names[] = {"Walker", "Cyclist", "Family"};
@@ -94,9 +90,6 @@ int write_report_to_file(SharedState *state, const char *filepath) {
     for (int i = 0; i < state->tourist_entry_count && i < state->max_tracked_tourists; i++) {
         TouristEntry *e = &state->tourist_entries[i];
         if (!e->active) continue;
-
-        char entry_time_buf[8];
-        time_format_minutes(e->entry_time_sim, entry_time_buf, sizeof(entry_time_buf));
 
         char notes[32] = "";
         if (e->is_vip) strcat(notes, "VIP ");
@@ -106,11 +99,10 @@ int write_report_to_file(SharedState *state, const char *filepath) {
             strcat(notes, kid_note);
         }
 
-        fprintf(f, "%-6d %-8s %-10s %-8s %-6d %s\n",
+        fprintf(f, "%-6d %-8s %-10s %-6d %s\n",
                e->tourist_id,
                type_names[e->tourist_type],
                ticket_names[e->ticket_type],
-               entry_time_buf,
                e->total_rides,
                notes);
     }
