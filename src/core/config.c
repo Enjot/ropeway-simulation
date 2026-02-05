@@ -43,6 +43,8 @@ void config_set_defaults(Config *cfg) {
     cfg->danger_duration_sim = 30;  // 30 sim minutes duration
 
     cfg->debug_logs_enabled = 1;    // Debug logs enabled by default
+
+    cfg->scared_enabled = 1;        // Tourists can be scared by default
 }
 
 /**
@@ -139,6 +141,8 @@ int config_load(const char *path, Config *cfg) {
             cfg->danger_duration_sim = atoi(value);
         } else if (strcmp(key, "DEBUG_LOGS_ENABLED") == 0) {
             cfg->debug_logs_enabled = atoi(value);
+        } else if (strcmp(key, "SCARED_ENABLED") == 0) {
+            cfg->scared_enabled = atoi(value);
         } else {
             fprintf(stderr, "[--:--:--] [WARN ] [CONFIG] Unknown key at line %d: %s\n", line_num, key);
         }

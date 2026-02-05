@@ -9,6 +9,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/msg.h>
 
 int tourist_buy_ticket(IPCResources *res, TouristData *data) {
@@ -72,4 +73,21 @@ int tourist_is_station_closing(IPCResources *res) {
     int closing = res->state->closing;
     sem_post(res->sem_id, SEM_STATE, 1);
     return closing;
+}
+
+int tourist_is_too_scared(IPCResources *res, TouristData *data) {
+    // Check if scared behavior is enabled
+    if (!res->state->scared_enabled) {
+        return 0;
+    }
+    // Only check on first two potential rides
+    if (data->rides_completed > 1) {
+        return 0;
+    }
+    // ~10% chance to be scared
+    return (rand() % 10) == 0;
+}
+
+const char *tourist_scared_reason(TouristData *data) {
+    return (data->rides_completed == 0) ? "too scared to ride" : "that was too scary";
 }

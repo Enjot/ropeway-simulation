@@ -155,9 +155,9 @@ int main(int argc, char *argv[]) {
                      data.id, count, res.state->station_capacity);
         }
 
-        // ~10% chance to leave: before first ride (too scared) or after first ride (was too scary)
-        if ((data.rides_completed == 0 || data.rides_completed == 1) && (rand() % 10) == 0) {
-            const char *reason = (data.rides_completed == 0) ? "too scared to ride" : "that was too scary";
+        // Check if tourist is too scared to ride
+        if (tourist_is_too_scared(&res, &data)) {
+            const char *reason = tourist_scared_reason(&data);
             if (data.kid_count > 0) {
                 log_info(tag, "%d + %d kids leaving lower station (%s)",
                          data.id, data.kid_count, reason);

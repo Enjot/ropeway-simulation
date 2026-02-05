@@ -88,6 +88,9 @@ typedef struct {
     // Logging settings
     int debug_logs_enabled;         // 1 = show debug logs, 0 = hide debug logs
 
+    // Tourist behavior settings
+    int scared_enabled;             // 1 = tourists can be scared, 0 = disabled
+
     // Process IDs for signal handling
     pid_t main_pid;
     pid_t time_server_pid;

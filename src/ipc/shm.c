@@ -99,6 +99,7 @@ void ipc_shm_init_state(IPCResources *res, const Config *cfg) {
     res->state->danger_probability = cfg->danger_probability;
     res->state->danger_duration_sim = cfg->danger_duration_sim;
     res->state->debug_logs_enabled = cfg->debug_logs_enabled;
+    res->state->scared_enabled = cfg->scared_enabled;
 
     // Set initial state
     res->state->running = 1;
