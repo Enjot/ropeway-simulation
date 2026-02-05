@@ -83,10 +83,13 @@ if [ "$ZOMBIES" -gt 0 ]; then
     exit 1
 fi
 
-# Check processes terminated cleanly
-REMAINING=$(ps aux | grep -E "(ropeway|tourist)" | grep -v grep | wc -l)
-if [ "$REMAINING" -gt 0 ]; then
-    echo "Warning: $REMAINING processes still running"
+# Check for orphaned processes
+ORPHANS=$(ps aux | grep -E "(ropeway_simulation|tourist_process)" | grep -v grep | wc -l)
+if [ "$ORPHANS" -gt 0 ]; then
+    echo "FAIL: Found $ORPHANS orphaned processes"
+    ps aux | grep -E "(ropeway_simulation|tourist_process)" | grep -v grep
+    pkill -9 -f "ropeway_simulation|tourist_process" 2>/dev/null || true
+    exit 1
 fi
 
 echo "PASS: Emergency stop/resume signals handled"

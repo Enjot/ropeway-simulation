@@ -137,11 +137,11 @@ The chairlift operates through a chain of coordinated steps:
 ### Message Queues ([include/ipc/messages.h](https://github.com/Enjot/ropeway-simulation/blob/main/include/ipc/messages.h))
 | Queue | ID | Direction | Message Type |
 |-------|----|-----------|----|
-| MQ_CASHIER | 1 | Tourist ↔ Cashier | [CashierMsg](https://github.com/Enjot/ropeway-simulation/blob/main/include/ipc/messages.h#L17-L26) |
+| MQ_CASHIER | 1 | Tourist <-> Cashier | [CashierMsg](https://github.com/Enjot/ropeway-simulation/blob/main/include/ipc/messages.h#L17-L26) |
 | MQ_PLATFORM | 2 | Tourist → LowerWorker | [PlatformMsg](https://github.com/Enjot/ropeway-simulation/blob/main/include/ipc/messages.h#L31-L41) |
 | MQ_BOARDING | 3 | LowerWorker → Tourist | [PlatformMsg](https://github.com/Enjot/ropeway-simulation/blob/main/include/ipc/messages.h#L31-L41) |
 | MQ_ARRIVALS | 4 | Tourist → UpperWorker | [ArrivalMsg](https://github.com/Enjot/ropeway-simulation/blob/main/include/ipc/messages.h#L46-L53) |
-| MQ_WORKER | 5 | Worker ↔ Worker | [WorkerMsg](https://github.com/Enjot/ropeway-simulation/blob/main/include/ipc/messages.h#L58-L61) |
+| MQ_WORKER | 5 | Worker <-> Worker | [WorkerMsg](https://github.com/Enjot/ropeway-simulation/blob/main/include/ipc/messages.h#L58-L61) |
 
 **VIP Priority**: Regular tourists use `mtype=2`, VIPs use `mtype=1`; `msgrcv` with `-2` retrieves lowest mtype first (VIPs first).
 
@@ -717,7 +717,7 @@ Config file format: `KEY=VALUE` with `#` comments.
 - **Goal**: Station visitor count never exceeds N
 - **Rationale**: Tests for race condition between 4 entry gates incrementing station count via `SEM_LOWER_STATION`. Without proper semaphore synchronization, concurrent `sem_wait()` calls could allow count > N briefly.
 - **Parameters**: `station_capacity=5`, `tourists=15`, `simulation_time=1s`
-- **Expected**: Max observed count ≤ 5. No zombies. IPC cleaned.
+- **Expected**: Max observed count <= 5. No zombies. IPC cleaned.
 
 #### [test2_children.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test2_children.sh) - Children Under 8 with Guardians
 - **Goal**: Children board with guardians, max 2 kids per adult
@@ -749,7 +749,7 @@ Config file format: `KEY=VALUE` with `#` comments.
 - **Goal**: Capacity N=5 never exceeded across 10 iterations
 - **Rationale**: Tests TOCTOU race in `SEM_LOWER_STATION`. Multiple tourists calling `sem_wait()` simultaneously could interleave check-and-decrement operations. 10 iterations increases probability of catching intermittent race.
 - **Parameters**: `tourists=10`, `N=5`, `simulation_time=3s`, 10 iterations
-- **Expected**: Count ≤ 5 in all iterations. 100% pass rate.
+- **Expected**: Count <= 5 in all iterations. 100% pass rate.
 
 #### [test7_emergency_race.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test7_emergency_race.sh) - Emergency Race Condition Test
 - **Goal**: Only one worker initiates emergency when both detect danger
@@ -858,5 +858,4 @@ Tests check for:
 - **Signal safety**: Only async-signal-safe functions in handlers
 - **EINTR handling**: All blocking operations handle interrupts
 - **IPC cleanup**: Resources destroyed on shutdown via `IPC_RMID`
-- **No volatile/sig_atomic_t**: Uses `__atomic_*` builtins instead
 - **Threads**: Only for kids/bikes within Tourist process and zombie reaper

@@ -52,6 +52,15 @@ if [ "$ZOMBIES" -gt 0 ]; then
     exit 1
 fi
 
+# Check for orphaned processes
+ORPHANS=$(ps aux | grep -E "(ropeway_simulation|tourist_process)" | grep -v grep | wc -l)
+if [ "$ORPHANS" -gt 0 ]; then
+    echo "FAIL: Found $ORPHANS orphaned processes"
+    ps aux | grep -E "(ropeway_simulation|tourist_process)" | grep -v grep
+    pkill -9 -f "ropeway_simulation|tourist_process" 2>/dev/null || true
+    exit 1
+fi
+
 # Check for leftover IPC resources
 IPC_COUNT=$(ipcs | grep -c "$(id -u)" 2>/dev/null || echo "0")
 if [ "$IPC_COUNT" != "0" ]; then

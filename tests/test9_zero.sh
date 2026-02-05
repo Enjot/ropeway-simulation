@@ -53,5 +53,21 @@ if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 124 ]; then
     exit 1
 fi
 
+# Check for zombies
+ZOMBIES=$(ps aux | grep -E "(ropeway|tourist)" | grep -v grep | grep defunct | wc -l)
+if [ "$ZOMBIES" -gt 0 ]; then
+    echo "FAIL: Found $ZOMBIES zombie processes"
+    exit 1
+fi
+
+# Check for orphaned processes
+ORPHANS=$(ps aux | grep -E "(ropeway_simulation|tourist_process)" | grep -v grep | wc -l)
+if [ "$ORPHANS" -gt 0 ]; then
+    echo "FAIL: Found $ORPHANS orphaned processes"
+    ps aux | grep -E "(ropeway_simulation|tourist_process)" | grep -v grep
+    pkill -9 -f "ropeway_simulation|tourist_process" 2>/dev/null || true
+    exit 1
+fi
+
 echo "PASS: Zero tourists edge case handled gracefully"
 exit 0

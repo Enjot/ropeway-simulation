@@ -67,6 +67,22 @@ echo "=== Summary ==="
 echo "Iterations: $ITERATIONS"
 echo "Failures: $FAILURES"
 
+# Final zombie check
+ZOMBIES=$(ps aux | grep -E "(ropeway|tourist)" | grep -v grep | grep defunct | wc -l)
+if [ "$ZOMBIES" -gt 0 ]; then
+    echo "FAIL: Found $ZOMBIES zombie processes"
+    exit 1
+fi
+
+# Check for orphaned processes
+ORPHANS=$(ps aux | grep -E "(ropeway_simulation|tourist_process)" | grep -v grep | wc -l)
+if [ "$ORPHANS" -gt 0 ]; then
+    echo "FAIL: Found $ORPHANS orphaned processes"
+    ps aux | grep -E "(ropeway_simulation|tourist_process)" | grep -v grep
+    pkill -9 -f "ropeway_simulation|tourist_process" 2>/dev/null || true
+    exit 1
+fi
+
 if [ $FAILURES -gt 0 ]; then
     echo "FAIL: $FAILURES/$ITERATIONS iterations had capacity violations or timeouts"
     exit 1
