@@ -1,10 +1,6 @@
 cmake-build-*
 build
-.claude/
-CLAUDE.md
 PROJECT.md
 .DS_Store
 .vscode/
 .idea/
-TESTS.md
-FLOWCHART.md
