@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test7_emergency_race.conf"
+CONFIG="${SCRIPT_DIR}/../config/test7_emergency_race.conf"
 LOG_FILE="/tmp/ropeway_test7.log"
 
 cd "$BUILD_DIR" || exit 1
@@ -23,13 +23,13 @@ echo "Goal: Verify only one worker becomes emergency initiator"
 echo "Running simulation with 100% danger probability..."
 
 # Run simulation with timeout
-timeout 90 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
+timeout 15 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
 EXIT_CODE=$?
 
 echo
 echo "Analyzing results..."
 
-# Check for timeout (possible deadlock)
+# Check for timeout 15(possible deadlock)
 if [ $EXIT_CODE -eq 124 ]; then
     echo "FAIL: Simulation timed out - possible deadlock during emergency"
     exit 1

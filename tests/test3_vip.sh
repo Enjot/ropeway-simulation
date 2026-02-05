@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test3_vip.conf"
+CONFIG="${SCRIPT_DIR}/../config/test3_vip.conf"
 LOG_FILE="/tmp/ropeway_test3.log"
 
 cd "$BUILD_DIR"
@@ -22,7 +22,7 @@ echo "Testing VIP priority (10% VIPs)"
 echo "Running simulation..."
 
 # Run simulation with timeout
-timeout 130 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
+timeout 15 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
 
 # Analyze results
 echo

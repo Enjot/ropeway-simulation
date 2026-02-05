@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test6_race.conf"
+CONFIG="${SCRIPT_DIR}/../config/test6_race.conf"
 LOG_FILE="/tmp/ropeway_test6.log"
 EXPECTED_MAX_CAPACITY=5
 ITERATIONS=10
@@ -31,7 +31,7 @@ for i in $(seq 1 $ITERATIONS); do
     echo "--- Iteration $i/$ITERATIONS ---"
 
     # Run simulation with timeout
-    timeout 150 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
+    timeout 15 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
     EXIT_CODE=$?
 
     if [ $EXIT_CODE -eq 124 ]; then

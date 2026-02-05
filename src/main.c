@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 /**
  * @file main.c
  * @brief Main process orchestrator for ropeway simulation.
@@ -13,14 +15,14 @@
 #include "lifecycle/process_manager.h"
 #include "lifecycle/zombie_reaper.h"
 
+#include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <signal.h>
 #include <sys/msg.h>
 #include <sys/sem.h>
+#include <unistd.h>
 
 // Forward declarations for worker entry points
 void time_server_main(IPCResources *res, IPCKeys *keys);
@@ -32,8 +34,9 @@ void upper_worker_main(IPCResources *res, IPCKeys *keys);
 static IPCResources g_res;
 
 static void print_usage(const char *prog) {
-    fprintf(stderr, "Usage: %s [config_name]\n", prog);
-    fprintf(stderr, "  config_name: Config file in ../config/ (default: default.conf)\n");
+    fprintf(stderr, "Usage: %s [config_path]\n", prog);
+    fprintf(stderr, "  config_path: Config file path or name (default: default.conf)\n");
+    fprintf(stderr, "               If just a filename, looks in ../config/\n");
 }
 
 /**
@@ -115,7 +118,13 @@ int main(int argc, char *argv[]) {
     }
 
     // Build config path
-    snprintf(config_path, sizeof(config_path), "../config/%s", config_name);
+    // If config_name is an absolute path or contains a directory separator,
+    // use it directly; otherwise, look in ../config/
+    if (config_name[0] == '/' || strchr(config_name, '/') != NULL) {
+        snprintf(config_path, sizeof(config_path), "%s", config_name);
+    } else {
+        snprintf(config_path, sizeof(config_path), "../config/%s", config_name);
+    }
 
     // Check tourist executable exists
     if (access(tourist_exe, X_OK) == -1) {

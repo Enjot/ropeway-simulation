@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test10_single.conf"
+CONFIG="${SCRIPT_DIR}/../config/test10_single.conf"
 LOG_FILE="/tmp/ropeway_test10.log"
 
 cd "$BUILD_DIR" || exit 1
@@ -23,7 +23,7 @@ echo "Goal: Verify one tourist completes full lifecycle"
 echo "Running simulation..."
 
 # Run simulation with timeout
-timeout 90 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
+timeout 15 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
 EXIT_CODE=$?
 
 echo

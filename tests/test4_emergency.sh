@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test4_emergency.conf"
+CONFIG="${SCRIPT_DIR}/../config/test4_emergency.conf"
 LOG_FILE="/tmp/ropeway_test4.log"
 
 cd "$BUILD_DIR"

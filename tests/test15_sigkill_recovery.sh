@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test1_capacity.conf"
+CONFIG="${SCRIPT_DIR}/../config/test1_capacity.conf"
 LOG_FILE="/tmp/ropeway_test15.log"
 LOG_FILE2="/tmp/ropeway_test15_recovery.log"
 
@@ -31,7 +31,7 @@ SIM_PID=$!
 
 echo "Simulation PID: $SIM_PID"
 echo "Waiting 5 seconds for IPC resources to be created..."
-sleep 5
+sleep 1
 
 # Verify simulation is running
 if ! kill -0 $SIM_PID 2>/dev/null; then
@@ -52,12 +52,12 @@ fi
 
 echo "Sending SIGKILL (simulating crash)..."
 kill -9 $SIM_PID 2>/dev/null
-sleep 2
+sleep 1
 
 # Kill any remaining child processes
 pkill -9 -P $SIM_PID 2>/dev/null || true
 pkill -9 -f "tourist" 2>/dev/null || true
-sleep 2
+sleep 1
 
 # Verify IPC resources are orphaned
 IPC_ORPHANED_SEM=$(ipcs -s 2>/dev/null | grep "$(id -u)" | wc -l)
@@ -68,10 +68,10 @@ echo "Orphaned IPC resources: sem=$IPC_ORPHANED_SEM, shm=$IPC_ORPHANED_SHM, mq=$
 
 echo
 echo "Starting new simulation (should clean stale resources)..."
-timeout 30 ./ropeway_simulation "$CONFIG" > "$LOG_FILE2" 2>&1 &
+timeout 10 ./ropeway_simulation "$CONFIG" > "$LOG_FILE2" 2>&1 &
 SIM_PID2=$!
 
-sleep 3
+sleep 1
 
 # Check for stale cleanup message
 if grep -qi "stale\|orphan\|cleanup.*previous\|removing.*old" "$LOG_FILE2"; then
@@ -80,11 +80,11 @@ fi
 
 # Kill the recovery run
 kill -TERM $SIM_PID2 2>/dev/null
-sleep 5
+sleep 1
 kill -9 $SIM_PID2 2>/dev/null || true
 
 # Final check for leftover resources
-sleep 2
+sleep 1
 IPC_FINAL_SEM=$(ipcs -s 2>/dev/null | grep "$(id -u)" | wc -l)
 IPC_FINAL_SHM=$(ipcs -m 2>/dev/null | grep "$(id -u)" | wc -l)
 IPC_FINAL_MQ=$(ipcs -q 2>/dev/null | grep "$(id -u)" | wc -l)

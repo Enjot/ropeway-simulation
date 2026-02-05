@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test2_children.conf"
+CONFIG="${SCRIPT_DIR}/../config/test2_children.conf"
 LOG_FILE="/tmp/ropeway_test2.log"
 MAX_KIDS_PER_ADULT=2
 
@@ -23,7 +23,7 @@ echo "Testing children/guardian logic"
 echo "Running simulation..."
 
 # Run simulation with timeout
-timeout 100 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
+timeout 15 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
 
 # Check for family boarding
 echo

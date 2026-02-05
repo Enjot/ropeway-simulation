@@ -1,7 +1,7 @@
 #!/bin/bash
 # Test 5: High Throughput Stress Test
 #
-# Goal: Simulation completes without timeout under high concurrency.
+# Goal: Simulation completes without timeout 30under high concurrency.
 #
 # Rationale: Tests for deadlock between MQ_CASHIER, MQ_PLATFORM, MQ_BOARDING
 # under load. 500 concurrent tourists stress all semaphores and message queues
@@ -9,11 +9,11 @@
 #
 # Parameters: tourists=500, spawn_delay=0, station_capacity=50, simulation_time=300s.
 #
-# Expected outcome: No timeout (deadlock). No zombies. IPC cleaned.
+# Expected outcome: No timeout 30(deadlock). No zombies. IPC cleaned.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test5_stress.conf"
+CONFIG="${SCRIPT_DIR}/../config/test5_stress.conf"
 LOG_FILE="/tmp/ropeway_test5.log"
 
 cd "$BUILD_DIR" || exit 1
@@ -22,14 +22,14 @@ echo "=== Test 5: High Throughput Stress Test ==="
 echo "Goal: Verify no deadlocks with 500 tourists, rapid spawn"
 echo "Running simulation (this may take a while)..."
 
-# Run simulation with timeout (5 minutes + buffer)
-timeout 360 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
+# Run simulation with timeout 30(5 minutes + buffer)
+timeout 30 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
 EXIT_CODE=$?
 
 echo
 echo "Analyzing results..."
 
-# Check for timeout (deadlock indicator)
+# Check for timeout 30(deadlock indicator)
 if [ $EXIT_CODE -eq 124 ]; then
     echo "FAIL: Simulation timed out - possible deadlock"
     exit 1

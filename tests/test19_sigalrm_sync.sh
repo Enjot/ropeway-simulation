@@ -27,7 +27,7 @@ ipcrm -a 2>/dev/null || true
 echo "Starting simulation..."
 
 # Run simulation with timeout (should complete well before 120s)
-timeout 120 ./ropeway_simulation "$CONFIG" > "$LOG_FILE" 2>&1
+timeout 10 ./ropeway_simulation "$CONFIG" > "$LOG_FILE" 2>&1
 EXIT_CODE=$?
 
 echo "Simulation exited with code: $EXIT_CODE"

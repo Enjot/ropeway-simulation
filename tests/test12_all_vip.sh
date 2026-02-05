@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test12_all_vip.conf"
+CONFIG="${SCRIPT_DIR}/../config/test12_all_vip.conf"
 LOG_FILE="/tmp/ropeway_test12.log"
 
 cd "$BUILD_DIR" || exit 1
@@ -23,7 +23,7 @@ echo "Goal: Verify system works with 100% VIP tourists"
 echo "Running simulation..."
 
 # Run simulation with timeout
-timeout 120 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
+timeout 15 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
 EXIT_CODE=$?
 
 echo

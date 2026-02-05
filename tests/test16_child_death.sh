@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test1_capacity.conf"
+CONFIG="${SCRIPT_DIR}/../config/test1_capacity.conf"
 LOG_FILE="/tmp/ropeway_test16.log"
 
 cd "$BUILD_DIR" || exit 1
@@ -30,7 +30,7 @@ SIM_PID=$!
 
 echo "Simulation PID: $SIM_PID"
 echo "Waiting 8 seconds for workers to start..."
-sleep 8
+sleep 1
 
 # Verify simulation is running
 if ! kill -0 $SIM_PID 2>/dev/null; then
@@ -73,12 +73,12 @@ done
 if kill -0 $SIM_PID 2>/dev/null; then
     echo "Main process still running - sending SIGTERM"
     kill -TERM $SIM_PID 2>/dev/null
-    sleep 5
+    sleep 1
     kill -9 $SIM_PID 2>/dev/null || true
 fi
 
 # Check for zombies
-sleep 2
+sleep 1
 ZOMBIES=$(ps aux | grep -E "(ropeway|tourist)" | grep -v grep | grep defunct | wc -l)
 if [ "$ZOMBIES" -gt 0 ]; then
     echo "Warning: Found $ZOMBIES zombie processes"

@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test1_capacity.conf"  # Use existing config
+CONFIG="${SCRIPT_DIR}/../config/test1_capacity.conf"  # Use existing config
 LOG_FILE="/tmp/ropeway_test14.log"
 
 cd "$BUILD_DIR" || exit 1
@@ -30,7 +30,7 @@ SIM_PID=$!
 
 echo "Simulation PID: $SIM_PID"
 echo "Waiting 10 seconds for simulation to start..."
-sleep 10
+sleep 1
 
 # Verify simulation is running
 if ! kill -0 $SIM_PID 2>/dev/null; then
@@ -61,11 +61,11 @@ done
 if kill -0 $SIM_PID 2>/dev/null; then
     echo "Warning: Simulation still running, sending SIGKILL"
     kill -9 $SIM_PID 2>/dev/null
-    sleep 2
+    sleep 1
 fi
 
 # Check IPC resources after
-sleep 2  # Give time for cleanup
+sleep 1  # Give time for cleanup
 IPC_AFTER_SEM=$(ipcs -s 2>/dev/null | grep "$(id -u)" | wc -l)
 IPC_AFTER_SHM=$(ipcs -m 2>/dev/null | grep "$(id -u)" | wc -l)
 IPC_AFTER_MQ=$(ipcs -q 2>/dev/null | grep "$(id -u)" | wc -l)

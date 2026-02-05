@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test4_emergency.conf"  # Emergency config
+CONFIG="${SCRIPT_DIR}/../config/test4_emergency.conf"  # Emergency config
 LOG_FILE="/tmp/ropeway_test18.log"
 
 cd "$BUILD_DIR" || exit 1
@@ -30,7 +30,7 @@ SIM_PID=$!
 
 echo "Simulation PID: $SIM_PID"
 echo "Waiting 5 seconds for workers to start..."
-sleep 5
+sleep 1
 
 # Verify simulation is running
 if ! kill -0 $SIM_PID 2>/dev/null; then
@@ -51,11 +51,11 @@ echo "Sending 10 SIGUSR1 signals rapidly..."
 for i in $(seq 1 10); do
     kill -USR1 $SIM_PID 2>/dev/null
     # Very short delay between signals
-    sleep 0.1
+    sleep 0.05
 done
 
 echo "Signals sent. Checking if simulation is still alive..."
-sleep 2
+sleep 1
 
 if ! kill -0 $SIM_PID 2>/dev/null; then
     echo "FAIL: Simulation crashed during rapid signal delivery"
@@ -78,7 +78,7 @@ echo "Emergency-related log entries: $EMERGENCY_COUNT"
 
 # Let simulation run a bit more
 echo "Waiting 5 more seconds..."
-sleep 5
+sleep 1
 
 # Graceful shutdown
 echo "Sending SIGTERM for cleanup..."
@@ -100,7 +100,7 @@ if kill -0 $SIM_PID 2>/dev/null; then
 fi
 
 # Check for zombies
-sleep 2
+sleep 1
 ZOMBIES=$(ps aux | grep -E "(ropeway|tourist)" | grep -v grep | grep defunct | wc -l)
 if [ "$ZOMBIES" -gt 0 ]; then
     echo "Warning: Found $ZOMBIES zombie processes"

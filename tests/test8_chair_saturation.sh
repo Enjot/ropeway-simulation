@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test8_chair_saturation.conf"
+CONFIG="${SCRIPT_DIR}/../config/test8_chair_saturation.conf"
 LOG_FILE="/tmp/ropeway_test8.log"
 MAX_CHAIRS=36
 
@@ -24,7 +24,7 @@ echo "Goal: Verify chair semaphore (max=$MAX_CHAIRS) blocks correctly"
 echo "Running simulation with slow chair travel..."
 
 # Run simulation with timeout
-timeout 210 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
+timeout 15 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
 EXIT_CODE=$?
 
 echo

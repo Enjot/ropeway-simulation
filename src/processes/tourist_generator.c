@@ -5,53 +5,95 @@
 #include "core/logger.h"
 #include "core/time_sim.h"
 
+#include <errno.h>
+#include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <signal.h>
-#include <errno.h>
-#include <time.h>
-#include <sys/wait.h>
 #include <sys/msg.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
 
 static int g_running = 1;
-static int g_child_exited = 0;
 static int g_alarm_signal = 0;
 
+// Zombie reaper thread state
+static pthread_t reaper_thread;
+static volatile int reaper_running = 0;
+static volatile int active_tourists = 0;
+
 /**
- * @brief Signal handler for SIGTERM, SIGINT, SIGCHLD, and SIGALRM.
+ * @brief Signal handler for SIGTERM, SIGINT, and SIGALRM.
  *
  * @param sig Signal number received.
  */
 static void signal_handler(int sig) {
     if (sig == SIGTERM || sig == SIGINT) {
         g_running = 0;
-    } else if (sig == SIGCHLD) {
-        g_child_exited = 1;
     } else if (sig == SIGALRM) {
         g_alarm_signal = 1;
     }
 }
 
 /**
- * @brief Reap zombie child processes (non-blocking).
+ * @brief Zombie reaper thread function.
  *
- * @return Number of processes reaped.
+ * Uses sigwait() to wait for SIGCHLD and reaps zombie child processes.
  */
-static int reap_zombies(void) {
-    if (!g_child_exited) return 0;
-    g_child_exited = 0;
+static void *reaper_thread_func(void *arg) {
+    (void)arg;
 
-    int reaped = 0;
-    int status;
-    pid_t pid;
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGCHLD);
 
-    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-        reaped++;
+    while (reaper_running) {
+        int sig;
+        int ret = sigwait(&set, &sig);
+
+        if (ret != 0 || !reaper_running) {
+            break;
+        }
+
+        // Reap all zombie children (multiple may have exited)
+        pid_t pid;
+        int status;
+        while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+            __atomic_fetch_sub(&active_tourists, 1, __ATOMIC_SEQ_CST);
+        }
     }
 
-    return reaped;
+    return NULL;
+}
+
+/**
+ * @brief Start the zombie reaper thread.
+ *
+ * @return 0 on success, -1 on error.
+ */
+static int start_reaper_thread(void) {
+    reaper_running = 1;
+    if (pthread_create(&reaper_thread, NULL, reaper_thread_func, NULL) != 0) {
+        perror("generator: pthread_create reaper");
+        reaper_running = 0;
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * @brief Stop the zombie reaper thread.
+ */
+static void stop_reaper_thread(void) {
+    if (!reaper_running) {
+        return;
+    }
+
+    reaper_running = 0;
+    pthread_kill(reaper_thread, SIGCHLD);  // Wake up sigwait()
+    pthread_join(reaper_thread, NULL);
 }
 
 /**
@@ -135,8 +177,8 @@ static int is_vip(SharedState *state) {
  * @brief Tourist generator process entry point.
  *
  * Spawns tourist processes with random attributes (age, type, VIP status,
- * ticket type, kids). Uses fork+exec to create tourist processes. Waits
- * for all spawned tourists to exit before returning.
+ * ticket type, kids). Uses fork+exec to create tourist processes. Uses a
+ * dedicated zombie reaper thread to handle SIGCHLD via sigwait().
  *
  * @param res IPC resources (shared memory for config values).
  * @param keys IPC keys (unused, kept for interface consistency).
@@ -149,13 +191,22 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
     logger_init(res->state, LOG_GENERATOR);
     logger_set_debug_enabled(res->state->debug_logs_enabled);
 
-    // Install signal handlers
+    // Block SIGCHLD - will be handled by reaper thread via sigwait()
+    sigset_t sigchld_mask;
+    sigemptyset(&sigchld_mask);
+    sigaddset(&sigchld_mask, SIGCHLD);
+    pthread_sigmask(SIG_BLOCK, &sigchld_mask, NULL);
+
+    // Start zombie reaper thread
+    if (start_reaper_thread() != 0) {
+        log_error("GENERATOR", "Failed to start reaper thread");
+        return;
+    }
+
+    // Install signal handlers (not SIGCHLD - handled by thread)
     struct sigaction sa;
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
-    sigaction(SIGCHLD, &sa, NULL);
-
     sa.sa_flags = 0;
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGINT, &sa, NULL);
@@ -168,16 +219,10 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
              res->state->tourists_to_generate, res->state->tourist_spawn_delay_us);
 
     int tourist_id = 0;
-    int active_tourists = 0;
     int total_to_spawn = res->state->tourists_to_generate;
     int spawn_delay_us = res->state->tourist_spawn_delay_us;
 
     while (g_running && res->state->running && tourist_id < total_to_spawn) {
-        // Reap zombie children and update active count
-        int reaped = reap_zombies();
-        active_tourists -= reaped;
-        if (active_tourists < 0) active_tourists = 0;
-
         // Check if closing
         if (res->state->closing) {
             log_info("GENERATOR", "Station closing, stopping tourist generation");
@@ -239,8 +284,8 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
             _exit(1);
         }
 
-        // Parent process - tourists stay in foreground group for SIGTSTP
-        active_tourists++;
+        // Parent process - increment active count
+        __atomic_fetch_add(&active_tourists, 1, __ATOMIC_SEQ_CST);
 
         const char *type_names[] = {"walker", "cyclist", "family"};
         const char *type_name = type_names[type];
@@ -254,40 +299,22 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
         }
 
         // Sleep before next spawn (if delay configured)
-        if (spawn_delay_us > 0) {
-            usleep(spawn_delay_us);
-        }
+        usleep(spawn_delay_us);
     }
 
     log_info("GENERATOR", "Tourist generator shutting down (spawned %d tourists)", tourist_id);
 
-    // Wait for tourists to exit naturally (they exit when ticket expires or simulation ends)
-    // Don't send SIGTERM - let tourists complete their ride loops
-    log_debug("GENERATOR", "Waiting for %d tourists to exit naturally...", active_tourists);
+    // Stop reaper thread first
+    stop_reaper_thread();
 
-    int status;
+    // Wait for all children using blocking waitpid (proper synchronization, no polling)
+    int current_active = __atomic_load_n(&active_tourists, __ATOMIC_SEQ_CST);
+    log_debug("GENERATOR", "Waiting for %d tourists to exit...", current_active);
+
     pid_t pid;
-
-    // Wait for all tourists to exit (blocking wait with SIGALRM timeout)
-    while (active_tourists > 0) {
-        // First reap any accumulated zombies (non-blocking)
-        while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-            active_tourists--;
-            log_debug("GENERATOR", "Tourist exited (PID %d), %d remaining", (int)pid, active_tourists);
-        }
-
-        if (active_tourists > 0) {
-            // Use blocking waitpid with SIGALRM timeout (100ms)
-            ualarm(100000, 0);
-            pid = waitpid(-1, &status, 0);  // Blocking wait
-            ualarm(0, 0);
-
-            if (pid > 0) {
-                active_tourists--;
-                log_debug("GENERATOR", "Tourist exited (PID %d), %d remaining", (int)pid, active_tourists);
-            }
-            // EINTR from SIGALRM or SIGCHLD just loops back to check again
-        }
+    int status;
+    while ((pid = waitpid(-1, &status, 0)) > 0) {
+        log_debug("GENERATOR", "Reaped tourist PID %d", pid);
     }
 
     log_debug("GENERATOR", "All tourists exited");

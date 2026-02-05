@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test13_all_families.conf"
+CONFIG="${SCRIPT_DIR}/../config/test13_all_families.conf"
 LOG_FILE="/tmp/ropeway_test13.log"
 
 cd "$BUILD_DIR" || exit 1
@@ -23,7 +23,7 @@ echo "Goal: Verify atomic multi-slot acquisition for families"
 echo "Running simulation with 100% walkers (max family probability)..."
 
 # Run simulation with timeout
-timeout 150 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
+timeout 15 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
 EXIT_CODE=$?
 
 echo

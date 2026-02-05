@@ -15,6 +15,7 @@ NC='\033[0m'
 PASSED=0
 FAILED=0
 SKIPPED=0
+FAILED_TESTS=""
 
 run_test() {
     local test_name="$1"
@@ -36,6 +37,7 @@ run_test() {
     else
         echo -e "${RED}FAILED${NC}: $test_name"
         ((FAILED++))
+        FAILED_TESTS="${FAILED_TESTS}  - ${test_name}\n"
     fi
     echo
 }
@@ -126,6 +128,7 @@ if [ $FAILED -eq 0 ]; then
     echo -e "${GREEN}All tests passed!${NC}"
     exit 0
 else
-    echo -e "${RED}Some tests failed.${NC}"
+    echo -e "${RED}Failed tests:${NC}"
+    echo -e "$FAILED_TESTS"
     exit 1
 fi

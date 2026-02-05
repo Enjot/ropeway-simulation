@@ -51,7 +51,7 @@ The simulation demonstrates classical Unix IPC patterns through a real-world sce
 - `SIGUSR1`/`SIGUSR2` coordinate emergency stop and resume between workers
 - `SIGTSTP`/`SIGCONT` (Ctrl+Z / fg) pause and resume the entire simulation with proper time offset tracking
 - `SIGALRM` triggers periodic checks and timeouts
-- `SIGCHLD` enables the main process to reap terminated children
+- `SIGCHLD` is handled by a dedicated zombie reaper thread via `sigwait()` to reap terminated children
 
 **Defensive Design** — Every system call checks for errors and handles `EINTR` interrupts. IPC resources are cleaned up on both graceful shutdown and crash recovery. All user-provided configuration values are validated before use.
 
@@ -71,7 +71,7 @@ The simulation demonstrates classical Unix IPC patterns through a real-world sce
 
 The chairlift operates through a chain of coordinated steps:
 
-1. **Initialization** — Main generates IPC keys with `ftok()`, creates all resources ([ipc_create](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/ipc.c#L82-L125)), then spawns worker processes ([process spawning](https://github.com/Enjot/ropeway-simulation/blob/main/src/main.c#L181-L212))
+1. **Initialization** — Main generates IPC keys with `ftok()`, creates all resources ([ipc_create](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/ipc.c#L82-L125)), then spawns worker processes ([process spawning](https://github.com/Enjot/ropeway-simulation/blob/main/src/main.c#L201-L225))
 
 2. **Time Management** — TimeServer atomically updates simulated clock every 10ms ([update_sim_time](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/time_server.c#L137-L165)), compensating for any shell-level pauses ([pause handling](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/time_server.c#L50-L78))
 
@@ -145,14 +145,15 @@ The chairlift operates through a chain of coordinated steps:
 ## Signal Handling
 
 ### Signal handlers
-- **Main**: [src/lifecycle/process_signals.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/lifecycle/process_signals.c) - SIGCHLD, SIGTERM/SIGINT, SIGALRM
+- **Main**: [src/lifecycle/process_signals.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/lifecycle/process_signals.c) - SIGTERM/SIGINT, SIGALRM
+- **Zombie Reaper**: [src/lifecycle/zombie_reaper.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/lifecycle/zombie_reaper.c) - SIGCHLD via `sigwait()` in dedicated thread
 - **TimeServer**: [src/processes/time_server.c#L49-L97](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/time_server.c#L49-L97) - SIGTSTP, SIGCONT, SIGTERM, SIGALRM
 - **Workers**: [include/common/signal_common.h](https://github.com/Enjot/ropeway-simulation/blob/main/include/common/signal_common.h) - Macro-generated handlers for SIGUSR1/SIGUSR2/SIGALRM
 
 ### Signal usage
 | Signal | Purpose |
 |--------|---------|
-| SIGCHLD | Zombie reaping in main |
+| SIGCHLD | Zombie reaping via dedicated thread (`sigwait()`) |
 | SIGTERM/SIGINT | Graceful shutdown |
 | SIGALRM | Periodic time checks, emergency timeouts |
 | SIGUSR1 | Emergency stop notification |
@@ -164,11 +165,11 @@ The chairlift operates through a chain of coordinated steps:
 
 ### Main Process ([src/main.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/main.c))
 
-#### [`shutdown_workers`](https://github.com/Enjot/ropeway-simulation/blob/main/src/main.c#L42-L98)
+#### [`shutdown_workers`](https://github.com/Enjot/ropeway-simulation/blob/main/src/main.c#L45-L101)
 Signal workers to stop and destroy IPC to unblock blocked operations.
 
-#### [`main`](https://github.com/Enjot/ropeway-simulation/blob/main/src/main.c#L100-L254)
-Entry point: load config, create IPC, spawn workers, run main loop.
+#### [`main`](https://github.com/Enjot/ropeway-simulation/blob/main/src/main.c#L103-L275)
+Entry point: load config, block SIGCHLD, create IPC, start zombie reaper thread, spawn workers, run main loop.
 
 ---
 

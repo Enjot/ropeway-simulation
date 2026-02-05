@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test1_capacity.conf"
+CONFIG="${SCRIPT_DIR}/../config/test1_capacity.conf"
 LOG_FILE="/tmp/ropeway_test1.log"
 EXPECTED_MAX_CAPACITY=5
 
@@ -23,7 +23,7 @@ echo "Testing capacity limit enforcement (N=$EXPECTED_MAX_CAPACITY)"
 echo "Running simulation..."
 
 # Run simulation with timeout
-timeout 70 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
+timeout 15 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
 
 # Check for capacity violations
 echo

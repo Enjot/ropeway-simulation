@@ -13,7 +13,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/../build"
-CONFIG="${BUILD_DIR}/config/test11_capacity_one.conf"
+CONFIG="${SCRIPT_DIR}/../config/test11_capacity_one.conf"
 LOG_FILE="/tmp/ropeway_test11.log"
 EXPECTED_MAX_CAPACITY=1
 
@@ -24,13 +24,13 @@ echo "Goal: Verify only 1 tourist in station at a time (N=$EXPECTED_MAX_CAPACITY
 echo "Running simulation..."
 
 # Run simulation with timeout
-timeout 150 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
+timeout 15 ./ropeway_simulation "$CONFIG" 2>&1 | tee "$LOG_FILE"
 EXIT_CODE=$?
 
 echo
 echo "Analyzing results..."
 
-# Check for timeout (possible deadlock with N=1)
+# Check for timeout 15(possible deadlock with N=1)
 if [ $EXIT_CODE -eq 124 ]; then
     echo "Warning: Simulation timed out - checking for deadlock"
 fi
