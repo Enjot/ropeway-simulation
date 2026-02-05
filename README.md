@@ -95,7 +95,7 @@ The chairlift operates through a chain of coordinated steps:
 ## Process Architecture
 
 | Process | File | Purpose |
-|---------|------|---------|
+|-------|--------|---------|
 | Main | [src/main.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/main.c) | Orchestrator: IPC creation, worker spawning, signal handling, zombie reaping |
 | TimeServer | [src/processes/time_server.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/time_server.c) | Atomic time updates, SIGTSTP/SIGCONT pause offset |
 | Cashier | [src/processes/cashier.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/processes/cashier.c) | Ticket sales with age discounts and VIP surcharges |
