@@ -31,15 +31,25 @@ void wait_for_workers(void) {
     int status;
     pid_t pid;
 
-    while ((pid = waitpid(-1, &status, 0)) > 0) {
-        char buf[64];
-        int len = snprintf(buf, sizeof(buf), "[DEBUG] [MAIN] Worker exited: PID %d\n", (int)pid);
-        if (len > 0 && len < (int)sizeof(buf)) {
-            write(STDERR_FILENO, buf, len);
+    while (1) {
+        pid = waitpid(-1, &status, 0);
+        if (pid > 0) {
+            char buf[64];
+            int len = snprintf(buf, sizeof(buf), "[DEBUG] [MAIN] Worker exited: PID %d\n", (int)pid);
+            if (len > 0 && len < (int)sizeof(buf)) {
+                write(STDERR_FILENO, buf, len);
+            }
+            continue;
         }
+        if (pid == -1 && errno == EINTR) {
+            // Signal interrupted waitpid, retry
+            continue;
+        }
+        // ECHILD or other error - no more children
+        break;
     }
 
-    if (errno != ECHILD) {
+    if (errno != ECHILD && errno != EINTR) {
         perror("wait_for_workers: waitpid");
     }
 }

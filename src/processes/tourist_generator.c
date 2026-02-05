@@ -313,8 +313,18 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
 
     pid_t pid;
     int status;
-    while ((pid = waitpid(-1, &status, 0)) > 0) {
-        log_debug("GENERATOR", "Reaped tourist PID %d", pid);
+    while (1) {
+        pid = waitpid(-1, &status, 0);
+        if (pid > 0) {
+            log_debug("GENERATOR", "Reaped tourist PID %d", pid);
+            continue;
+        }
+        if (pid == -1 && errno == EINTR) {
+            // Signal interrupted waitpid, retry
+            continue;
+        }
+        // ECHILD or other error - no more children
+        break;
     }
 
     log_debug("GENERATOR", "All tourists exited");
