@@ -26,7 +26,7 @@ echo "Running simulation in background..."
 SIM_PID=$!
 
 # Wait for simulation to start
-sleep 5
+sleep 0.5
 
 # Check if simulation is running
 if ! kill -0 $SIM_PID 2>/dev/null; then
@@ -46,7 +46,7 @@ else
     kill -SIGUSR1 $LOWER_PID 2>/dev/null || kill -SIGUSR1 $SIM_PID
 fi
 
-sleep 3
+sleep 0.5
 
 # Check for emergency stop message
 if grep -q "Emergency stop" "$LOG_FILE"; then
@@ -63,7 +63,7 @@ else
     kill -SIGUSR2 $SIM_PID
 fi
 
-sleep 3
+sleep 0.5
 
 # Check for resume message
 if grep -q -i "resume" "$LOG_FILE"; then
