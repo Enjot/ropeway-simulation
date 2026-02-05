@@ -254,6 +254,11 @@ int main(int argc, char *argv[]) {
     // Print report - shared memory is still attached
     print_report(g_res.state);
 
+    // Write report to file
+    if (write_report_to_file(g_res.state, "simulation_report.txt") == 0) {
+        write(STDERR_FILENO, "[INFO] [MAIN] Report saved to simulation_report.txt\n", 52);
+    }
+
     // Cleanup remaining IPC resources (shared memory)
     ipc_destroy(&g_res);
 
