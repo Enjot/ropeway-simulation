@@ -8,16 +8,13 @@ mkdir -p build && cd build
 cmake ..
 cmake --build .
 
-# Run with default config
+# Run with default config (../config/default.conf)
 ./ropeway_simulation
 
 # Run with specific config
 ./ropeway_simulation test1_capacity.conf
 
-# Save logs to file (colored output preserved)
-./ropeway_simulation 2>&1 | tee simulation.log
-
-# Save logs without colors (for later analysis)
+# Save logs to file (no terminal output)
 ./ropeway_simulation > simulation.log 2>&1
 ```
 
