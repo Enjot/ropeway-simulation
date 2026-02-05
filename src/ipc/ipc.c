@@ -17,9 +17,12 @@
 #include <unistd.h>
 
 /**
- * Clean up stale IPC resources from a previous crashed run.
+ * @brief Clean up stale IPC resources from a previous crashed run.
+ *
  * Checks if shared memory exists and if the stored main_pid is dead.
- * Returns: 1 if stale resources cleaned, 0 if no stale resources, -1 on error
+ *
+ * @param keys IPC keys to check for stale resources.
+ * @return 1 if stale resources cleaned, 0 if no stale resources, -1 on error.
  */
 int ipc_cleanup_stale(const IPCKeys *keys) {
     // Try to access existing shared memory (without IPC_CREAT)
@@ -79,6 +82,16 @@ int ipc_cleanup_stale(const IPCKeys *keys) {
     return 1;
 }
 
+/**
+ * @brief Create all IPC resources (shared memory, semaphores, message queues).
+ *
+ * Should only be called by main process.
+ *
+ * @param res Structure to populate with created resource IDs.
+ * @param keys IPC keys for resource creation.
+ * @param cfg Configuration for initial values.
+ * @return 0 on success, -1 on error.
+ */
 int ipc_create(IPCResources *res, const IPCKeys *keys, const Config *cfg) {
     memset(res, 0, sizeof(IPCResources));
     res->shm_id = -1;
@@ -124,6 +137,13 @@ cleanup:
     return -1;
 }
 
+/**
+ * @brief Attach to existing IPC resources (for child processes).
+ *
+ * @param res Structure to populate with attached resource IDs.
+ * @param keys IPC keys for resource lookup.
+ * @return 0 on success, -1 on error.
+ */
 int ipc_attach(IPCResources *res, const IPCKeys *keys) {
     memset(res, 0, sizeof(IPCResources));
     res->state = NULL;
@@ -146,10 +166,20 @@ int ipc_attach(IPCResources *res, const IPCKeys *keys) {
     return 0;
 }
 
+/**
+ * @brief Detach from IPC resources (for child processes before exit).
+ *
+ * @param res IPC resources to detach from.
+ */
 void ipc_detach(IPCResources *res) {
     ipc_shm_detach(res);
 }
 
+/**
+ * @brief Destroy all IPC resources (for main process cleanup).
+ *
+ * @param res IPC resources to destroy.
+ */
 void ipc_destroy(IPCResources *res) {
     // Remove message queues first (before shared memory, so we can log)
     ipc_mq_destroy(res);
@@ -165,9 +195,12 @@ void ipc_destroy(IPCResources *res) {
 }
 
 /**
- * Signal-safe IPC cleanup for use in signal handlers.
+ * @brief Signal-safe IPC cleanup for use in signal handlers.
+ *
  * Only uses async-signal-safe syscalls (msgctl, semctl, shmctl).
  * Cleanup order: MQ -> Semaphores -> SHM (unblocks waiting processes first).
+ *
+ * @param res IPC resources to clean up.
  */
 void ipc_cleanup_signal_safe(IPCResources *res) {
     // Clean up message queues first (unblocks msgrcv/msgsnd)

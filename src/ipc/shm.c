@@ -10,6 +10,14 @@
 #include <string.h>
 #include <sys/shm.h>
 
+/**
+ * @brief Create and attach shared memory segment.
+ *
+ * @param res IPC resources structure to populate.
+ * @param key Shared memory key.
+ * @param size Size of shared memory segment.
+ * @return 0 on success, -1 on error.
+ */
 int ipc_shm_create(IPCResources *res, key_t key, size_t size) {
     res->shm_id = shmget(key, size, IPC_CREAT | IPC_EXCL | 0600);
     if (res->shm_id == -1) {
@@ -33,6 +41,13 @@ int ipc_shm_create(IPCResources *res, key_t key, size_t size) {
     return 0;
 }
 
+/**
+ * @brief Attach to existing shared memory segment.
+ *
+ * @param res IPC resources structure to populate.
+ * @param key Shared memory key for lookup.
+ * @return 0 on success, -1 on error.
+ */
 int ipc_shm_attach(IPCResources *res, key_t key) {
     // Get shared memory (size 0 to attach to existing segment with unknown size)
     res->shm_id = shmget(key, 0, 0600);
@@ -52,6 +67,11 @@ int ipc_shm_attach(IPCResources *res, key_t key) {
     return 0;
 }
 
+/**
+ * @brief Detach from shared memory segment.
+ *
+ * @param res IPC resources to detach from.
+ */
 void ipc_shm_detach(IPCResources *res) {
     if (res->state) {
         shmdt(res->state);
@@ -59,6 +79,11 @@ void ipc_shm_detach(IPCResources *res) {
     }
 }
 
+/**
+ * @brief Detach and destroy shared memory segment.
+ *
+ * @param res IPC resources to destroy.
+ */
 void ipc_shm_destroy(IPCResources *res) {
     if (res->state) {
         shmdt(res->state);
@@ -72,6 +97,13 @@ void ipc_shm_destroy(IPCResources *res) {
     }
 }
 
+/**
+ * @brief Signal-safe shared memory destruction.
+ *
+ * Uses only shmctl which is async-signal-safe.
+ *
+ * @param res IPC resources to destroy.
+ */
 void ipc_shm_destroy_signal_safe(IPCResources *res) {
     if (res->shm_id != -1) {
         shmctl(res->shm_id, IPC_RMID, NULL);
@@ -79,6 +111,12 @@ void ipc_shm_destroy_signal_safe(IPCResources *res) {
     }
 }
 
+/**
+ * @brief Initialize shared state with configuration values.
+ *
+ * @param res IPC resources containing shared state.
+ * @param cfg Configuration values to copy.
+ */
 void ipc_shm_init_state(IPCResources *res, const Config *cfg) {
     // Copy config to shared state
     res->state->station_capacity = cfg->station_capacity;

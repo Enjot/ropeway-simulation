@@ -9,6 +9,15 @@
 #include <stdio.h>
 #include <sys/msg.h>
 
+/**
+ * @brief Create all message queues.
+ *
+ * Creates cashier, platform, boarding, arrivals, and worker message queues.
+ *
+ * @param res IPC resources structure to populate with queue IDs.
+ * @param keys IPC keys for queue creation.
+ * @return 0 on success, -1 on error.
+ */
 int ipc_mq_create(IPCResources *res, const IPCKeys *keys) {
     res->mq_cashier_id = msgget(keys->mq_cashier_key, IPC_CREAT | IPC_EXCL | 0600);
     if (res->mq_cashier_id == -1) {
@@ -48,6 +57,15 @@ int ipc_mq_create(IPCResources *res, const IPCKeys *keys) {
     return 0;
 }
 
+/**
+ * @brief Attach to existing message queues.
+ *
+ * For child processes to access message queues created by main.
+ *
+ * @param res IPC resources structure to populate with queue IDs.
+ * @param keys IPC keys for queue lookup.
+ * @return 0 on success, -1 on error.
+ */
 int ipc_mq_attach(IPCResources *res, const IPCKeys *keys) {
     res->mq_cashier_id = msgget(keys->mq_cashier_key, 0600);
     if (res->mq_cashier_id == -1) {
@@ -82,6 +100,13 @@ int ipc_mq_attach(IPCResources *res, const IPCKeys *keys) {
     return 0;
 }
 
+/**
+ * @brief Destroy all message queues.
+ *
+ * Removes all message queues with IPC_RMID.
+ *
+ * @param res IPC resources containing queue IDs to destroy.
+ */
 void ipc_mq_destroy(IPCResources *res) {
     if (res->mq_cashier_id != -1) {
         if (msgctl(res->mq_cashier_id, IPC_RMID, NULL) == -1) {
@@ -119,6 +144,13 @@ void ipc_mq_destroy(IPCResources *res) {
     }
 }
 
+/**
+ * @brief Signal-safe message queue destruction.
+ *
+ * Uses only msgctl which is async-signal-safe.
+ *
+ * @param res IPC resources containing queue IDs to destroy.
+ */
 void ipc_mq_destroy_signal_safe(IPCResources *res) {
     if (res->mq_cashier_id != -1) {
         msgctl(res->mq_cashier_id, IPC_RMID, NULL);

@@ -395,6 +395,267 @@ Write final simulation summary to file including duration, total tourists, total
 - **Parameters**: `state` - shared state with simulation statistics, `filepath` - output file path
 - **Returns**: 0 on success, -1 on error
 
+---
+
+### Time Simulation ([src/core/time_sim.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/time_sim.c))
+
+#### [`time_init`](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/time_sim.c)
+Initialize time acceleration in shared state. Called once at startup by main process.
+- **Parameters**: `state` - shared memory state, `cfg` - configuration with time settings
+
+#### [`time_get_sim_minutes`](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/time_sim.c)
+Get current simulated time in minutes from midnight.
+- **Parameters**: `state` - shared memory state
+- **Returns**: Simulated minutes from midnight (e.g., 480 = 08:00)
+
+#### [`time_get_sim_minutes_f`](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/time_sim.c)
+Get current simulated time in minutes from midnight with fractional part.
+- **Parameters**: `state` - shared memory state
+- **Returns**: Simulated minutes from midnight as double
+
+#### [`time_is_simulation_over`](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/time_sim.c)
+Check if simulation time has ended (past sim_end_minutes).
+- **Parameters**: `state` - shared memory state
+- **Returns**: 1 if simulation is over, 0 otherwise
+
+#### [`time_is_closing`](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/time_sim.c)
+Check if station is closing (approaching end time).
+- **Parameters**: `state` - shared memory state
+- **Returns**: 1 if closing, 0 otherwise
+
+#### [`time_sim_to_real_seconds`](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/time_sim.c)
+Convert simulated minutes to real seconds.
+- **Parameters**: `state` - shared memory state, `sim_minutes` - duration in simulated minutes
+- **Returns**: Duration in real seconds
+
+#### [`time_sleep_sim_minutes`](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/time_sim.c)
+Sleep for simulated minutes (handles pause via EINTR).
+- **Parameters**: `state` - shared memory state, `sem_id` - semaphore ID, `sim_minutes` - duration to sleep
+- **Returns**: 0 on success, -1 if simulation should stop
+
+#### [`time_format`](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/time_sim.c)
+Format current simulated time as HH:MM string.
+- **Parameters**: `state` - shared memory state, `buf` - output buffer, `buf_size` - buffer size
+
+#### [`time_format_minutes`](https://github.com/Enjot/ropeway-simulation/blob/main/src/core/time_sim.c)
+Format minutes from midnight as HH:MM string.
+- **Parameters**: `minutes` - minutes from midnight, `buf` - output buffer, `buf_size` - buffer size
+
+---
+
+### Tourist Lifecycle ([src/tourist/lifecycle.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/lifecycle.c))
+
+#### [`tourist_buy_ticket`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/lifecycle.c)
+Buy ticket at cashier via message queue. For families, parent buys tickets for all kids.
+- **Parameters**: `res` - IPC resources, `data` - tourist data (updated with ticket info)
+- **Returns**: 0 on success, -1 if rejected or on error
+
+#### [`tourist_is_ticket_valid`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/lifecycle.c)
+Check if tourist's ticket is still valid.
+- **Parameters**: `res` - IPC resources, `data` - tourist data with ticket info
+- **Returns**: 1 if valid, 0 if expired
+
+#### [`tourist_is_station_closing`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/lifecycle.c)
+Check if station is closing.
+- **Parameters**: `res` - IPC resources
+- **Returns**: 1 if closing, 0 if open
+
+#### [`tourist_is_too_scared`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/lifecycle.c)
+Check if tourist is too scared to ride (~10% chance on first two rides if enabled).
+- **Parameters**: `res` - IPC resources, `data` - tourist data
+- **Returns**: 1 if scared, 0 otherwise
+
+#### [`tourist_scared_reason`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/lifecycle.c)
+Get reason string for scared tourist.
+- **Parameters**: `data` - tourist data
+- **Returns**: Reason string for logging
+
+---
+
+### Tourist Movement ([src/tourist/movement.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/movement.c))
+
+#### [`tourist_pauseable_sleep`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/movement.c)
+Pause-aware sleep for simulated durations. Handles EINTR from signals.
+- **Parameters**: `res` - IPC resources, `real_seconds` - duration in real seconds, `running_flag` - pointer to running flag
+- **Returns**: 0 on success, -1 if interrupted by shutdown
+
+#### [`tourist_ride_chairlift`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/movement.c)
+Simulate riding the chairlift to the upper station.
+- **Parameters**: `res` - IPC resources, `data` - tourist data, `departure_time` - chair departure time, `running_flag` - pointer to running flag
+- **Returns**: 0 on success, -1 if interrupted by shutdown
+
+#### [`tourist_descend_trail`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/movement.c)
+Simulate walking or biking down the trail.
+- **Parameters**: `res` - IPC resources, `data` - tourist data, `running_flag` - pointer to running flag
+- **Returns**: 0 on success, -1 if interrupted by shutdown
+
+---
+
+### Tourist Initialization ([src/tourist/init.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/init.c))
+
+#### [`tourist_parse_args`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/init.c)
+Parse command line arguments and populate tourist data.
+- **Parameters**: `argc` - argument count, `argv` - argument vector, `data` - tourist data structure
+- **Returns**: 0 on success, -1 on error
+
+#### [`tourist_get_tag`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/init.c)
+Get logging tag based on tourist type and VIP status.
+- **Parameters**: `data` - tourist data
+- **Returns**: Logging tag string (e.g., "VIP CYCLIST", "FAMILY", "TOURIST")
+
+#### [`tourist_setup_signals`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/init.c)
+Install signal handlers for tourist process.
+- **Parameters**: `running_flag` - pointer to running flag to clear on SIGTERM/SIGINT
+
+---
+
+### Process Manager ([src/lifecycle/process_manager.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/lifecycle/process_manager.c))
+
+#### [`spawn_worker`](https://github.com/Enjot/ropeway-simulation/blob/main/src/lifecycle/process_manager.c)
+Spawn a worker process via fork.
+- **Parameters**: `worker_func` - worker entry point, `res` - IPC resources, `keys` - IPC keys, `name` - worker name for logging
+- **Returns**: Child PID on success, -1 on error
+
+#### [`spawn_generator`](https://github.com/Enjot/ropeway-simulation/blob/main/src/lifecycle/process_manager.c)
+Spawn the tourist generator process via fork.
+- **Parameters**: `res` - IPC resources, `keys` - IPC keys, `tourist_exe` - path to tourist executable
+- **Returns**: Child PID on success, -1 on error
+
+---
+
+### IPC Functions ([src/ipc/](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/))
+
+#### [`ipc_generate_keys`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/keys.c#L18-L38)
+Generate IPC keys using ftok.
+- **Parameters**: `keys` - structure to populate, `path` - file path for key generation
+- **Returns**: 0 on success, -1 on error
+
+#### [`ipc_cleanup_stale`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/ipc.c#L27-L83)
+Clean up stale IPC resources from a previous crashed run.
+- **Parameters**: `keys` - IPC keys to check
+- **Returns**: 1 if cleaned, 0 if no stale resources, -1 on error
+
+#### [`ipc_detach`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/ipc.c#L174-L176)
+Detach from IPC resources (for child processes before exit).
+- **Parameters**: `res` - IPC resources to detach from
+
+#### [`ipc_cleanup_signal_safe`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/ipc.c#L205-L214)
+Signal-safe IPC cleanup for use in signal handlers. Only uses async-signal-safe syscalls.
+- **Parameters**: `res` - IPC resources to clean up
+
+#### [`sem_wait`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sem.c#L117-L132)
+Atomically wait (decrement) a semaphore by count.
+- **Parameters**: `sem_id` - semaphore set ID, `sem_num` - semaphore index, `count` - slots to acquire
+- **Returns**: 0 on success, -1 on error or signal interruption
+
+#### [`sem_post`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sem.c#L176-L191)
+Atomically post (increment) a semaphore by count.
+- **Parameters**: `sem_id` - semaphore set ID, `sem_num` - semaphore index, `count` - slots to release
+- **Returns**: 0 on success, -1 on error
+
+#### [`sem_trywait`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sem.c#L200-L215)
+Non-blocking semaphore wait (try to decrement by 1).
+- **Parameters**: `sem_id` - semaphore set ID, `sem_num` - semaphore index
+- **Returns**: 0 on success, -1 if would block or on error
+
+#### [`sem_wait_pauseable`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sem.c#L145-L164)
+Semaphore wait with EINTR handling and pause support. Retries on EINTR.
+- **Parameters**: `res` - IPC resources, `sem_num` - semaphore index, `count` - slots to acquire
+- **Returns**: 0 on success, -1 on shutdown or error
+
+#### [`sem_getval`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sem.c#L224-L230)
+Get current semaphore value.
+- **Parameters**: `sem_id` - semaphore set ID, `sem_num` - semaphore index
+- **Returns**: Current value, or -1 on error
+
+#### [`ipc_wait_emergency_clear`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sync.c#L19-L34)
+Wait for emergency stop to clear. Tracks emergency_waiters for reliable wakeup.
+- **Parameters**: `res` - IPC resources
+
+#### [`ipc_release_emergency_waiters`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sync.c#L43-L56)
+Release all processes waiting for emergency to clear.
+- **Parameters**: `res` - IPC resources
+
+#### [`ipc_signal_worker_ready`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sync.c#L66-L72)
+Signal that a worker has completed initialization.
+- **Parameters**: `res` - IPC resources
+- **Returns**: 0 on success, -1 on error
+
+#### [`ipc_wait_workers_ready`](https://github.com/Enjot/ropeway-simulation/blob/main/src/ipc/sync.c#L83-L95)
+Wait for all workers to signal ready.
+- **Parameters**: `res` - IPC resources, `expected_count` - number of workers to wait for
+- **Returns**: 0 on success, -1 on error/timeout
+
+---
+
+### Signal Handling ([src/lifecycle/process_signals.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/lifecycle/process_signals.c))
+
+#### [`signals_init`](https://github.com/Enjot/ropeway-simulation/blob/main/src/lifecycle/process_signals.c#L76-L78)
+Initialize signal handling module. Must be called before install_signal_handlers().
+- **Parameters**: `res` - pointer to IPC resources for signal-safe cleanup
+
+#### [`install_signal_handlers`](https://github.com/Enjot/ropeway-simulation/blob/main/src/lifecycle/process_signals.c#L85-L106)
+Install all signal handlers for main process. Sets up SIGCHLD, SIGINT, SIGTERM, SIGALRM handlers.
+
+---
+
+### Zombie Reaper ([src/lifecycle/zombie_reaper.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/lifecycle/zombie_reaper.c))
+
+#### [`reap_zombies`](https://github.com/Enjot/ropeway-simulation/blob/main/src/lifecycle/zombie_reaper.c#L19-L33)
+Reap zombie child processes (non-blocking). Called from main loop when SIGCHLD is received.
+
+#### [`wait_for_workers`](https://github.com/Enjot/ropeway-simulation/blob/main/src/lifecycle/zombie_reaper.c#L40-L65)
+Wait for all worker processes to exit (blocking). Called during shutdown.
+
+---
+
+### Tourist Stats ([src/tourist/stats.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/stats.c))
+
+#### [`tourist_record_entry`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/stats.c#L15-L38)
+Record tourist entry in shared state for final report.
+- **Parameters**: `res` - IPC resources, `data` - tourist data
+
+#### [`tourist_update_stats`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/stats.c#L46-L72)
+Update ride statistics after completing a ride. Counts parent and all kids.
+- **Parameters**: `res` - IPC resources, `data` - tourist data
+
+---
+
+### Tourist Boarding ([src/tourist/boarding.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/boarding.c))
+
+#### [`tourist_board_chair`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/boarding.c#L25-L82)
+Board the chairlift by messaging lower worker.
+- **Parameters**: `res` - IPC resources, `data` - tourist data, `departure_time_out` - receives departure time, `chair_id_out` - receives chair ID, `tourists_on_chair_out` - receives tourist count
+- **Returns**: 0 on success, -1 on error or shutdown
+
+#### [`tourist_arrive_upper`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/boarding.c#L93-L121)
+Arrive at upper station and notify upper worker.
+- **Parameters**: `res` - IPC resources, `data` - tourist data, `chair_id` - chair ID, `tourists_on_chair` - tourist count
+- **Returns**: 0 on success, -1 on error
+
+---
+
+### Tourist Threads ([src/tourist/threads.c](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/threads.c))
+
+#### [`kid_thread_func`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/threads.c#L17-L27)
+Thread function for kid simulation. Kids log and exit immediately.
+- **Parameters**: `arg` - pointer to KidThreadData
+- **Returns**: NULL
+
+#### [`bike_thread_func`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/threads.c#L35-L43)
+Thread function for bike simulation. Bikes log and exit immediately.
+- **Parameters**: `arg` - pointer to BikeThreadData
+- **Returns**: NULL
+
+#### [`tourist_create_family_threads`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/threads.c#L57-L95)
+Create threads for kids and bike (if cyclist).
+- **Parameters**: `data` - tourist data, `family` - family state, `kid_data` - kid thread data array, `kid_threads` - thread handles array, `bike_data` - bike thread data, `bike_thread` - bike thread handle, `bike_thread_created` - output flag
+- **Returns**: 0 on success, -1 on error
+
+#### [`tourist_join_family_threads`](https://github.com/Enjot/ropeway-simulation/blob/main/src/tourist/threads.c#L105-L116)
+Join all family threads (kids and bike).
+- **Parameters**: `data` - tourist data, `kid_threads` - thread handles array, `bike_thread` - bike thread handle, `bike_thread_created` - whether bike thread was created
+
 ## Configuration Parameters
 
 Config file format: `KEY=VALUE` with `#` comments.

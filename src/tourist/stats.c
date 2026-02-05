@@ -6,6 +6,12 @@
 #include "tourist/stats.h"
 #include "core/time_sim.h"
 
+/**
+ * @brief Record tourist entry in shared state for final report.
+ *
+ * @param res IPC resources.
+ * @param data Tourist data.
+ */
 void tourist_record_entry(IPCResources *res, TouristData *data) {
     if (sem_wait_pauseable(res, SEM_STATS, 1) == -1) {
         return;  // Shutdown in progress
@@ -31,6 +37,12 @@ void tourist_record_entry(IPCResources *res, TouristData *data) {
     sem_post(res->sem_id, SEM_STATS, 1);
 }
 
+/**
+ * @brief Update ride statistics after completing a ride.
+ *
+ * @param res IPC resources.
+ * @param data Tourist data.
+ */
 void tourist_update_stats(IPCResources *res, TouristData *data) {
     if (sem_wait_pauseable(res, SEM_STATS, 1) == -1) {
         return;  // Shutdown in progress

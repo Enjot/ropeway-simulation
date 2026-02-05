@@ -16,12 +16,25 @@
 // Global pointer for signal handler (set by tourist_setup_signals)
 static int *g_running_ptr = NULL;
 
+/**
+ * @brief Signal handler for SIGTERM/SIGINT.
+ *
+ * @param sig Signal number.
+ */
 static void signal_handler(int sig) {
     if ((sig == SIGTERM || sig == SIGINT) && g_running_ptr) {
         *g_running_ptr = 0;
     }
 }
 
+/**
+ * @brief Parse command line arguments and populate tourist data.
+ *
+ * @param argc Argument count.
+ * @param argv Argument vector.
+ * @param data Tourist data structure to populate.
+ * @return 0 on success, -1 on error.
+ */
 int tourist_parse_args(int argc, char *argv[], TouristData *data) {
     if (argc != 7) {
         fprintf(stderr, "Usage: tourist <id> <age> <type> <vip> <kid_count> <ticket_type>\n");
@@ -64,6 +77,12 @@ int tourist_parse_args(int argc, char *argv[], TouristData *data) {
     return 0;
 }
 
+/**
+ * @brief Get logging tag based on tourist type and VIP status.
+ *
+ * @param data Tourist data.
+ * @return Logging tag string.
+ */
 const char *tourist_get_tag(const TouristData *data) {
     if (data->is_vip) {
         if (data->type == TOURIST_CYCLIST) return "VIP CYCLIST";
@@ -75,6 +94,11 @@ const char *tourist_get_tag(const TouristData *data) {
     return "TOURIST";
 }
 
+/**
+ * @brief Install signal handlers for tourist process.
+ *
+ * @param running_flag Pointer to running flag to clear on SIGTERM/SIGINT.
+ */
 void tourist_setup_signals(int *running_flag) {
     g_running_ptr = running_flag;
 

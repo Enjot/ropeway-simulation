@@ -8,6 +8,13 @@
 #include <stdio.h>
 #include <sys/ipc.h>
 
+/**
+ * @brief Generate IPC keys using ftok.
+ *
+ * @param keys Structure to populate with generated keys.
+ * @param path File path to use for key generation.
+ * @return 0 on success, -1 on error.
+ */
 int ipc_generate_keys(IPCKeys *keys, const char *path) {
     keys->shm_key = ftok(path, 'S');
     keys->sem_key = ftok(path, 'E');

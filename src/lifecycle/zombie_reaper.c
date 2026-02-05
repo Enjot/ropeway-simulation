@@ -11,6 +11,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+/**
+ * @brief Reap any zombie child processes (non-blocking).
+ *
+ * Called from main loop when SIGCHLD indicates a child has exited.
+ */
 void reap_zombies(void) {
     if (!g_child_exited) return;
     g_child_exited = 0;
@@ -27,6 +32,11 @@ void reap_zombies(void) {
     }
 }
 
+/**
+ * @brief Wait for all worker processes to exit (blocking).
+ *
+ * Called during shutdown to ensure all children have terminated.
+ */
 void wait_for_workers(void) {
     int status;
     pid_t pid;

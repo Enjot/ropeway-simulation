@@ -11,6 +11,16 @@
 #include <errno.h>
 #include <stdlib.h>
 
+/**
+ * @brief Pause-aware sleep for simulated durations.
+ *
+ * Handles EINTR from signals and checks running flags.
+ *
+ * @param res IPC resources.
+ * @param real_seconds Duration to sleep in real seconds.
+ * @param running_flag Pointer to running flag.
+ * @return 0 on success, -1 if interrupted by shutdown.
+ */
 int tourist_pauseable_sleep(IPCResources *res, double real_seconds, int *running_flag) {
     time_t start = time(NULL);
     double remaining = real_seconds;
@@ -33,6 +43,15 @@ int tourist_pauseable_sleep(IPCResources *res, double real_seconds, int *running
     return (*running_flag && res->state->running) ? 0 : -1;
 }
 
+/**
+ * @brief Simulate riding the chairlift to the upper station.
+ *
+ * @param res IPC resources.
+ * @param data Tourist data.
+ * @param departure_time Time when chair departed.
+ * @param running_flag Pointer to running flag.
+ * @return 0 on success, -1 if interrupted by shutdown.
+ */
 int tourist_ride_chairlift(IPCResources *res, TouristData *data,
                            time_t departure_time, int *running_flag) {
     // Calculate expected arrival time
@@ -54,6 +73,14 @@ int tourist_ride_chairlift(IPCResources *res, TouristData *data,
     return 0;
 }
 
+/**
+ * @brief Simulate walking or biking down the trail.
+ *
+ * @param res IPC resources.
+ * @param data Tourist data.
+ * @param running_flag Pointer to running flag.
+ * @return 0 on success, -1 if interrupted by shutdown.
+ */
 int tourist_descend_trail(IPCResources *res, TouristData *data, int *running_flag) {
     int trail_time_sim;
 

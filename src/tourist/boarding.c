@@ -12,6 +12,16 @@
 #include <string.h>
 #include <sys/msg.h>
 
+/**
+ * @brief Board the chairlift by messaging lower worker.
+ *
+ * @param res IPC resources.
+ * @param data Tourist data.
+ * @param departure_time_out Output: chair departure time.
+ * @param chair_id_out Output: chair ID for tracking.
+ * @param tourists_on_chair_out Output: number of tourists on this chair.
+ * @return 0 on success, -1 on error or shutdown.
+ */
 int tourist_board_chair(IPCResources *res, TouristData *data, time_t *departure_time_out,
                         int *chair_id_out, int *tourists_on_chair_out) {
     // Note: SEM_CHAIRS is now acquired by lower_worker when chair departs,
@@ -71,6 +81,15 @@ int tourist_board_chair(IPCResources *res, TouristData *data, time_t *departure_
     return 0;
 }
 
+/**
+ * @brief Arrive at upper station and notify upper worker.
+ *
+ * @param res IPC resources.
+ * @param data Tourist data.
+ * @param chair_id Chair ID for tracking.
+ * @param tourists_on_chair Number of tourists on this chair.
+ * @return 0 on success, -1 on error.
+ */
 int tourist_arrive_upper(IPCResources *res, TouristData *data,
                          int chair_id, int tourists_on_chair) {
     // Note: SEM_CHAIRS is released by upper_worker when all tourists from chair arrive

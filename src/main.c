@@ -33,6 +33,11 @@ void upper_worker_main(IPCResources *res, IPCKeys *keys);
 // Global IPC resources (used by signal handler via signals_init)
 static IPCResources g_res;
 
+/**
+ * @brief Print usage information to stderr.
+ *
+ * @param prog Program name (argv[0]).
+ */
 static void print_usage(const char *prog) {
     fprintf(stderr, "Usage: %s [config_path]\n", prog);
     fprintf(stderr, "  config_path: Config file path or name (default: default.conf)\n");
@@ -40,7 +45,10 @@ static void print_usage(const char *prog) {
 }
 
 /**
- * Signal workers to stop and destroy IPC to unblock blocked operations.
+ * @brief Signal workers to stop and destroy IPC to unblock blocked operations.
+ *
+ * Sends SIGTERM to all worker processes and destroys message queues
+ * and semaphores to unblock any stuck operations.
  */
 static void shutdown_workers(void) {
     // Send SIGTERM to worker processes
@@ -100,6 +108,15 @@ static void shutdown_workers(void) {
     }
 }
 
+/**
+ * @brief Main entry point for ropeway simulation.
+ *
+ * Loads config, creates IPC, spawns workers, runs main loop, handles shutdown.
+ *
+ * @param argc Argument count.
+ * @param argv Argument vector (optional config path).
+ * @return 0 on success, 1 on error.
+ */
 int main(int argc, char *argv[]) {
     static char config_path[256];
     const char *config_name = "default.conf";

@@ -19,7 +19,9 @@ pid_t g_main_pid = 0;
 static IPCResources *g_res_ptr = NULL;
 
 /**
- * SIGCHLD handler - sets flag for zombie reaping.
+ * @brief SIGCHLD handler - sets flag for zombie reaping.
+ *
+ * @param sig Signal number (unused).
  */
 static void sigchld_handler(int sig) {
     (void)sig;
@@ -27,8 +29,11 @@ static void sigchld_handler(int sig) {
 }
 
 /**
- * SIGTERM/SIGINT handler - triggers shutdown.
+ * @brief SIGTERM/SIGINT handler - triggers shutdown.
+ *
  * Only main process performs IPC cleanup.
+ *
+ * @param sig Signal number (unused).
  */
 static void sigterm_handler(int sig) {
     (void)sig;
@@ -52,17 +57,31 @@ static void sigterm_handler(int sig) {
 }
 
 /**
- * SIGALRM handler - just wakes up from pause() to check simulation time.
+ * @brief SIGALRM handler - wakes up from pause() to check simulation time.
+ *
+ * @param sig Signal number (unused).
  */
 static void sigalrm_handler(int sig) {
     (void)sig;
     // Nothing to do - just wake up from pause()
 }
 
+/**
+ * @brief Initialize signal handling module.
+ *
+ * Must be called before install_signal_handlers().
+ *
+ * @param res Pointer to IPC resources (for signal-safe cleanup).
+ */
 void signals_init(IPCResources *res) {
     g_res_ptr = res;
 }
 
+/**
+ * @brief Install all signal handlers for main process.
+ *
+ * Sets up SIGCHLD, SIGINT, SIGTERM, SIGALRM handlers.
+ */
 void install_signal_handlers(void) {
     struct sigaction sa;
 

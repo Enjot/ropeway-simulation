@@ -8,6 +8,12 @@
 
 #include <stdio.h>
 
+/**
+ * @brief Thread function for kid simulation.
+ *
+ * @param arg Pointer to KidThreadData.
+ * @return NULL.
+ */
 void *kid_thread_func(void *arg) {
     KidThreadData *td = (KidThreadData *)arg;
     FamilyState *family = td->family;
@@ -20,6 +26,12 @@ void *kid_thread_func(void *arg) {
     return NULL;
 }
 
+/**
+ * @brief Thread function for bike simulation.
+ *
+ * @param arg Pointer to BikeThreadData.
+ * @return NULL.
+ */
 void *bike_thread_func(void *arg) {
     BikeThreadData *td = (BikeThreadData *)arg;
 
@@ -30,6 +42,18 @@ void *bike_thread_func(void *arg) {
     return NULL;
 }
 
+/**
+ * @brief Create threads for kids and bike (if cyclist).
+ *
+ * @param data Tourist data.
+ * @param family Family state for thread data.
+ * @param kid_data Array of kid thread data.
+ * @param kid_threads Array of kid thread handles.
+ * @param bike_data Bike thread data.
+ * @param bike_thread Bike thread handle.
+ * @param bike_thread_created Output: 1 if bike thread was created.
+ * @return 0 on success, -1 on error.
+ */
 int tourist_create_family_threads(const TouristData *data, FamilyState *family,
                                    KidThreadData kid_data[], pthread_t kid_threads[],
                                    BikeThreadData *bike_data, pthread_t *bike_thread,
@@ -70,6 +94,14 @@ int tourist_create_family_threads(const TouristData *data, FamilyState *family,
     return 0;
 }
 
+/**
+ * @brief Join all family threads (kids and bike).
+ *
+ * @param data Tourist data.
+ * @param kid_threads Array of kid thread handles.
+ * @param bike_thread Bike thread handle.
+ * @param bike_thread_created 1 if bike thread was created.
+ */
 void tourist_join_family_threads(const TouristData *data, pthread_t kid_threads[],
                                   pthread_t bike_thread, int bike_thread_created) {
     // Join bike thread if created (returns immediately - thread already exited)

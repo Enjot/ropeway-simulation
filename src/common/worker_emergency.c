@@ -9,40 +9,67 @@
 #include <sys/msg.h>
 
 /**
- * Get the message queue destination filter for this worker's incoming messages.
+ * @brief Get the message queue destination filter for this worker's incoming messages.
+ *
+ * @param role Worker role (WORKER_LOWER or WORKER_UPPER).
+ * @return Message queue destination filter.
  */
 static int get_my_dest(WorkerRole role) {
     return (role == WORKER_LOWER) ? WORKER_DEST_LOWER : WORKER_DEST_UPPER;
 }
 
 /**
- * Get the message queue destination for sending to the other worker.
+ * @brief Get the message queue destination for sending to the other worker.
+ *
+ * @param role Worker role (WORKER_LOWER or WORKER_UPPER).
+ * @return Message queue destination for the other worker.
  */
 static int get_other_dest(WorkerRole role) {
     return (role == WORKER_LOWER) ? WORKER_DEST_UPPER : WORKER_DEST_LOWER;
 }
 
 /**
- * Get the PID of the other worker.
+ * @brief Get the PID of the other worker.
+ *
+ * @param res IPC resources containing worker PIDs.
+ * @param role Worker role (WORKER_LOWER or WORKER_UPPER).
+ * @return PID of the other worker.
  */
 static pid_t get_other_pid(IPCResources *res, WorkerRole role) {
     return (role == WORKER_LOWER) ? res->state->upper_worker_pid : res->state->lower_worker_pid;
 }
 
 /**
- * Get the logging tag for this worker.
+ * @brief Get the logging tag for this worker.
+ *
+ * @param role Worker role (WORKER_LOWER or WORKER_UPPER).
+ * @return Logging tag string.
  */
 static const char* get_worker_tag(WorkerRole role) {
     return (role == WORKER_LOWER) ? "LOWER_WORKER" : "UPPER_WORKER";
 }
 
 /**
- * Get the name of the other worker (for logging).
+ * @brief Get the name of the other worker (for logging).
+ *
+ * @param role Worker role (WORKER_LOWER or WORKER_UPPER).
+ * @return Name string of the other worker.
  */
 static const char* get_other_worker_name(WorkerRole role) {
     return (role == WORKER_LOWER) ? "upper worker" : "lower worker";
 }
 
+/**
+ * @brief Initiate emergency stop when danger is detected.
+ *
+ * Attempts to acquire SEM_EMERGENCY_LOCK to become the initiator.
+ * If lock acquired, sets emergency_stop flag and signals other worker via SIGUSR1.
+ * If lock not acquired, falls back to receiver role.
+ *
+ * @param res IPC resources.
+ * @param role Worker role (WORKER_LOWER or WORKER_UPPER).
+ * @param state Emergency state tracking.
+ */
 void worker_trigger_emergency_stop(IPCResources *res, WorkerRole role, WorkerEmergencyState *state) {
     const char *tag = get_worker_tag(role);
     log_warn(tag, "Danger detected! Attempting to become emergency initiator");
@@ -78,6 +105,16 @@ void worker_trigger_emergency_stop(IPCResources *res, WorkerRole role, WorkerEme
     }
 }
 
+/**
+ * @brief Acknowledge emergency stop from the other worker.
+ *
+ * Sets emergency_stop flag, then blocks waiting for resume message via MQ_WORKER.
+ * After resume received, signals ready and clears emergency flag.
+ *
+ * @param res IPC resources.
+ * @param role Worker role (WORKER_LOWER or WORKER_UPPER).
+ * @param state Emergency state tracking.
+ */
 void worker_acknowledge_emergency_stop(IPCResources *res, WorkerRole role, WorkerEmergencyState *state) {
     const char *tag = get_worker_tag(role);
     const char *other_name = get_other_worker_name(role);
@@ -134,6 +171,16 @@ void worker_acknowledge_emergency_stop(IPCResources *res, WorkerRole role, Worke
     log_info(tag, "Chairlift resumed");
 }
 
+/**
+ * @brief Resume operations after emergency cooldown passed.
+ *
+ * Sends READY_TO_RESUME message to other worker, waits for I_AM_READY response,
+ * sends SIGUSR2, clears emergency flag, and releases SEM_EMERGENCY_LOCK.
+ *
+ * @param res IPC resources.
+ * @param role Worker role (WORKER_LOWER or WORKER_UPPER).
+ * @param state Emergency state tracking.
+ */
 void worker_initiate_resume(IPCResources *res, WorkerRole role, WorkerEmergencyState *state) {
     const char *tag = get_worker_tag(role);
     const char *other_name = get_other_worker_name(role);

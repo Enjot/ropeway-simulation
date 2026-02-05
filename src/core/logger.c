@@ -27,12 +27,23 @@ static const char *g_component_colors[LOG_COMPONENT_COUNT] = {
     [LOG_UNKNOWN]      = "\033[39m",  // default
 };
 
+/**
+ * @brief Initialize the logger with shared state and component type.
+ *
+ * @param state Shared memory state for time synchronization.
+ * @param comp Component type for colored output selection.
+ */
 void logger_init(SharedState *state, LogComponent comp) {
     g_state = state;
     g_component = comp;
     g_use_colors = isatty(STDERR_FILENO);
 }
 
+/**
+ * @brief Enable or disable debug log output.
+ *
+ * @param enabled 1 to enable debug logs, 0 to disable.
+ */
 void logger_set_debug_enabled(int enabled) {
     g_debug_enabled = enabled;
 }
@@ -61,6 +72,15 @@ static void format_sim_time(char *buf, int buf_size) {
     snprintf(buf, buf_size, "%02d:%02d:%02d", hours, minutes, seconds);
 }
 
+/**
+ * @brief Log a formatted message to stderr.
+ *
+ * NOT signal-safe (uses snprintf). Format: [HH:MM:SS] [LEVEL] [COMPONENT] message
+ *
+ * @param level Log level string (LOG_DEBUG, LOG_INFO, etc.).
+ * @param component Component name for the log entry.
+ * @param fmt Printf-style format string.
+ */
 void log_msg(const char *level, const char *component, const char *fmt, ...) {
     // Skip debug logs if disabled
     if (!g_debug_enabled && strcmp(level, LOG_DEBUG) == 0) {
@@ -105,12 +125,26 @@ void log_msg(const char *level, const char *component, const char *fmt, ...) {
     write(STDERR_FILENO, buf, len);
 }
 
+/**
+ * @brief Signal-safe logging for use in signal handlers only.
+ *
+ * Uses write() syscall directly. Only pass pre-formatted static strings.
+ *
+ * @param msg Message string to write to stderr.
+ */
 void log_signal_safe(const char *msg) {
     if (msg) {
         write(STDERR_FILENO, msg, strlen(msg));
     }
 }
 
+/**
+ * @brief Signal-safe integer to string conversion.
+ *
+ * @param n Integer value to convert.
+ * @param buf Output buffer for the string.
+ * @param buf_size Size of the output buffer.
+ */
 void int_to_str(int n, char *buf, int buf_size) {
     if (buf_size <= 0) return;
 

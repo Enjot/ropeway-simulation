@@ -13,6 +13,15 @@
 // Forward declaration for tourist generator entry point
 void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *tourist_exe);
 
+/**
+ * @brief Spawn a worker process via fork.
+ *
+ * @param worker_func Worker entry point function.
+ * @param res IPC resources for the worker.
+ * @param keys IPC keys for the worker.
+ * @param name Worker name for logging.
+ * @return Child PID on success, -1 on error.
+ */
 pid_t spawn_worker(void (*worker_func)(IPCResources*, IPCKeys*),
                    IPCResources *res, IPCKeys *keys,
                    const char *name) {
@@ -34,6 +43,14 @@ pid_t spawn_worker(void (*worker_func)(IPCResources*, IPCKeys*),
     return pid;
 }
 
+/**
+ * @brief Spawn the tourist generator process via fork.
+ *
+ * @param res IPC resources for the generator.
+ * @param keys IPC keys for the generator.
+ * @param tourist_exe Path to the tourist executable.
+ * @return Child PID on success, -1 on error.
+ */
 pid_t spawn_generator(IPCResources *res, IPCKeys *keys, const char *tourist_exe) {
     pid_t pid = fork();
 

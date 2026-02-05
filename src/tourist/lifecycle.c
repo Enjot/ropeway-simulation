@@ -12,6 +12,15 @@
 #include <stdlib.h>
 #include <sys/msg.h>
 
+/**
+ * @brief Buy ticket at cashier via message queue.
+ *
+ * For families, parent buys tickets for all kids (same type).
+ *
+ * @param res IPC resources.
+ * @param data Tourist data (updated with ticket info).
+ * @return 0 on success, -1 if rejected or on error.
+ */
 int tourist_buy_ticket(IPCResources *res, TouristData *data) {
     CashierMsg request;
     request.mtype = MSG_CASHIER_REQUEST;
@@ -55,6 +64,13 @@ int tourist_buy_ticket(IPCResources *res, TouristData *data) {
     return 0;
 }
 
+/**
+ * @brief Check if tourist's ticket is still valid.
+ *
+ * @param res IPC resources.
+ * @param data Tourist data with ticket info.
+ * @return 1 if valid, 0 if expired.
+ */
 int tourist_is_ticket_valid(IPCResources *res, TouristData *data) {
     // Single-use tickets are valid until used once
     if (data->ticket_type == TICKET_SINGLE) {
@@ -66,6 +82,12 @@ int tourist_is_ticket_valid(IPCResources *res, TouristData *data) {
     return current_minutes < data->ticket_valid_until;
 }
 
+/**
+ * @brief Check if station is closing.
+ *
+ * @param res IPC resources.
+ * @return 1 if closing, 0 if open.
+ */
 int tourist_is_station_closing(IPCResources *res) {
     if (sem_wait_pauseable(res, SEM_STATE, 1) == -1) {
         return 1;  // Assume closing on failure (shutdown)
@@ -75,6 +97,13 @@ int tourist_is_station_closing(IPCResources *res) {
     return closing;
 }
 
+/**
+ * @brief Check if tourist is too scared to ride.
+ *
+ * @param res IPC resources.
+ * @param data Tourist data.
+ * @return 1 if scared, 0 otherwise.
+ */
 int tourist_is_too_scared(IPCResources *res, TouristData *data) {
     // Check if scared behavior is enabled
     if (!res->state->scared_enabled) {
@@ -88,6 +117,12 @@ int tourist_is_too_scared(IPCResources *res, TouristData *data) {
     return (rand() % 10) == 0;
 }
 
+/**
+ * @brief Get reason string for scared tourist.
+ *
+ * @param data Tourist data.
+ * @return Reason string for logging.
+ */
 const char *tourist_scared_reason(TouristData *data) {
     return (data->rides_completed == 0) ? "too scared to ride" : "that was too scary";
 }

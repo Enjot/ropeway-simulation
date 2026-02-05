@@ -10,7 +10,11 @@
 #include <string.h>
 
 /**
- * Wait for emergency stop to clear.
+ * @brief Wait for emergency stop to clear.
+ *
+ * Properly tracks emergency_waiters for reliable wakeup.
+ *
+ * @param res IPC resources.
  */
 void ipc_wait_emergency_clear(IPCResources *res) {
     if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
@@ -30,8 +34,11 @@ void ipc_wait_emergency_clear(IPCResources *res) {
 }
 
 /**
- * Release all processes waiting for emergency to clear.
+ * @brief Release all processes waiting for emergency to clear.
+ *
  * Called when emergency stop is cleared (after both workers ready).
+ *
+ * @param res IPC resources.
  */
 void ipc_release_emergency_waiters(IPCResources *res) {
     if (sem_wait(res->sem_id, SEM_STATE, 1) == -1) {
@@ -49,8 +56,12 @@ void ipc_release_emergency_waiters(IPCResources *res) {
 }
 
 /**
- * Signal that a worker has completed initialization and is ready.
+ * @brief Signal that a worker has completed initialization.
+ *
  * Called by each worker (TimeServer, Cashier, LowerWorker, UpperWorker).
+ *
+ * @param res IPC resources.
+ * @return 0 on success, -1 on error.
  */
 int ipc_signal_worker_ready(IPCResources *res) {
     if (sem_post(res->sem_id, SEM_WORKER_READY, 1) == -1) {
@@ -61,12 +72,13 @@ int ipc_signal_worker_ready(IPCResources *res) {
 }
 
 /**
- * Wait for all workers to signal ready.
+ * @brief Wait for all workers to signal ready.
+ *
  * Called by main process before spawning tourist generator.
  *
- * @param res IPC resources
- * @param expected_count Number of workers to wait for (WORKER_COUNT_FOR_BARRIER)
- * @return 0 on success, -1 on error/timeout
+ * @param res IPC resources.
+ * @param expected_count Number of workers to wait for.
+ * @return 0 on success, -1 on error/timeout.
  */
 int ipc_wait_workers_ready(IPCResources *res, int expected_count) {
     log_debug("IPC", "Waiting for %d workers to be ready...", expected_count);
