@@ -13,6 +13,12 @@ cmake --build .
 
 # Run with specific config
 ./ropeway_simulation test1_capacity.conf
+
+# Save logs to file (colored output preserved)
+./ropeway_simulation 2>&1 | tee simulation.log
+
+# Save logs without colors (for later analysis)
+./ropeway_simulation > simulation.log 2>&1
 ```
 
 Config files are located in `../config/` relative to the binary.
@@ -461,10 +467,10 @@ Config file format: `KEY=VALUE` with `#` comments.
 - **Expected**: Families board together. No adult has >2 kids. No deadlock.
 
 #### [test3_vip.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test3_vip.sh) - VIP Priority Without Queue Starvation
-- **Goal**: VIPs served first, regular tourists not starved indefinitely
-- **Rationale**: Tests `msgrcv()` with `mtype=-2` for priority ordering. If VIPs continuously arrive, `mtype=2` messages could starve. Verifies cashier eventually serves regular tourists between VIP bursts.
-- **Parameters**: `vip_percentage=10`, `tourists=20`, `simulation_time=1s`
-- **Expected**: VIPs board first. Regular tourists eventually served.
+- **Goal**: VIPs skip entry gates while regular tourists wait in queue
+- **Rationale**: VIPs bypass `SEM_ENTRY_GATES` entirely, reaching the platform faster when gates are congested. Verifies VIPs log "skipped gate queue" while regulars log "entered through gate", and both groups are served.
+- **Parameters**: `vip_percentage=30`, `tourists=30`, `simulation_time=1s`
+- **Expected**: VIPs skip gates, regulars enter gates, both groups served.
 
 #### [test4_emergency.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test4_emergency.sh) - Emergency Stop and Resume (Signals)
 - **Goal**: SIGUSR1 stops chairlift, SIGUSR2 resumes after worker confirmation

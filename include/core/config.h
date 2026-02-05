@@ -1,6 +1,13 @@
 #pragma once
 
-// Configuration structure (loaded at startup)
+/**
+ * @file core/config.h
+ * @brief Configuration loading and validation.
+ */
+
+/**
+ * @brief Configuration structure (loaded at startup).
+ */
 typedef struct {
     // Station settings
     int station_capacity;           // Max tourists in lower station

@@ -13,14 +13,17 @@ extern int g_child_exited;
 extern pid_t g_main_pid;
 
 /**
- * Initialize signal handling module.
+ * @brief Initialize signal handling module.
+ *
  * Must be called before install_signal_handlers().
- * @param res Pointer to IPC resources (for signal-safe cleanup)
+ *
+ * @param res Pointer to IPC resources (for signal-safe cleanup).
  */
 void signals_init(IPCResources *res);
 
 /**
- * Install all signal handlers for main process.
+ * @brief Install all signal handlers for main process.
+ *
  * Sets up SIGCHLD, SIGINT, SIGTERM, SIGALRM handlers.
  */
 void install_signal_handlers(void);

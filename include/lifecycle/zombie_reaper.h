@@ -6,13 +6,15 @@
  */
 
 /**
- * Reap zombie child processes (non-blocking).
+ * @brief Reap zombie child processes (non-blocking).
+ *
  * Should be called in main loop when g_child_exited is set.
  */
 void reap_zombies(void);
 
 /**
- * Wait for all worker processes to exit (blocking).
+ * @brief Wait for all worker processes to exit (blocking).
+ *
  * Called during shutdown after signaling workers.
  */
 void wait_for_workers(void);
