@@ -484,7 +484,7 @@ Config file format: `KEY=VALUE` with `#` comments.
 #### [test5_stress.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test5_stress.sh) - High Throughput Stress Test
 - **Goal**: Simulation completes without timeout under high concurrency
 - **Rationale**: Tests for deadlock between `MQ_CASHIER`, `MQ_PLATFORM`, `MQ_BOARDING` under load. Concurrent tourists stress all semaphores and message queues simultaneously - exposes circular wait conditions or semaphore exhaustion.
-- **Parameters**: `tourists=50`, `station_capacity=50`, `simulation_time=5s`
+- **Parameters**: `tourists=6000`, `station_capacity=500`, `simulation_time=180s`, rapid spawn (no delay)
 - **Expected**: No timeout (deadlock). No zombies. IPC cleaned.
 
 #### [test6_race.sh](https://github.com/Enjot/ropeway-simulation/blob/main/tests/test6_race.sh) - Entry Gate Race Condition Test
