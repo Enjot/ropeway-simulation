@@ -267,9 +267,7 @@ void tourist_generator_main(IPCResources *res, IPCKeys *keys, const char *touris
 
         if (pid == -1) {
             perror("generator: fork");
-            if (spawn_delay_us > 0) { //TODO wywalic
-                usleep(spawn_delay_us);
-            }
+            usleep(spawn_delay_us);
             continue;
         }
 
